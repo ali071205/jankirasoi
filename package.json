@@ -8,6 +8,8 @@
     "build": "pnpm --filter ./apps/api build",
     "start": "pnpm --filter ./apps/api start",
     "start:dev": "pnpm --filter ./apps/api start:dev",
+    "api:dev": "pnpm --filter ./apps/api start:dev",
+    "web:dev": "pnpm --filter ./apps/web dev",
     "start:worker": "pnpm --filter ./apps/api start:worker",
     "prisma:generate": "pnpm --filter ./apps/api prisma:generate",
     "lint": "pnpm --filter ./apps/api lint",
