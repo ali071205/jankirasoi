@@ -1,0 +1,19 @@
+{
+  "name": "jankirasoi-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production monorepo for Janki Rasoi Tiffin Ordering Platform",
+  "packageManager": "pnpm@12.14.0",
+  "scripts": {
+    "build": "pnpm --filter ./apps/api build",
+    "start": "pnpm --filter ./apps/api start",
+    "start:dev": "pnpm --filter ./apps/api start:dev",
+    "start:worker": "pnpm --filter ./apps/api start:worker",
+    "prisma:generate": "pnpm --filter ./apps/api prisma:generate",
+    "lint": "pnpm --filter ./apps/api lint",
+    "test": "pnpm --filter ./apps/api test"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

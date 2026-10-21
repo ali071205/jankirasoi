@@ -1,0 +1,502 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// -------------------------------------------------------------
+// 1. IDENTITY & ACCESS MANAGEMENT
+// -------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  STAFF
+  RIDER
+  CUSTOMER
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String?       @unique
+  phone        String        @unique
+  passwordHash String        @map("password_hash")
+  name         String
+  role         UserRole      @default(CUSTOMER)
+  isActive     Boolean       @default(true) @map("is_active")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  sessions     Session[]
+  riderProfile RiderProfile?
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("sessions")
+}
+
+// -------------------------------------------------------------
+// 2. MENU CATALOG & INVENTORY
+// -------------------------------------------------------------
+
+enum DietaryType {
+  VEG
+  NON_VEG
+  JAIN
+  VEGAN
+}
+
+model MenuCategory {
+  id           String    @id @default(uuid())
+  name         String
+  slug         String    @unique
+  description  String?
+  displayOrder Int       @default(0) @map("display_order")
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  products Product[]
+
+  @@map("menu_categories")
+}
+
+model Product {
+  id             String      @id @default(uuid())
+  categoryId     String      @map("category_id")
+  name           String
+  slug           String      @unique
+  description    String?
+  dietaryType    DietaryType @default(VEG) @map("dietary_type")
+  imageUrl       String?     @map("image_url")
+  basePricePaise Int         @map("base_price_paise")
+  taxRatePercent Int         @default(5) @map("tax_rate_percent")
+  isActive       Boolean     @default(true) @map("is_active")
+  displayOrder   Int         @default(0) @map("display_order")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  category       MenuCategory                    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  variants       ProductVariant[]
+  addonGroups    ProductAddonGroup[]
+  availabilities ProductServiceDateAvailability[]
+
+  @@index([categoryId, isActive])
+  @@map("products")
+}
+
+model ProductVariant {
+  id                 String   @id @default(uuid())
+  productId          String   @map("product_id")
+  name               String
+  priceModifierPaise Int      @default(0) @map("price_modifier_paise")
+  isDefault          Boolean  @default(false) @map("is_default")
+  isActive           Boolean  @default(true) @map("is_active")
+  displayOrder       Int      @default(0) @map("display_order")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_variants")
+}
+
+model AddonGroup {
+  id            String   @id @default(uuid())
+  name          String
+  minSelections Int      @default(0) @map("min_selections")
+  maxSelections Int      @default(5) @map("max_selections")
+  isActive      Boolean  @default(true) @map("is_active")
+
+  options  AddonOption[]
+  products ProductAddonGroup[]
+
+  @@map("addon_groups")
+}
+
+model ProductAddonGroup {
+  productId    String @map("product_id")
+  addonGroupId String @map("addon_group_id")
+
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  addonGroup AddonGroup @relation(fields: [addonGroupId], references: [id], onDelete: Cascade)
+
+  @@id([productId, addonGroupId])
+  @@map("product_addon_groups")
+}
+
+model AddonOption {
+  id           String   @id @default(uuid())
+  addonGroupId String   @map("addon_group_id")
+  name         String
+  pricePaise   Int      @map("price_paise")
+  isActive     Boolean  @default(true) @map("is_active")
+
+  addonGroup AddonGroup @relation(fields: [addonGroupId], references: [id], onDelete: Cascade)
+
+  @@map("addon_options")
+}
+
+model ProductServiceDateAvailability {
+  id          String   @id @default(uuid())
+  productId   String   @map("product_id")
+  serviceDate DateTime @db.Date @map("service_date")
+  isSoldOut   Boolean  @default(false) @map("is_sold_out")
+  dailyCap    Int?     @map("daily_cap")
+  soldCount   Int      @default(0) @map("sold_count")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, serviceDate])
+  @@map("product_service_date_availabilities")
+}
+
+// -------------------------------------------------------------
+// 3. DELIVERY ZONES & SLOTS
+// -------------------------------------------------------------
+
+model DeliveryZone {
+  id                         String   @id @default(uuid())
+  name                       String
+  pincode                    String   @unique
+  minOrderPaise              Int      @default(0) @map("min_order_paise")
+  deliveryFeePaise           Int      @default(3000) @map("delivery_fee_paise")
+  freeDeliveryThresholdPaise Int?     @map("free_delivery_threshold_paise")
+  isActive                   Boolean  @default(true) @map("is_active")
+  createdAt                  DateTime @default(now()) @map("created_at")
+
+  orders Order[]
+
+  @@index([pincode])
+  @@map("delivery_zones")
+}
+
+enum MealType {
+  LUNCH
+  DINNER
+}
+
+model DeliverySlot {
+  id              String   @id @default(uuid())
+  mealType        MealType @map("meal_type")
+  label           String
+  startTime       String   @map("start_time")
+  endTime         String   @map("end_time")
+  cutoffTime      String   @map("cutoff_time")
+  defaultCapacity Int      @default(30) @map("default_capacity")
+  isActive        Boolean  @default(true) @map("is_active")
+
+  capacities DeliverySlotCapacity[]
+  orders     Order[]
+
+  @@map("delivery_slots")
+}
+
+model DeliverySlotCapacity {
+  id             String   @id @default(uuid())
+  deliverySlotId String   @map("delivery_slot_id")
+  serviceDate    DateTime @db.Date @map("service_date")
+  maxCapacity    Int      @map("max_capacity")
+  bookedCount    Int      @default(0) @map("booked_count")
+
+  deliverySlot DeliverySlot @relation(fields: [deliverySlotId], references: [id], onDelete: Cascade)
+
+  @@unique([deliverySlotId, serviceDate])
+  @@map("delivery_slot_capacities")
+}
+
+// -------------------------------------------------------------
+// 4. ORDERS & FULFILLMENT
+// -------------------------------------------------------------
+
+enum OrderStatus {
+  AWAITING_PAYMENT
+  PLACED
+  ACCEPTED
+  PREPARING
+  READY_FOR_PICKUP
+  OUT_FOR_DELIVERY
+  DELIVERED
+  DELIVERY_EXCEPTION
+  CANCELLED
+}
+
+enum PaymentMethod {
+  RAZORPAY
+  COD
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUND_PENDING
+  REFUNDED
+}
+
+model Order {
+  id                 String        @id @default(uuid())
+  orderNumber        String        @unique @map("order_number")
+  trackingToken      String        @unique @map("tracking_token")
+  status             OrderStatus   @default(AWAITING_PAYMENT)
+  paymentMethod      PaymentMethod @default(RAZORPAY) @map("payment_method")
+  paymentStatus      PaymentStatus @default(PENDING) @map("payment_status")
+  
+  serviceDate        DateTime      @db.Date @map("service_date")
+  deliverySlotId     String        @map("delivery_slot_id")
+  deliveryZoneId     String?       @map("delivery_zone_id")
+
+  customerName       String        @map("customer_name")
+  customerPhone      String        @map("customer_phone")
+  customerEmail      String?       @map("customer_email")
+
+  deliveryAddress    Json          @map("delivery_address")
+  deliveryNotes      String?       @map("delivery_notes")
+
+  subtotalPaise      Int           @map("subtotal_paise")
+  deliveryFeePaise   Int           @default(0) @map("delivery_fee_paise")
+  packagingFeePaise  Int           @default(0) @map("packaging_fee_paise")
+  taxPaise           Int           @default(0) @map("tax_paise")
+  discountPaise      Int           @default(0) @map("discount_paise")
+  totalAmountPaise   Int           @map("total_amount_paise")
+
+  idempotencyKey     String?       @unique @map("idempotency_key")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  deliverySlot       DeliverySlot  @relation(fields: [deliverySlotId], references: [id])
+  deliveryZone       DeliveryZone? @relation(fields: [deliveryZoneId], references: [id])
+  items              OrderItem[]
+  statusHistory      OrderStatusEvent[]
+  paymentAttempts    PaymentAttempt[]
+  riderAssignments   RiderAssignment[]
+  deliveryOtps       DeliveryOtp[]
+  deliveryAttempts   DeliveryAttempt[]
+  refunds            Refund[]
+
+  @@index([status, serviceDate])
+  @@index([trackingToken])
+  @@index([customerPhone])
+  @@map("orders")
+}
+
+model OrderItem {
+  id              String   @id @default(uuid())
+  orderId         String   @map("order_id")
+  productId       String   @map("product_id")
+  productName     String   @map("product_name")
+  variantName     String?  @map("variant_name")
+  unitPricePaise  Int      @map("unit_price_paise")
+  quantity        Int
+  totalPricePaise Int      @map("total_price_paise")
+
+  order  Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  addons OrderItemAddon[]
+
+  @@map("order_items")
+}
+
+model OrderItemAddon {
+  id            String @id @default(uuid())
+  orderItemId   String @map("order_item_id")
+  addonOptionId String @map("addon_option_id")
+  name          String
+  pricePaise    Int    @map("price_paise")
+
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@map("order_item_addons")
+}
+
+model OrderStatusEvent {
+  id         String      @id @default(uuid())
+  orderId    String      @map("order_id")
+  fromStatus OrderStatus? @map("from_status")
+  toStatus   OrderStatus @map("to_status")
+  actorId    String?     @map("actor_id")
+  actorType  String      @map("actor_type")
+  reason     String?
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+  @@map("order_status_events")
+}
+
+// -------------------------------------------------------------
+// 5. PAYMENTS & RECONCILIATION
+// -------------------------------------------------------------
+
+model PaymentAttempt {
+  id                String        @id @default(uuid())
+  orderId           String        @map("order_id")
+  provider          String        @default("RAZORPAY")
+  providerOrderId   String?       @map("provider_order_id")
+  providerPaymentId String?       @unique @map("provider_payment_id")
+  amountPaise       Int           @map("amount_paise")
+  currency          String        @default("INR")
+  status            PaymentStatus @default(PENDING)
+  signatureVerified Boolean       @default(false) @map("signature_verified")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([providerOrderId])
+  @@map("payment_attempts")
+}
+
+model PaymentEvent {
+  id              String   @id @default(uuid())
+  providerEventId String   @unique @map("provider_event_id")
+  eventType       String   @map("event_type")
+  payload         Json
+  processedAt     DateTime @default(now()) @map("processed_at")
+
+  @@map("payment_events")
+}
+
+model Refund {
+  id               String   @id @default(uuid())
+  orderId          String   @map("order_id")
+  providerRefundId String?  @unique @map("provider_refund_id")
+  amountPaise      Int      @map("amount_paise")
+  reason           String
+  status           String   @default("COMPLETED")
+  initiatedBy      String   @map("initiated_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("refunds")
+}
+
+// -------------------------------------------------------------
+// 6. RIDER MANAGEMENT & DELIVERY OTP
+// -------------------------------------------------------------
+
+model RiderProfile {
+  id            String   @id @default(uuid())
+  userId        String   @unique @map("user_id")
+  vehicleNumber String?  @map("vehicle_number")
+  isAvailable   Boolean  @default(true) @map("is_available")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignments RiderAssignment[]
+
+  @@map("rider_profiles")
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  ACCEPTED
+  COMPLETED
+  CANCELLED
+}
+
+model RiderAssignment {
+  id         String           @id @default(uuid())
+  orderId    String           @map("order_id")
+  riderId    String           @map("rider_id")
+  status     AssignmentStatus @default(ASSIGNED)
+  assignedAt DateTime         @default(now()) @map("assigned_at")
+
+  order Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  rider RiderProfile @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+  @@map("rider_assignments")
+}
+
+model DeliveryOtp {
+  id             String    @id @default(uuid())
+  orderId        String    @map("order_id")
+  phone          String
+  otpCode        String?   @map("otp_code") // Displayed on customer web tracking page to avoid SMS cost
+  hashedVerifier String    @map("hashed_verifier")
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(5) @map("max_attempts")
+  isUsed         Boolean   @default(false) @map("is_used")
+  usedAt         DateTime? @map("used_at")
+  expiresAt      DateTime  @map("expires_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, isUsed])
+  @@map("delivery_otps")
+}
+
+model DeliveryAttempt {
+  id         String   @id @default(uuid())
+  orderId    String   @map("order_id")
+  riderId    String?  @map("rider_id")
+  outcome    String
+  notes      String?
+  recordedAt DateTime @default(now()) @map("recorded_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("delivery_attempts")
+}
+
+// -------------------------------------------------------------
+// 7. ASYNCHRONOUS OUTBOX & AUDIT TRAIL
+// -------------------------------------------------------------
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model OutboxMessage {
+  id           String       @id @default(uuid())
+  eventType    String       @map("event_type")
+  payload      Json
+  status       OutboxStatus @default(PENDING)
+  retryCount   Int          @default(0) @map("retry_count")
+  maxRetries   Int          @default(5) @map("max_retries")
+  lastError    String?      @map("last_error")
+  scheduledFor DateTime     @default(now()) @map("scheduled_for")
+  processedAt  DateTime?    @map("processed_at")
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  @@index([status, scheduledFor])
+  @@map("outbox_messages")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?  @map("actor_id")
+  actorRole  String   @map("actor_role")
+  action     String
+  entity     String
+  entityId   String   @map("entity_id")
+  oldValue   Json?    @map("old_value")
+  newValue   Json?    @map("new_value")
+  reason     String?
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
