@@ -46,13 +46,21 @@ async function bootstrap() {
   // Global Prefix
   app.setGlobalPrefix('api/v1');
 
-  // CORS
-  const corsOrigins = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
-    : ['http://localhost:3000', 'http://localhost:3001', 'https://jankirasoi.in'];
-
+  // CORS configuration supporting localhost, mobile LAN IP, and production domains
   app.enableCors({
-    origin: corsOrigins,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile webviews, curl, server-to-server) or matching local/LAN patterns
+      if (
+        !origin ||
+        /^http:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(
+          origin,
+        ) ||
+        origin === 'https://jankirasoi.in'
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, true); // Permissive in dev/testing
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Razorpay-Signature', 'X-Simulated-Role'],

@@ -4,9 +4,9 @@
   "private": true,
   "description": "Production Next.js frontend web client for Janki Rasoi Tiffin Ordering Platform",
   "scripts": {
-    "dev": "next dev -p 3001",
+    "dev": "next dev -H 0.0.0.0 -p 3001",
     "build": "next build",
-    "start": "next start -p 3001",
+    "start": "next start -H 0.0.0.0 -p 3001",
     "lint": "next lint"
   },
   "dependencies": {
