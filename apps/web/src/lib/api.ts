@@ -140,6 +140,8 @@ export interface PlaceOrderResponse {
 export interface TrackOrderResponse {
   orderNumber: string;
   status: 'PENDING_PAYMENT' | 'PLACED' | 'ACCEPTED' | 'PREPARING' | 'READY_FOR_PICKUP' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
+  paymentMethod?: string;
+  paymentStatus?: string;
   serviceDate: string;
   deliverySlot: string;
   totalAmountPaise: number;
@@ -151,8 +153,16 @@ export interface TrackOrderResponse {
   deliveryOtp?: string; // Zero-cost in-app verbal handover PIN when OUT_FOR_DELIVERY
   riderName?: string;
   riderPhone?: string;
+  customerName?: string;
+  deliveryAddress?: {
+    flat?: string;
+    street?: string;
+    landmark?: string;
+    pincode?: string;
+  };
+  deliveryNotes?: string;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
 export interface AdminOrder {
@@ -203,7 +213,7 @@ export interface RiderDelivery {
   itemsSummary: string;
 }
 
-export const DEFAULT_FOOD_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300' width='400' height='300'%3E%3Crect width='400' height='300' fill='%23FDF8F5'/%3E%3Ccircle cx='200' cy='140' r='75' fill='%23F2E7DC'/%3E%3Ccircle cx='200' cy='140' r='60' fill='%23C15A10' fill-opacity='0.12' stroke='%23C15A10' stroke-width='2' stroke-dasharray='4 2'/%3E%3Ccircle cx='180' cy='130' r='18' fill='%23D48B47' fill-opacity='0.25'/%3E%3Ccircle cx='220' cy='130' r='18' fill='%232E7D32' fill-opacity='0.25'/%3E%3Ccircle cx='200' cy='160' r='16' fill='%23C15A10' fill-opacity='0.25'/%3E%3Ctext x='50%25' y='245' text-anchor='middle' font-family='sans-serif' font-weight='700' font-size='15' fill='%237C5843'%3EJanki Rasoi Ghar Ka Khana%3C/text%3E%3C/svg%3E";
+export const DEFAULT_FOOD_IMAGE = 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80';
 
 // In-memory + SessionStorage cache for instant zero-latency client transitions without re-fetching
 const memoryCache = new Map<string, { data: any; expiry: number }>();

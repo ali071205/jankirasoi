@@ -8,14 +8,20 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: '#C15A10',
-        'primary-container': '#C15A10',
-        'on-primary': '#FFFFFF',
-        secondary: '#00875A',
-        surface: '#0F172A',
-        'surface-container': '#1E293B',
-        'surface-container-high': '#334155',
-        'on-surface': '#F8FAFC',
+        primary: "#1d5c34",
+        "primary-container": "#38754a",
+        "on-primary": "#ffffff",
+        secondary: "#875200",
+        "secondary-container": "#ffad45",
+        "on-secondary-container": "#6f4300",
+        surface: "#f8fbf0",
+        "surface-container-lowest": "#ffffff",
+        "surface-container-low": "#f2f5ea",
+        "surface-container": "#ecefe4",
+        "surface-container-high": "#e6e9df",
+        "on-surface": "#191d16",
+        "on-surface-variant": "#404941",
+        outline: "#717970",
       },
       fontFamily: {
         headline: ['"DM Sans"', 'sans-serif'],

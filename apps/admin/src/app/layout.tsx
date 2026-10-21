@@ -13,14 +13,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <head>
         <link
           href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body className="bg-slate-950 font-body text-slate-100 min-h-screen flex flex-col antialiased">
+      <body className="bg-surface font-body text-on-surface min-h-screen flex flex-col antialiased">
         {children}
       </body>
     </html>

@@ -1,120 +1,54 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import React, { useEffect, useState, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { api, TrackOrderResponse } from '../../lib/api';
+import { api, TrackOrderResponse, CatalogResponse, DEFAULT_FOOD_IMAGE } from '../../lib/api';
 
-const STEP_DEFS = [
-  { key: 'PLACED', label: 'Order Received', desc: 'Order received and waiting for kitchen approval' },
-  { key: 'ACCEPTED', label: 'Accepted by Kitchen', desc: 'Chef confirmed meal preparation' },
-  { key: 'PREPARING', label: 'Fresh on Tawa & Simmering', desc: 'Fresh phulkas & hot dal being packed in tiffins' },
-  { key: 'READY_FOR_PICKUP', label: 'Ready for Dispatch', desc: 'Sealed & waiting for rider pickup' },
-  { key: 'OUT_FOR_DELIVERY', label: 'Out for Delivery', desc: 'Rider is on the way to your doorstep' },
-  { key: 'DELIVERED', label: 'Delivered Fresh', desc: 'Meal handed over and verified via PIN' },
+const PROGRESS_STEPS = [
+  { key: 'ACCEPTED', label: 'Confirmed', icon: 'check_circle' },
+  { key: 'PREPARING', label: 'Cooking', icon: 'skillet' },
+  { key: 'READY_FOR_PICKUP', label: 'Packed', icon: 'inventory_2' },
+  { key: 'OUT_FOR_DELIVERY', label: 'On Way', icon: 'moped' },
+  { key: 'DELIVERED', label: 'Delivered', icon: 'task_alt' },
 ];
 
-interface RecentOrderMeta {
-  orderNumber: string;
-  trackingToken: string;
-  placedAt: string;
+function getProgressIndex(status: string) {
+  if (status === 'DELIVERED') return 4;
+  if (status === 'OUT_FOR_DELIVERY') return 3;
+  if (status === 'READY_FOR_PICKUP') return 2;
+  if (status === 'PREPARING') return 1;
+  return 0;
 }
 
-function TrackContent() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const urlToken = searchParams.get('token');
-
-  const [activeIdentifier, setActiveIdentifier] = useState<string>('');
-  const [order, setOrder] = useState<TrackOrderResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+// Subcomponent: Individual Order Card
+function SingleOrderCard({
+  order,
+  catalog,
+}: {
+  order: TrackOrderResponse;
+  catalog: CatalogResponse | null;
+}) {
+  const [showBill, setShowBill] = useState(false);
   const [copiedPin, setCopiedPin] = useState(false);
-  const [recentOrders, setRecentOrders] = useState<RecentOrderMeta[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searching, setSearching] = useState(false);
 
-  // Load Recent Orders from LocalStorage on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = JSON.parse(window.localStorage.getItem('jr_recent_orders') || '[]');
-        if (Array.isArray(stored)) {
-          setRecentOrders(stored);
-        }
-
-        // Determine initial tracking token
-        if (urlToken) {
-          setActiveIdentifier(urlToken);
-        } else if (stored.length > 0 && stored[0].trackingToken) {
-          setActiveIdentifier(stored[0].trackingToken);
-        } else {
-          const lastToken = window.localStorage.getItem('jr_last_tracking_token');
-          if (lastToken) setActiveIdentifier(lastToken);
-          else setLoading(false);
-        }
-      } catch {
-        if (urlToken) setActiveIdentifier(urlToken);
-        else setLoading(false);
-      }
+  // Reliable, dish-specific high-resolution photography
+  const foodImageUrl = useMemo(() => {
+    const itemName = order.items?.[0]?.name?.toLowerCase() || '';
+    if (itemName.includes('khichdi') || itemName.includes('bowl')) {
+      return 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?auto=format&fit=crop&w=800&q=80';
     }
-  }, [urlToken]);
-
-  // Fetch Order by Identifier (token, order number, or phone)
-  const fetchOrder = useCallback(
-    async (idToFetch: string, isBackground = false) => {
-      if (!idToFetch) return;
-      if (!isBackground) setLoading(true);
-
-      try {
-        const data = await api.trackOrder(idToFetch);
-        setOrder(data);
-        setError(null);
-
-        // Update active token in URL without reload if changed
-        if (typeof window !== 'undefined' && data.orderNumber) {
-          try {
-            window.localStorage.setItem('jr_last_tracking_token', idToFetch);
-          } catch {}
-        }
-      } catch (err: any) {
-        if (!isBackground) {
-          setError(err.message || 'Order not found. Please check your order number or phone number.');
-        }
-      } finally {
-        setLoading(false);
-        setSearching(false);
-      }
-    },
-    []
-  );
-
-  // Trigger fetch when activeIdentifier changes
-  useEffect(() => {
-    if (activeIdentifier) {
-      fetchOrder(activeIdentifier);
+    if (itemName.includes('phulka') || itemName.includes('roti')) {
+      return 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=800&q=80';
     }
-  }, [activeIdentifier, fetchOrder]);
+    if (catalog?.categories) {
+      const allItems = catalog.categories.flatMap((c) => c.items);
+      const match = allItems.find((i) => i.name.toLowerCase() === itemName);
+      if (match?.imageUrl) return match.imageUrl;
+    }
+    return DEFAULT_FOOD_IMAGE;
+  }, [order, catalog]);
 
-  // Live Auto-Refresh every 4 seconds
-  useEffect(() => {
-    if (!activeIdentifier) return;
-    const interval = setInterval(() => {
-      fetchOrder(activeIdentifier, true);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [activeIdentifier, fetchOrder]);
-
-  // Handle Manual Search
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const query = searchQuery.trim();
-    if (!query) return;
-    setSearching(true);
-    setActiveIdentifier(query);
-  };
-
-  // Copy PIN to clipboard
   const handleCopyPin = (pin: string) => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(pin);
@@ -123,284 +57,516 @@ function TrackContent() {
     }
   };
 
-  const currentIdx = order ? STEP_DEFS.findIndex((s) => s.key === order.status) : -1;
+  const currentStep = getProgressIndex(order.status);
+  const progressPercent = Math.min(100, Math.max(10, (currentStep / 4) * 100));
 
-  let statusHeading = 'Kitchen is Preparing Your Tiffin';
-  if (order) {
-    if (order.status === 'DELIVERED') {
-      statusHeading = 'Meal Delivered Fresh!';
-    } else if (order.status === 'OUT_FOR_DELIVERY') {
-      statusHeading = 'Rider is on the Way!';
-    } else if (order.status === 'READY_FOR_PICKUP') {
-      statusHeading = 'Packed & Waiting for Rider';
-    } else if (order.status === 'ACCEPTED') {
-      statusHeading = 'Order Confirmed by Chef';
-    }
+  let statusBadge = 'Cooking on Tawa 🔥';
+  let statusDesc = 'Fresh phulkas & dal simmering on order';
+  if (order.status === 'DELIVERED') {
+    statusBadge = 'Delivered Fresh 🎉';
+    statusDesc = 'Handed over and verified via PIN';
+  } else if (order.status === 'OUT_FOR_DELIVERY') {
+    statusBadge = 'Out for Delivery 🛵';
+    statusDesc = `${order.riderName || 'Rider'} is on the way to your door`;
+  } else if (order.status === 'READY_FOR_PICKUP') {
+    statusBadge = 'Packed & Ready 🍱';
+    statusDesc = 'Sealed warm in spill-proof trays';
+  } else if (order.status === 'ACCEPTED' || order.status === 'PLACED') {
+    statusBadge = 'Confirmed by Chef 🍳';
+    statusDesc = 'Prep started for today’s batch dispatch';
   }
 
+  const firstItem = order.items && order.items.length > 0 ? order.items[0] : null;
+
   return (
-    <main className="flex-1 pt-20 pb-24 max-w-2xl mx-auto w-full px-4 flex flex-col gap-4">
-      {/* Top Search / Lookup Bar */}
-      <div className="bg-white rounded-2xl p-3.5 shadow-xs border border-black/5 flex flex-col gap-2.5">
-        <form onSubmit={handleSearch} className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <span className="material-symbols-outlined absolute left-3 top-2.5 text-gray-400 text-[20px]">
-              search
+    <div className="bg-white rounded-3xl shadow-sm border border-stone-200/90 overflow-hidden flex flex-col transition-all">
+      {/* Top Section: Food Image on LEFT side + Order Info on RIGHT side */}
+      <div className="p-4 sm:p-5 flex flex-col gap-3.5">
+        <div className="flex items-start gap-3.5">
+          {/* Left Side: Real Food Photo with Pure Veg Green Dot (Strict 72px thumbnail) */}
+          <div className="relative w-[72px] h-[72px] min-w-[72px] max-w-[72px] rounded-2xl overflow-hidden bg-stone-100 border border-stone-200 shrink-0 shadow-xs">
+            <img
+              src={foodImageUrl}
+              alt={firstItem?.name || 'Meal'}
+              className="w-full h-full object-cover"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = DEFAULT_FOOD_IMAGE;
+              }}
+            />
+            <span className="absolute top-1 left-1 w-2.5 h-2.5 rounded-xs border border-green-600 bg-white p-0.5 flex items-center justify-center shadow-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-600 block"></span>
             </span>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by Phone (9876543210) or #JR-Order"
-              className="w-full bg-surface-container-lowest border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-xs text-on-surface placeholder-gray-400 focus:outline-none focus:border-primary"
+          </div>
+
+          {/* Right Side: Order #, Status, Dish Name & Handover PIN */}
+          <div className="flex-1 min-w-0 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[11px] font-bold text-primary bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 truncate">
+                  #{order.orderNumber}
+                </span>
+                <span className="text-[10px] text-stone-400 shrink-0">
+                  {order.deliverySlot}
+                </span>
+              </div>
+
+              <div className="font-headline font-bold text-base text-stone-900 mt-1 leading-tight">
+                {statusBadge}
+              </div>
+              <p className="text-[11px] text-stone-500 leading-snug line-clamp-1 mt-0.5">
+                {statusDesc}
+              </p>
+            </div>
+
+            {/* Dish Title & PIN Row */}
+            <div className="mt-2 pt-2 border-t border-stone-100 flex items-center justify-between gap-2">
+              <div className="truncate">
+                <span className="text-xs font-bold text-stone-800 block truncate">
+                  {firstItem?.name || 'Homestyle Special Thali'}
+                </span>
+                <span className="text-[10px] text-stone-400">
+                  {order.items.length} {order.items.length === 1 ? 'item' : 'items'}
+                </span>
+              </div>
+
+              {/* Handover PIN (OTP) */}
+              <div className="shrink-0">
+                {order.deliveryOtp ? (
+                  <button
+                    onClick={() => handleCopyPin(order.deliveryOtp!)}
+                    className="bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2.5 py-1 rounded-xl text-right transition-colors flex items-center gap-1.5 shadow-2xs"
+                    title="Tap to copy PIN"
+                  >
+                    <div>
+                      <span className="text-[9px] uppercase font-bold text-amber-800 block leading-none">
+                        PIN
+                      </span>
+                      <span className="font-mono font-extrabold text-sm text-stone-900 leading-none">
+                        {order.deliveryOtp}
+                      </span>
+                    </div>
+                    <span className="material-symbols-outlined text-[13px] text-amber-700">
+                      {copiedPin ? 'check' : 'content_copy'}
+                    </span>
+                  </button>
+                ) : (
+                  <span className="text-[10px] text-stone-400 bg-stone-50 px-2 py-1 rounded-lg border border-stone-200 block">
+                    PIN on dispatch
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Milestone Flow & Icons */}
+        <div className="pt-1">
+          <div className="relative w-full h-2 bg-stone-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-emerald-600 via-primary to-amber-500 rounded-full transition-all duration-700 ease-out"
+              style={{ width: `${progressPercent}%` }}
             />
           </div>
-          <button
-            type="submit"
-            disabled={searching}
-            className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary-container active:scale-95 transition-all shrink-0"
-          >
-            {searching ? 'Finding...' : 'Track'}
-          </button>
-        </form>
 
-        {/* Recent Orders Pills Switcher */}
-        {recentOrders.length > 0 && (
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5">
-            <span className="text-[11px] font-bold text-gray-400 shrink-0">Recent:</span>
-            {recentOrders.map((ro) => {
-              const isSelected = activeIdentifier === ro.trackingToken || activeIdentifier === ro.orderNumber;
+          <div className="grid grid-cols-5 text-center mt-2">
+            {PROGRESS_STEPS.map((step, idx) => {
+              const isDone = currentStep >= idx;
+              const isCurrent = currentStep === idx;
               return (
-                <button
-                  key={ro.orderNumber}
-                  onClick={() => {
-                    setActiveIdentifier(ro.trackingToken || ro.orderNumber);
-                  }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold whitespace-nowrap transition-all border ${
-                    isSelected
-                      ? 'bg-primary text-white border-primary shadow-xs'
-                      : 'bg-surface-container text-on-surface-variant border-transparent hover:border-gray-200'
-                  }`}
-                >
-                  #{ro.orderNumber}
-                </button>
+                <div key={step.key} className="flex flex-col items-center gap-0.5">
+                  <span
+                    className={`material-symbols-outlined text-[15px] transition-colors ${
+                      isCurrent
+                        ? 'text-primary scale-110 animate-bounce'
+                        : isDone
+                        ? 'text-emerald-700'
+                        : 'text-stone-300'
+                    }`}
+                  >
+                    {step.icon}
+                  </span>
+                  <span
+                    className={`text-[9px] sm:text-[10px] font-bold truncate max-w-full ${
+                      isCurrent
+                        ? 'text-primary'
+                        : isDone
+                        ? 'text-stone-800'
+                        : 'text-stone-400'
+                    }`}
+                  >
+                    {step.label}
+                  </span>
+                </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* Rider Phone Call Strip (When Out For Delivery) */}
+        {order.status === 'OUT_FOR_DELIVERY' && (
+          <div className="pt-2 border-t border-stone-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-8 h-8 rounded-full bg-emerald-100 text-primary flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[18px]">sports_motorsports</span>
+              </span>
+              <div>
+                <span className="font-bold text-xs text-stone-900 block leading-tight">
+                  {order.riderName || 'Rider Sonu Kumar'}
+                </span>
+                <span className="text-[10px] text-stone-500">Delivery Partner</span>
+              </div>
+            </div>
+
+            <a
+              href={`tel:${order.riderPhone || '9876543210'}`}
+              className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 shadow-xs transition-colors"
+            >
+              <span className="material-symbols-outlined text-[15px]">call</span>
+              <span>Call Rider</span>
+            </a>
           </div>
         )}
       </div>
 
-      {/* Loading Skeleton */}
-      {loading && !order && (
-        <div className="bg-white rounded-2xl p-8 shadow-xs border border-black/5 animate-pulse flex flex-col items-center gap-3">
-          <div className="w-14 h-14 rounded-full bg-gray-200"></div>
-          <div className="h-6 bg-gray-200 rounded w-48"></div>
-          <div className="h-4 bg-gray-200 rounded w-32"></div>
-        </div>
-      )}
-
-      {/* Error or Empty State */}
-      {!loading && !order && (
-        <div className="bg-white rounded-2xl p-8 text-center flex flex-col items-center gap-3 shadow-xs border border-black/5">
-          <span className="material-symbols-outlined text-[48px] text-primary">local_shipping</span>
-          <h2 className="font-headline font-bold text-lg text-on-surface">No Active Order Selected</h2>
-          <p className="text-xs text-on-surface-variant max-w-sm">
-            {error ||
-              'Enter your 10-digit mobile phone number or your Order ID above to see live kitchen preparation and your verbal delivery PIN.'}
-          </p>
-          <div className="flex items-center gap-2 mt-2">
-            <Link
-              href="/menu"
-              className="px-5 py-2 rounded-full bg-primary text-white text-xs font-bold hover:bg-primary-container"
-            >
-              Order Lunch or Dinner
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {/* Order Active View */}
-      {order && (
-        <>
-          {/* Order Header Card */}
-          <div className="bg-white rounded-2xl p-5 shadow-xs border border-black/5 flex flex-col items-center text-center relative overflow-hidden">
-            <div className="w-12 h-12 rounded-full bg-primary-container text-white flex items-center justify-center shadow-md mb-2">
-              <span className="material-symbols-outlined text-[28px]">
-                {order.status === 'DELIVERED'
-                  ? 'task_alt'
-                  : order.status === 'OUT_FOR_DELIVERY'
-                  ? 'two_wheeler'
-                  : 'skillet'}
-              </span>
-            </div>
-            <span className="px-3 py-0.5 rounded-full bg-green-50 text-primary font-bold text-[11px] mb-1">
-              Ghar Jaisa Swad Assured
+      {/* Bill Description & Order Details (Appears ONLY AFTER Click) */}
+      <div className="border-t border-stone-200/90 bg-stone-50/60">
+        <button
+          onClick={() => setShowBill(!showBill)}
+          className="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-stone-100/70 transition-colors"
+        >
+          <div className="flex items-center gap-2 text-xs font-bold text-stone-800">
+            <span className="material-symbols-outlined text-[17px] text-primary">receipt_long</span>
+            <span>{showBill ? 'Hide Bill & Details' : 'View Bill & Order Details'}</span>
+            <span className="text-stone-400 font-normal">
+              (₹{(order.totalAmountPaise / 100).toFixed(0)})
             </span>
-            <h1 className="font-headline font-bold text-xl text-on-surface">{statusHeading}</h1>
-            <p className="text-xs text-on-surface-variant mt-1">
-              Order <span className="font-mono font-bold text-on-surface">#{order.orderNumber}</span> • {order.deliverySlot}
-            </p>
           </div>
 
-          {/* VERBAL DELIVERY PIN CARD (THE HERO COMPONENT) */}
-          {order.status === 'OUT_FOR_DELIVERY' && order.deliveryOtp ? (
-            <div className="rounded-2xl bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white p-6 shadow-lg text-center flex flex-col items-center gap-3 animate-in zoom-in-95 duration-200">
-              <div className="flex items-center gap-1.5 text-white/90 font-bold text-xs uppercase tracking-wider bg-black/20 px-3 py-1 rounded-full">
-                <span className="material-symbols-outlined text-[16px]">key</span>
-                <span>Your Verbal Handover PIN</span>
-              </div>
-
-              {/* 6 Digit Display Box */}
-              <div className="bg-white px-8 py-3 rounded-2xl shadow-inner border border-white/40">
-                <span className="font-headline font-bold text-4xl sm:text-5xl tracking-widest text-slate-900 font-mono">
-                  {order.deliveryOtp}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleCopyPin(order.deliveryOtp!)}
-                  className="px-3.5 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-xs font-bold flex items-center gap-1.5 transition-colors"
-                >
-                  <span className="material-symbols-outlined text-[16px]">
-                    {copiedPin ? 'check' : 'content_copy'}
-                  </span>
-                  <span>{copiedPin ? 'PIN Copied!' : 'Copy PIN'}</span>
-                </button>
-              </div>
-
-              <p className="text-xs text-white/95 max-w-sm leading-relaxed mt-1">
-                Tell this <strong>6-digit code</strong> to the rider when they arrive at your door to safely receive your meal.
-              </p>
-            </div>
-          ) : order.status === 'DELIVERED' ? (
-            <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-center flex items-center justify-center gap-2 text-xs text-emerald-800 font-bold shadow-xs">
-              <span className="material-symbols-outlined text-emerald-600 text-[20px]">verified</span>
-              <span>Delivered Fresh &amp; Verified with Handover PIN!</span>
-            </div>
-          ) : (
-            <div className="rounded-2xl bg-surface-container-low border border-black/5 p-4 text-center flex items-center justify-center gap-2 text-xs text-on-surface-variant shadow-xs">
-              <span className="material-symbols-outlined text-primary text-[20px]">lock_clock</span>
-              <span>
-                Your <strong>6-digit handover PIN</strong> will appear here automatically as soon as the rider departs the kitchen.
-              </span>
-            </div>
-          )}
-
-          {/* Assigned Rider Profile & Safety Call (Swiggy / Zomato Pattern) */}
-          {order.status === 'OUT_FOR_DELIVERY' && (
-            <div className="bg-white rounded-2xl p-4 shadow-xs border border-black/5 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-orange-100 text-primary flex items-center justify-center font-bold text-sm">
-                  <span className="material-symbols-outlined text-[24px]">sports_motorsports</span>
-                </div>
-                <div>
-                  <span className="font-bold text-xs text-on-surface block">
-                    {order.riderName || 'Rider Sonu Kumar'}
-                  </span>
-                  <span className="text-[11px] text-gray-500 block">Delivery Partner • Hero Splendor</span>
-                </div>
-              </div>
-              <a
-                href={`tel:${order.riderPhone || '9876543210'}`}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform"
-              >
-                <span className="material-symbols-outlined text-[16px]">call</span>
-                <span>Call Rider</span>
-              </a>
-            </div>
-          )}
-
-          {/* One-Tap WhatsApp Share for Family Members */}
-          <a
-            href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-              `Tracking my Janki Rasoi meal (Order #${order.orderNumber}). Verbal Handover PIN: ${
-                order.deliveryOtp || 'Active upon arrival'
-              }. Track live: http://10.103.206.252:3001/track?token=${order.orderNumber}`
-            )}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full py-2.5 rounded-2xl bg-emerald-50 text-emerald-800 font-bold text-xs flex items-center justify-center gap-2 border border-emerald-200 hover:bg-emerald-100 transition-colors shadow-xs"
+          <span
+            className={`material-symbols-outlined text-stone-400 text-base transition-transform duration-200 ${
+              showBill ? 'rotate-180' : ''
+            }`}
           >
-            <span className="material-symbols-outlined text-[18px] text-emerald-600">share</span>
-            <span>Share PIN &amp; Live Tracking on WhatsApp</span>
-          </a>
+            keyboard_arrow_down
+          </span>
+        </button>
 
-          {/* Live Kitchen Status Stepper */}
-          <section className="bg-white rounded-2xl p-5 shadow-xs border border-black/5 flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-              <h2 className="font-headline font-bold text-sm text-on-surface flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-primary text-[20px]">soup_kitchen</span>
-                Live Kitchen Timeline
-              </h2>
-              <span className="text-[11px] text-primary font-semibold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span> Auto-updating (4s)
+        {/* Collapsed by default: ONLY APPEARS AFTER CLICK */}
+        {showBill && (
+          <div className="p-4 pt-1 border-t border-stone-200/70 flex flex-col gap-3 text-xs bg-white animate-in fade-in duration-150">
+            {/* Dishes */}
+            <div>
+              <span className="text-[10px] font-bold uppercase text-stone-400 tracking-wider block mb-1">
+                Dishes in Tiffin
               </span>
-            </div>
-
-            <div className="flex flex-col gap-4 relative pl-3">
-              {STEP_DEFS.map((step, idx) => {
-                const isDone = currentIdx >= idx;
-                const isCurrent = currentIdx === idx;
-                return (
-                  <div key={step.key} className="flex items-start gap-3">
-                    <div
-                      className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
-                        isCurrent
-                          ? 'bg-primary text-white ring-4 ring-orange-100 animate-pulse'
-                          : isDone
-                          ? 'bg-primary text-white'
-                          : 'bg-gray-200 text-gray-500'
-                      }`}
-                    >
-                      {isDone ? (
-                        <span className="material-symbols-outlined text-[14px]">check</span>
-                      ) : (
-                        idx + 1
+              <div className="flex flex-col divide-y divide-stone-100">
+                {order.items.map((item, idx) => (
+                  <div key={idx} className="py-1.5 flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-stone-900">
+                        {item.quantity}x {item.name}
+                      </span>
+                      {item.variant && (
+                        <span className="text-[10px] text-stone-500 block">{item.variant}</span>
                       )}
                     </div>
-                    <div className="flex flex-col">
-                      <span
-                        className={`font-bold text-xs ${
-                          isCurrent ? 'text-primary' : isDone ? 'text-on-surface' : 'text-gray-400'
-                        }`}
-                      >
-                        {step.label}
-                      </span>
-                      <span className="text-[11px] text-on-surface-variant">{step.desc}</span>
-                    </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
-          </section>
 
-          {/* Order Items Snapshot */}
-          <section className="bg-white rounded-2xl p-5 shadow-xs border border-black/5 flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <h2 className="font-headline font-bold text-sm text-on-surface">Order Summary</h2>
-              <span className="text-xs font-semibold text-gray-500">
-                {order.paymentMethod === 'COD' ? '💵 Pay on Delivery' : '💳 Paid Online'}
-              </span>
-            </div>
-            <div className="flex flex-col divide-y divide-gray-100 text-xs">
-              {order.items.map((i, idx) => (
-                <div key={idx} className="py-2.5 flex justify-between items-center">
-                  <div>
-                    <span className="font-bold text-on-surface">
-                      {i.quantity}x {i.name}
-                    </span>
-                    {i.variant && <span className="text-[10px] text-gray-500 block">{i.variant}</span>}
-                  </div>
+            {/* Address & Instructions */}
+            <div className="bg-stone-50 p-3 rounded-2xl border border-stone-200/80 flex flex-col gap-2">
+              <div className="flex items-start gap-2">
+                <span className="material-symbols-outlined text-primary text-[17px] shrink-0 mt-0.5">
+                  location_on
+                </span>
+                <div className="text-[11px] text-stone-700 leading-relaxed">
+                  <strong className="block text-stone-900">Delivery Address:</strong>
+                  {order.deliveryAddress ? (
+                    <>
+                      <span>{order.deliveryAddress.flat || ''} </span>
+                      <span>{order.deliveryAddress.street || ''} </span>
+                      {order.deliveryAddress.landmark && (
+                        <span className="block text-stone-500">Landmark: {order.deliveryAddress.landmark}</span>
+                      )}
+                      <span className="text-primary font-semibold">Pincode: {order.deliveryAddress.pincode}</span>
+                    </>
+                  ) : (
+                    <span>South &amp; Central Delhi Hub</span>
+                  )}
                 </div>
-              ))}
+              </div>
+
+              <div className="pt-1.5 border-t border-stone-200/60 flex items-start gap-2">
+                <span className="material-symbols-outlined text-amber-700 text-[17px] shrink-0 mt-0.5">
+                  notes
+                </span>
+                <div className="text-[11px] text-stone-700">
+                  <strong className="block text-stone-900">Delivery Notes:</strong>
+                  <span>{order.deliveryNotes || 'Ring bell once & leave warm tray at doorstep.'}</span>
+                </div>
+              </div>
             </div>
-            <div className="pt-2.5 border-t border-gray-100 flex justify-between font-bold text-sm text-primary">
-              <span>Total Amount</span>
-              <span>₹{(order.totalAmountPaise / 100).toFixed(2)}</span>
+
+            {/* Bill Summary */}
+            <div className="flex flex-col gap-1 border-t border-stone-100 pt-1">
+              <div className="flex justify-between text-stone-600 text-[11px]">
+                <span>Item Total</span>
+                <span>₹{(order.totalAmountPaise / 100).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-stone-600 text-[11px]">
+                <span>Delivery Fee</span>
+                <span className="text-emerald-700 font-bold">FREE</span>
+              </div>
+              <div className="flex justify-between text-stone-600 text-[11px]">
+                <span>Payment Mode</span>
+                <span className="font-medium">
+                  {order.paymentMethod === 'COD' ? '💵 Cash on Delivery' : '💳 Paid Online (UPI)'}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm font-extrabold text-stone-900 pt-1 border-t border-stone-200">
+                <span>Total Amount</span>
+                <span className="text-primary font-bold">₹{(order.totalAmountPaise / 100).toFixed(2)}</span>
+              </div>
             </div>
-          </section>
-        </>
+          </div>
+        )}
+      </div>
+
+      {/* Share & Support Action Buttons */}
+      <div className="grid grid-cols-2 gap-2 p-2.5 bg-stone-50/80 border-t border-stone-200/70">
+        <a
+          href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+            `Tracking my Janki Rasoi meal (Order #${order.orderNumber}). Verbal Handover PIN: ${
+              order.deliveryOtp || 'Unlocks upon arrival'
+            }. Track live: http://10.103.206.252:3001/track?token=${order.orderNumber}`
+          )}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="py-1.5 px-2 rounded-xl bg-white text-emerald-800 font-bold text-[11px] flex items-center justify-center gap-1 border border-emerald-200 hover:bg-emerald-50 transition-colors shadow-2xs"
+        >
+          <span className="material-symbols-outlined text-[15px] text-emerald-600">share</span>
+          <span>WhatsApp Share</span>
+        </a>
+
+        <a
+          href="https://wa.me/919812345678?text=Hi%20Janki%20Rasoi,%20I%20have%20a%20query%20about%20Order%20"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="py-1.5 px-2 rounded-xl bg-white text-stone-800 font-bold text-[11px] flex items-center justify-center gap-1 border border-stone-200 hover:bg-stone-50 transition-colors shadow-2xs"
+        >
+          <span className="material-symbols-outlined text-[15px] text-primary">chat</span>
+          <span>Kitchen Help</span>
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// Main Page Content
+function TrackContent() {
+  const searchParams = useSearchParams();
+  const urlToken = searchParams.get('token');
+
+  const [orders, setOrders] = useState<TrackOrderResponse[]>([]);
+  const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Initial load: catalog + all recent orders
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadAllOrders() {
+      if (typeof window === 'undefined') return;
+
+      try {
+        // Fetch catalog for food images
+        api.getCatalog().then((cat) => {
+          if (isMounted) setCatalog(cat);
+        }).catch(() => {});
+
+        // Gather order tokens from URL, recent orders array, and last token
+        const tokensToFetch: string[] = [];
+
+        if (urlToken) {
+          tokensToFetch.push(urlToken);
+        }
+
+        try {
+          const stored = JSON.parse(window.localStorage.getItem('jr_recent_orders') || '[]');
+          if (Array.isArray(stored)) {
+            stored.slice(0, 5).forEach((item: any) => {
+              const tok = item.trackingToken || item.orderNumber;
+              if (tok && !tokensToFetch.includes(tok)) {
+                tokensToFetch.push(tok);
+              }
+            });
+          }
+        } catch {}
+
+        const lastToken = window.localStorage.getItem('jr_last_tracking_token');
+        if (lastToken && !tokensToFetch.includes(lastToken)) {
+          tokensToFetch.unshift(lastToken);
+        }
+
+        if (tokensToFetch.length === 0) {
+          if (isMounted) {
+            setOrders([]);
+            setLoading(false);
+          }
+          return;
+        }
+
+        // Fetch all orders in parallel
+        const results = await Promise.allSettled(
+          tokensToFetch.map((t) => api.trackOrder(t))
+        );
+
+        if (!isMounted) return;
+
+        const fetchedOrders: TrackOrderResponse[] = [];
+        results.forEach((res) => {
+          if (res.status === 'fulfilled' && res.value?.orderNumber) {
+            // Deduplicate by orderNumber
+            if (!fetchedOrders.some((o) => o.orderNumber === res.value.orderNumber)) {
+              fetchedOrders.push(res.value);
+            }
+          }
+        });
+
+        setOrders(fetchedOrders);
+        if (fetchedOrders.length === 0 && tokensToFetch.length > 0) {
+          setError('Could not find active order. Please check order number or phone.');
+        }
+      } catch (err: any) {
+        if (isMounted) setError(err.message || 'Failed to load live tracking.');
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    loadAllOrders();
+  }, [urlToken]);
+
+  // Handle Search Submission
+  const handleSearchSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const query = searchQuery.trim();
+    if (!query) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api.trackOrder(query);
+      if (data?.orderNumber) {
+        setOrders((prev) => {
+          const filtered = prev.filter((o) => o.orderNumber !== data.orderNumber);
+          return [data, ...filtered];
+        });
+        setShowSearch(false);
+        setSearchQuery('');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Order not found for given number.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <main className="flex-1 pt-20 pb-28 max-w-lg mx-auto w-full px-4 flex flex-col gap-3.5">
+      {/* Top Header Bar */}
+      <div className="flex items-center justify-between py-1">
+        <Link
+          href="/"
+          className="flex items-center gap-1 text-xs font-bold text-stone-600 hover:text-stone-900 bg-white px-3 py-1.5 rounded-full border border-stone-200/80 shadow-2xs transition-colors"
+        >
+          <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+          <span>Home</span>
+        </Link>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-stone-700">
+            {orders.length > 0 ? `${orders.length} Order${orders.length > 1 ? 's' : ''}` : 'Live Tracking'}
+          </span>
+
+          <button
+            onClick={() => setShowSearch(!showSearch)}
+            aria-label="Search order"
+            className="w-8 h-8 rounded-full bg-white border border-stone-200/80 flex items-center justify-center text-stone-600 hover:text-stone-900 shadow-2xs transition-colors"
+          >
+            <span className="material-symbols-outlined text-[18px]">search</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Expandable Search Input */}
+      {showSearch && (
+        <form onSubmit={handleSearchSubmit} className="bg-white p-3 rounded-2xl border border-stone-200 shadow-xs flex gap-2 animate-in fade-in">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Enter Order # or 10-digit Phone"
+            className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-primary"
+          />
+          <button
+            type="submit"
+            className="px-4 py-1.5 bg-primary text-white text-xs font-bold rounded-xl hover:bg-emerald-800"
+          >
+            Track
+          </button>
+        </form>
+      )}
+
+      {/* Loading Skeleton */}
+      {loading && orders.length === 0 && (
+        <div className="bg-white rounded-3xl p-5 shadow-xs border border-stone-200/80 animate-pulse flex flex-col gap-4">
+          <div className="flex gap-3">
+            <div className="w-[72px] h-[72px] min-w-[72px] bg-stone-200 rounded-2xl shrink-0"></div>
+            <div className="flex-1 flex flex-col gap-2">
+              <div className="h-5 bg-stone-200 rounded w-3/4"></div>
+              <div className="h-4 bg-stone-100 rounded w-1/2"></div>
+            </div>
+          </div>
+          <div className="h-2 bg-stone-100 rounded-full w-full"></div>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && orders.length === 0 && (
+        <div className="bg-white rounded-3xl p-8 text-center flex flex-col items-center gap-3 shadow-xs border border-stone-200/80">
+          <span className="material-symbols-outlined text-[44px] text-primary">moped</span>
+          <h2 className="font-headline font-bold text-base text-stone-900">No Orders Found</h2>
+          <p className="text-xs text-stone-500 max-w-xs">
+            {error || 'Place a homestyle tiffin meal from our menu to track your fresh batch delivery.'}
+          </p>
+          <Link
+            href="/menu"
+            className="mt-2 px-5 py-2.5 rounded-full bg-primary text-white text-xs font-bold hover:bg-emerald-800 shadow-sm"
+          >
+            Order Lunch or Dinner
+          </Link>
+        </div>
+      )}
+
+      {/* ORDERS DISPLAYED ONE BY ONE IN A ROW / LIST */}
+      {orders.length > 0 && (
+        <div className="flex flex-col gap-4">
+          {orders.map((ord) => (
+            <SingleOrderCard
+              key={ord.orderNumber}
+              order={ord}
+              catalog={catalog}
+            />
+          ))}
+        </div>
       )}
     </main>
   );
@@ -410,7 +576,7 @@ export default function TrackPage() {
   return (
     <Suspense
       fallback={
-        <div className="p-10 text-center text-xs text-gray-500">
+        <div className="p-10 text-center text-xs text-stone-500">
           Loading live tracking console...
         </div>
       }

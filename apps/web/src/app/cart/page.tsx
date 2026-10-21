@@ -250,8 +250,8 @@ export default function CartPage() {
                 >
                   <div className="flex justify-between items-center">
                     <span className="font-bold text-xs">{s.label}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 rounded">
-                      {s.remainingCapacity} left
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                      🟢 Open
                     </span>
                   </div>
                   <span className="text-[10px] text-gray-500 block mt-0.5">Cutoff: {s.cutoffTime}</span>

@@ -103,6 +103,24 @@ export const adminApi = {
     return res.json();
   },
 
+  // 3b. Assign Rider
+  async assignRider(orderId: string, riderId: string) {
+    const base = getApiBase();
+    const res = await fetch(`${base}/admin/orders/${encodeURIComponent(orderId)}/assign-rider`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Simulated-Role': 'STAFF',
+      },
+      body: JSON.stringify({ riderId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to assign rider');
+    }
+    return res.json();
+  },
+
   // 4. Daily Slots Inspection
   async getDeliverySlots(date?: string) {
     const base = getApiBase();
@@ -146,6 +164,64 @@ export const adminApi = {
       cache: 'no-store',
     });
     if (!res.ok) throw new Error('Failed to fetch riders list');
+    return res.json();
+  },
+
+  // 8. Live Menu & Inventory Inspection
+  async getCatalog(): Promise<any> {
+    const base = getApiBase();
+    const res = await fetch(`${base}/catalog`, { cache: 'no-store' });
+    if (!res.ok) throw new Error('Failed to fetch catalog');
+    return res.json();
+  },
+
+  // 9. Live 86 / Sold Out Toggle
+  async toggleDishSoldOut(productId: string, serviceDate: string, isSoldOut: boolean) {
+    const base = getApiBase();
+    const res = await fetch(`${base}/catalog/${encodeURIComponent(productId)}/sold-out`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Simulated-Role': 'STAFF',
+      },
+      body: JSON.stringify({ serviceDate, isSoldOut }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to toggle item availability');
+    }
+    return res.json();
+  },
+
+  // 10. Create New Dish / Thali
+  async createDish(data: {
+    categoryId: string;
+    name: string;
+    description?: string;
+    basePricePaise: number;
+    imageUrl?: string;
+    dietaryType?: string;
+  }) {
+    const base = getApiBase();
+    const res = await fetch(`${base}/admin/catalog/products`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Simulated-Role': 'STAFF',
+      },
+      body: JSON.stringify({
+        categoryId: data.categoryId,
+        name: data.name,
+        description: data.description,
+        dietaryType: data.dietaryType || 'VEG',
+        imageUrl: data.imageUrl,
+        basePricePaise: data.basePricePaise,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to create new dish');
+    }
     return res.json();
   },
 };

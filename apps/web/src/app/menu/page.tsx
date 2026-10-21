@@ -122,21 +122,7 @@ export default function MenuPage() {
     : catalog.categories.filter((c) => c.id === activeCategory);
 
   return (
-    <main className="flex-1 pt-20 pb-36 max-w-3xl mx-auto w-full px-4 flex flex-col gap-4">
-      {/* Notice Bar */}
-      <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl p-3.5 border border-primary/15 flex items-center justify-between shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <span className="material-symbols-outlined text-primary text-[22px]">verified</span>
-          <div>
-            <p className="text-xs sm:text-sm font-bold text-on-surface">Fresh Daily Kitchen Batch</p>
-            <p className="text-[11px] text-on-surface-variant">Cooked in Pure Desi Ghee • 100% Maida Free</p>
-          </div>
-        </div>
-        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-          HOT DISPATCH
-        </span>
-      </div>
-
+    <main className="flex-1 pt-20 pb-44 max-w-3xl mx-auto w-full px-4 flex flex-col gap-4">
       {/* Sticky Category Scroller (Swiggy / Zomato Pattern) */}
       <div className="sticky top-16 z-30 bg-surface/95 backdrop-blur-md py-2 overflow-x-auto no-scrollbar flex items-center gap-2 border-b border-gray-100">
         <button
@@ -229,22 +215,24 @@ export default function MenuPage() {
 
                         {/* Portion Variant Selector */}
                         {item.variants && item.variants.length > 1 && (
-                          <div className="flex items-center gap-1.5 mt-1">
-                            <span className="text-[11px] font-semibold text-gray-500">Portion:</span>
-                            <select
-                              value={currentVar?.id || ''}
-                              onChange={(e) => handleVariantChange(item.id, e.target.value, item.variants)}
-                              className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-gray-50 font-medium text-gray-800 focus:outline-none focus:border-primary"
-                            >
-                              {item.variants.map((v) => (
-                                <option key={v.id} value={v.id}>
-                                  {v.name}{' '}
-                                  {v.priceModifierPaise > 0
-                                    ? `(+₹${(v.priceModifierPaise / 100).toFixed(2)})`
-                                    : ''}
-                                </option>
-                              ))}
-                            </select>
+                          <div className="flex items-center gap-1.5 mt-2 max-w-full">
+                            <span className="text-[10px] uppercase font-bold text-stone-500 tracking-wider shrink-0">Portion:</span>
+                            <div className="relative max-w-[150px] sm:max-w-[190px]">
+                              <select
+                                value={currentVar?.id || ''}
+                                onChange={(e) => handleVariantChange(item.id, e.target.value, item.variants)}
+                                className="w-full truncate border border-stone-200 rounded-xl pl-2.5 pr-7 py-1 text-[11px] bg-stone-50 font-semibold text-stone-800 focus:outline-hidden focus:border-primary shadow-2xs appearance-none"
+                              >
+                                {item.variants.map((v) => (
+                                  <option key={v.id} value={v.id}>
+                                    {v.name} {v.priceModifierPaise > 0 ? `(+₹${(v.priceModifierPaise / 100).toFixed(0)})` : ''}
+                                  </option>
+                                ))}
+                              </select>
+                              <span className="material-symbols-outlined text-[14px] text-stone-500 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                                expand_more
+                              </span>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -300,30 +288,6 @@ export default function MenuPage() {
           ))
         )}
       </div>
-
-      {/* Swiggy/Zomato Signature Floating Bottom Cart Bar */}
-      {totalCount > 0 && (
-        <aside aria-label="Cart summary" className="fixed bottom-16 inset-x-4 max-w-md mx-auto z-40 animate-in slide-in-from-bottom duration-200">
-          <Link
-            href="/cart"
-            className="w-full h-13 rounded-2xl bg-gradient-to-r from-orange-600 via-primary to-amber-600 text-white px-4 py-3 flex items-center justify-between shadow-xl shadow-orange-950/20 active:scale-98 transition-transform"
-          >
-            <div className="flex items-center gap-2.5">
-              <span className="w-8 h-8 rounded-xl bg-black/20 flex items-center justify-center font-bold text-xs">
-                {totalCount}
-              </span>
-              <div className="flex flex-col">
-                <span className="text-xs font-bold leading-tight">₹{(totalPricePaise / 100).toFixed(2)}</span>
-                <span className="text-[10px] text-white/80">Meals in Tray</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 font-bold text-xs">
-              <span>View Tray</span>
-              <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-            </div>
-          </Link>
-        </aside>
-      )}
     </main>
   );
 }

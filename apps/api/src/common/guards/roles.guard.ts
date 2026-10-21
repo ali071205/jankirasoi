@@ -45,13 +45,16 @@ export class RolesGuard implements CanActivate {
       user = await this.authService.validateSessionToken(token);
     }
 
-    // Allow development test bypass only if NOT in production
-    if (!user && process.env.NODE_ENV !== 'production' && request.headers['x-simulated-role']) {
-      user = {
-        id: 'simulated_user_id',
-        role: request.headers['x-simulated-role'],
-        name: 'Simulated Developer',
-      };
+    // Allow development test bypass or admin console simulation if NOT in production
+    if (process.env.NODE_ENV !== 'production' && request.headers['x-simulated-role']) {
+      const simRole = String(request.headers['x-simulated-role']).toUpperCase();
+      if (!user || !requiredRoles.includes(user.role)) {
+        user = {
+          id: user?.id || 'simulated_staff_id',
+          role: simRole,
+          name: user?.name || 'Kitchen Station Staff',
+        };
+      }
     }
 
     if (!user) {

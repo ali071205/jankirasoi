@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsInt, IsEnum, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsInt, IsEnum, Min, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum DietaryTypeDto {
@@ -51,5 +51,6 @@ export class ToggleSoldOutDto {
   serviceDate: string;
 
   @ApiProperty({ example: true })
+  @IsBoolean()
   isSoldOut: boolean;
 }
