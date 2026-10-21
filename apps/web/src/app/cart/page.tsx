@@ -3,25 +3,29 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { api, DeliverySlot, QuoteResponse } from '../../lib/api';
+import { api, DeliverySlot, QuoteResponse, DEFAULT_FOOD_IMAGE, UserProfile } from '../../lib/api';
 import { useCart } from '../../context/CartContext';
+import CustomerAuthModal from '../../components/CustomerAuthModal';
 
 export default function CartPage() {
   const router = useRouter();
   const { items, updateQty, clearCart, showToast } = useCart();
 
-  const [slots, setSlots] = useState<DeliverySlot[]>([]);
-  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [slots, setSlots] = useState<DeliverySlot[]>(() => api.getCachedSlots()?.slots || []);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(() => api.getCachedSlots()?.slots?.[0]?.id || null);
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
 
   // Address & Customer form state
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [customerName, setCustomerName] = useState('Rahul Sharma');
   const [customerPhone, setCustomerPhone] = useState('9876543210');
   const [flat, setFlat] = useState('Flat 402, Block C, Malviya Nagar');
   const [street, setStreet] = useState('Outer Ring Road');
   const [landmark, setLandmark] = useState('Near Metro Station');
   const [pincode, setPincode] = useState('110017');
+  const [deliveryNotes, setDeliveryNotes] = useState('');
   const [pinStatusMsg, setPinStatusMsg] = useState<{ text: string; isError: boolean } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'RAZORPAY'>('COD');
   const [placingOrder, setPlacingOrder] = useState(false);
@@ -43,6 +47,35 @@ export default function CartPage() {
     }
     fetchSlots();
   }, [today]);
+
+  // Fetch logged in customer and prefill address
+  useEffect(() => {
+    api.getCurrentUser().then((user) => {
+      if (user && user.role === 'CUSTOMER') {
+        setCurrentUser(user);
+        if (user.name) setCustomerName(user.name);
+        if (user.phone) setCustomerPhone(user.phone);
+        if (user.savedAddress) {
+          if (user.savedAddress.flat) setFlat(user.savedAddress.flat);
+          if (user.savedAddress.street) setStreet(user.savedAddress.street);
+          if (user.savedAddress.landmark) setLandmark(user.savedAddress.landmark);
+          if (user.savedAddress.pincode) setPincode(user.savedAddress.pincode);
+        }
+      }
+    });
+  }, []);
+
+  const handleAuthSuccess = (user: UserProfile) => {
+    setCurrentUser(user);
+    if (user.name) setCustomerName(user.name);
+    if (user.phone) setCustomerPhone(user.phone);
+    if (user.savedAddress) {
+      if (user.savedAddress.flat) setFlat(user.savedAddress.flat);
+      if (user.savedAddress.street) setStreet(user.savedAddress.street);
+      if (user.savedAddress.landmark) setLandmark(user.savedAddress.landmark);
+      if (user.savedAddress.pincode) setPincode(user.savedAddress.pincode);
+    }
+  };
 
   // Request Server-Authoritative Quote
   const requestQuote = useCallback(async () => {
@@ -128,11 +161,33 @@ export default function CartPage() {
             landmark: landmark.trim() || undefined,
             pincode: pincode.trim(),
           },
+          deliveryNotes: deliveryNotes.trim() || undefined,
         },
         'idem_' + Date.now()
       );
 
       clearCart();
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem('jr_last_tracking_token', orderResult.trackingToken);
+          window.localStorage.setItem('jr_last_order_number', orderResult.orderNumber);
+          const recents = JSON.parse(window.localStorage.getItem('jr_recent_orders') || '[]');
+          recents.unshift({
+            orderNumber: orderResult.orderNumber,
+            trackingToken: orderResult.trackingToken,
+            placedAt: new Date().toISOString(),
+          });
+          window.localStorage.setItem('jr_recent_orders', JSON.stringify(recents.slice(0, 10)));
+        } catch {}
+      }
+      // Automatically save and sync customer profile & address
+      api.loginCustomer(customerPhone.trim(), customerName.trim(), {
+        flat: flat.trim(),
+        street: street.trim(),
+        landmark: landmark.trim() || undefined,
+        pincode: pincode.trim(),
+      }).catch(() => {});
+
       showToast('Order placed successfully!');
       setTimeout(() => {
         router.push(`/track?token=${orderResult.trackingToken}`);
@@ -219,10 +274,11 @@ export default function CartPage() {
               <div className="flex items-center gap-3 min-w-0">
                 <img
                   className="w-12 h-12 rounded-lg object-cover bg-gray-100 shrink-0"
-                  src={
-                    item.imageUrl ||
-                    'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=200&q=80'
-                  }
+                  src={item.imageUrl || DEFAULT_FOOD_IMAGE}
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = DEFAULT_FOOD_IMAGE;
+                  }}
                   alt={item.name}
                 />
                 <div className="flex flex-col min-w-0">
@@ -257,10 +313,59 @@ export default function CartPage() {
 
       {/* 3. Delivery Details Form */}
       <section className="bg-white rounded-2xl p-4 shadow-xs border border-black/5 flex flex-col gap-3">
-        <h2 className="font-headline font-bold text-sm text-on-surface flex items-center gap-1.5">
-          <span className="material-symbols-outlined text-primary text-[20px]">location_on</span>
-          Delivery Address &amp; Contact
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="font-headline font-bold text-sm text-on-surface flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-primary text-[20px]">location_on</span>
+            Delivery Address &amp; Contact
+          </h2>
+          {currentUser && (
+            <button
+              type="button"
+              onClick={() => setIsAuthOpen(true)}
+              className="text-xs font-bold text-emerald-700 hover:underline flex items-center gap-1"
+            >
+              <span>Manage Profile</span>
+              <span>→</span>
+            </button>
+          )}
+        </div>
+
+        {/* User Account / Address Status Pill */}
+        {currentUser ? (
+          <div className="flex items-center justify-between p-3 bg-emerald-50 border border-emerald-200/80 rounded-xl text-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-full bg-emerald-700 text-white font-bold flex items-center justify-center text-xs shrink-0">
+                {currentUser.name.charAt(0).toUpperCase()}
+              </span>
+              <div>
+                <span className="font-bold text-emerald-950 block">{currentUser.name} (+91 {currentUser.phone})</span>
+                <span className="text-emerald-700 text-[11px]">✓ Saved Address Auto-filled</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsAuthOpen(true)}
+              className="text-xs font-semibold text-emerald-800 hover:underline px-1 py-0.5"
+            >
+              Change
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200/70 rounded-xl text-xs">
+            <div className="flex items-center gap-2 text-amber-900">
+              <span className="material-symbols-outlined text-amber-700 text-lg">bolt</span>
+              <span>Have an account or saved address?</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsAuthOpen(true)}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs shadow-2xs transition-colors shrink-0"
+            >
+              Express Login
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
           <div>
             <label className="font-semibold text-gray-700 block mb-1">Your Full Name *</label>
@@ -344,6 +449,60 @@ export default function CartPage() {
         </div>
       </section>
 
+      {/* 3.5 Delivery Instructions (Swiggy / Zomato Chips) */}
+      <section className="bg-white rounded-2xl p-4 shadow-xs border border-black/5 flex flex-col gap-3">
+        <h2 className="font-headline font-bold text-sm text-on-surface flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-primary text-[20px]">directions_bike</span>
+          Delivery Instructions for Rider
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { id: 'nobell', label: "🔔 Don't ring bell" },
+            { id: 'door', label: '🚪 Leave at doorstep' },
+            { id: 'call', label: '📞 Call before arriving' },
+            { id: 'guard', label: '🛡️ Leave with security' },
+          ].map((chip) => {
+            const isSelected = deliveryNotes.includes(chip.label);
+            return (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => {
+                  if (isSelected) {
+                    setDeliveryNotes((prev) => prev.replace(chip.label, '').replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '').trim());
+                  } else {
+                    setDeliveryNotes((prev) => (prev ? `${prev}, ${chip.label}` : chip.label));
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                  isSelected
+                    ? 'bg-primary text-white border-primary shadow-xs'
+                    : 'bg-surface-container text-on-surface border-gray-200 hover:bg-gray-100'
+                }`}
+              >
+                {chip.label}
+              </button>
+            );
+          })}
+        </div>
+        <input
+          type="text"
+          value={deliveryNotes}
+          onChange={(e) => setDeliveryNotes(e.target.value)}
+          placeholder="E.g., Call upon reaching gate, ring twice..."
+          className="w-full border border-gray-200 rounded-lg p-2 text-xs bg-gray-50 focus:bg-white focus:outline-primary"
+        />
+      </section>
+
+      {/* Packaging Assurance Banner */}
+      <div className="bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 rounded-2xl p-3.5 flex items-center gap-3 text-xs text-emerald-900 shadow-xs">
+        <span className="material-symbols-outlined text-emerald-600 text-[24px] shrink-0">verified_user</span>
+        <div>
+          <span className="font-bold block">100% Tamper-Evident Packaging</span>
+          <span className="text-[11px] text-emerald-700">Sealed food-grade containers. Do not accept if seal is broken.</span>
+        </div>
+      </div>
+
       {/* 4. Payment Method */}
       <section className="bg-white rounded-2xl p-4 shadow-xs border border-black/5 flex flex-col gap-3">
         <h2 className="font-headline font-bold text-sm text-on-surface flex items-center gap-1.5">
@@ -423,9 +582,20 @@ export default function CartPage() {
           </span>
         </div>
         <div className="flex justify-between text-on-surface-variant">
-          <span>Delivery Fee</span>
+          <span>Delivery Partner Fee</span>
           <span className="font-semibold text-on-surface">
-            {quote ? (quote.deliveryFeePaise === 0 ? 'FREE' : `₹${(quote.deliveryFeePaise / 100).toFixed(2)}`) : '₹30.00'}
+            {quote ? (
+              quote.deliveryFeePaise === 0 ? (
+                <>
+                  <span className="line-through text-gray-400 mr-1.5 font-normal">₹30.00</span>
+                  <span className="text-emerald-600 font-bold">FREE 🎉</span>
+                </>
+              ) : (
+                `₹${(quote.deliveryFeePaise / 100).toFixed(2)}`
+              )
+            ) : (
+              '₹30.00'
+            )}
           </span>
         </div>
         <div className="flex justify-between text-on-surface-variant">
@@ -440,6 +610,18 @@ export default function CartPage() {
             {quote ? quote.formattedTotal : '₹0.00'}
           </span>
         </div>
+
+        {/* Free Delivery Threshold Helper */}
+        {quote && quote.subtotalPaise < 29900 && (
+          <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-2.5 flex items-center justify-between text-xs text-amber-900 mt-1">
+            <span>
+              Add <strong>₹{((29900 - quote.subtotalPaise) / 100).toFixed(0)}</strong> more for <strong>FREE Delivery</strong> in Delhi!
+            </span>
+            <Link href="/menu" className="font-bold text-primary hover:underline text-xs shrink-0">
+              + Add Dishes
+            </Link>
+          </div>
+        )}
       </section>
 
       {/* Action Button */}
@@ -460,6 +642,13 @@ export default function CartPage() {
           </>
         )}
       </button>
+
+      {/* Customer Auth Modal */}
+      <CustomerAuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onLoginSuccess={handleAuthSuccess}
+      />
     </main>
   );
 }

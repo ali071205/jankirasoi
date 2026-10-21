@@ -1,0 +1,22 @@
+import { MetadataRoute } from 'next';
+
+export default function manifest(): MetadataRoute.Manifest {
+  return {
+    name: 'Janki Rasoi Delivery Partner',
+    short_name: 'JR Rider',
+    description: 'Janki Rasoi Delivery Partner App for live orders, navigation, and PIN verification.',
+    start_url: '/rider',
+    scope: '/rider',
+    display: 'standalone',
+    orientation: 'portrait',
+    background_color: '#FDF8F5',
+    theme_color: '#C15A10',
+    icons: [
+      {
+        src: '/favicon.svg',
+        sizes: 'any',
+        type: 'image/svg+xml',
+      },
+    ],
+  };
+}

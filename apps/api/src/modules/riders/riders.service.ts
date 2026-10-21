@@ -41,9 +41,24 @@ export class RidersService {
       orderBy: { assignedAt: 'desc' },
     });
 
+    let ordersToDisplay = assignments.map((a) => a.order);
+
+    // If no explicit rider assignment records found, display all active kitchen orders ready for delivery
+    if (ordersToDisplay.length === 0) {
+      ordersToDisplay = await this.prisma.order.findMany({
+        where: {
+          status: { in: ['READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'] },
+        },
+        include: {
+          deliverySlot: true,
+          items: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
     return {
-      deliveries: assignments.map((a) => {
-        const o = a.order;
+      deliveries: ordersToDisplay.map((o) => {
         const addr = (o.deliveryAddress as any) || {};
         const lat = addr.latitude || 28.52728;
         const lng = addr.longitude || 77.21832;

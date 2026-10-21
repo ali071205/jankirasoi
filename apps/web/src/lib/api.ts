@@ -184,6 +184,73 @@ export interface AdminOrdersResponse {
   };
 }
 
+export interface RiderDelivery {
+  orderId: string;
+  orderNumber: string;
+  status: string;
+  customerName: string;
+  customerPhone: string;
+  deliveryAddress: string;
+  landmark?: string;
+  coordinates: {
+    latitude: number;
+    longitude: number;
+  };
+  navigationUrl: string;
+  slotLabel: string;
+  paymentMethod: string;
+  cashDuePaise: number;
+  itemsSummary: string;
+}
+
+export const DEFAULT_FOOD_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300' width='400' height='300'%3E%3Crect width='400' height='300' fill='%23FDF8F5'/%3E%3Ccircle cx='200' cy='140' r='75' fill='%23F2E7DC'/%3E%3Ccircle cx='200' cy='140' r='60' fill='%23C15A10' fill-opacity='0.12' stroke='%23C15A10' stroke-width='2' stroke-dasharray='4 2'/%3E%3Ccircle cx='180' cy='130' r='18' fill='%23D48B47' fill-opacity='0.25'/%3E%3Ccircle cx='220' cy='130' r='18' fill='%232E7D32' fill-opacity='0.25'/%3E%3Ccircle cx='200' cy='160' r='16' fill='%23C15A10' fill-opacity='0.25'/%3E%3Ctext x='50%25' y='245' text-anchor='middle' font-family='sans-serif' font-weight='700' font-size='15' fill='%237C5843'%3EJanki Rasoi Ghar Ka Khana%3C/text%3E%3C/svg%3E";
+
+// In-memory + SessionStorage cache for instant zero-latency client transitions without re-fetching
+const memoryCache = new Map<string, { data: any; expiry: number }>();
+
+function getCached<T>(key: string): T | null {
+  const item = memoryCache.get(key);
+  if (item) {
+    if (Date.now() <= item.expiry) {
+      return item.data as T;
+    }
+    memoryCache.delete(key);
+  }
+
+  // Cross-refresh fallback from sessionStorage
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = window.sessionStorage.getItem(`jr_cache_${key}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Date.now() <= parsed.expiry) {
+          memoryCache.set(key, parsed);
+          return parsed.data as T;
+        } else {
+          window.sessionStorage.removeItem(`jr_cache_${key}`);
+        }
+      }
+    } catch {
+      // Ignore sessionStorage issues
+    }
+  }
+
+  return null;
+}
+
+function setCached<T>(key: string, data: T, ttlMs = 180000): T {
+  const expiry = Date.now() + ttlMs;
+  memoryCache.set(key, { data, expiry });
+  if (typeof window !== 'undefined') {
+    try {
+      window.sessionStorage.setItem(`jr_cache_${key}`, JSON.stringify({ data, expiry }));
+    } catch {
+      // Ignore quota issues
+    }
+  }
+  return data;
+}
+
 const getApiBase = () => {
   if (typeof window === 'undefined') {
     return process.env.NEXT_PUBLIC_INTERNAL_API_URL || 'http://localhost:3000/api/v1';
@@ -192,38 +259,70 @@ const getApiBase = () => {
 };
 
 export const api = {
-  // 1. Live Catalog
-  async getCatalog(serviceDate?: string): Promise<CatalogResponse> {
+  // Synchronous cache accessors for zero-flicker instant hydration
+  getCachedCatalog(serviceDate?: string): CatalogResponse | null {
+    return getCached<CatalogResponse>(`catalog_${serviceDate || 'today'}`);
+  },
+
+  getCachedSlots(date?: string): SlotsResponse | null {
+    const d = date || (typeof window !== 'undefined' ? new Date().toISOString().split('T')[0] : '');
+    return getCached<SlotsResponse>(`slots_${d}`);
+  },
+
+  getCachedPincode(pincode: string): PincodeCheckResponse | null {
+    return getCached<PincodeCheckResponse>(`pin_${pincode}`);
+  },
+
+  // 1. Live Catalog with 3-minute Client Cache
+  async getCatalog(serviceDate?: string, forceRefresh = false): Promise<CatalogResponse> {
+    const cacheKey = `catalog_${serviceDate || 'today'}`;
+    if (!forceRefresh) {
+      const cached = getCached<CatalogResponse>(cacheKey);
+      if (cached) return cached;
+    }
     const base = getApiBase();
     const url = serviceDate ? `${base}/catalog?service_date=${encodeURIComponent(serviceDate)}` : `${base}/catalog`;
-    const res = await fetch(url, { cache: 'no-store' });
+    const res = await fetch(url);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || 'Failed to fetch catalog from live kitchen backend');
     }
-    return res.json();
+    const data = await res.json();
+    return setCached(cacheKey, data, 180000); // 3 minutes cache
   },
 
-  // 2. Delivery Zones
+  // 2. Delivery Zones with 5-minute Cache
   async checkPincode(pincode: string): Promise<PincodeCheckResponse> {
+    const cacheKey = `pin_${pincode}`;
+    const cached = getCached<PincodeCheckResponse>(cacheKey);
+    if (cached) return cached;
+
     const base = getApiBase();
     const res = await fetch(`${base}/delivery-zones/check?pincode=${encodeURIComponent(pincode)}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || 'Failed to verify delivery zone');
     }
-    return res.json();
+    const data = await res.json();
+    return setCached(cacheKey, data, 300000);
   },
 
-  // 3. Delivery Slots
-  async getSlots(date: string): Promise<SlotsResponse> {
+  // 3. Delivery Slots with 1-minute Cache
+  async getSlots(date: string, forceRefresh = false): Promise<SlotsResponse> {
+    const cacheKey = `slots_${date}`;
+    if (!forceRefresh) {
+      const cached = getCached<SlotsResponse>(cacheKey);
+      if (cached) return cached;
+    }
+
     const base = getApiBase();
-    const res = await fetch(`${base}/delivery-slots?date=${encodeURIComponent(date)}`, { cache: 'no-store' });
+    const res = await fetch(`${base}/delivery-slots?date=${encodeURIComponent(date)}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || 'Failed to fetch delivery slots');
     }
-    return res.json();
+    const data = await res.json();
+    return setCached(cacheKey, data, 60000);
   },
 
   // 4. Server-Authoritative Quotation (in paise)
@@ -319,4 +418,179 @@ export const api = {
     }
     return res.json();
   },
+
+  // 10. Rider Deliveries Queue
+  async getRiderDeliveries(): Promise<{ deliveries: RiderDelivery[] }> {
+    const base = getApiBase();
+    const res = await fetch(`${base}/rider/deliveries`, {
+      headers: { 'X-Simulated-Role': 'RIDER' },
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to fetch assigned rider deliveries');
+    }
+    return res.json();
+  },
+
+  // 11. Rider Mark Out for Delivery (generates customer PIN)
+  async markRiderOutForDelivery(orderId: string) {
+    const base = getApiBase();
+    const res = await fetch(`${base}/rider/deliveries/${encodeURIComponent(orderId)}/out-for-delivery`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Simulated-Role': 'RIDER',
+      },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to start delivery trip');
+    }
+    return res.json();
+  },
+
+  // 12. Rider Verify Delivery OTP PIN
+  async verifyRiderDeliveryOtp(orderId: string, code: string) {
+    const base = getApiBase();
+    const res = await fetch(`${base}/rider/deliveries/${encodeURIComponent(orderId)}/verify-otp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Simulated-Role': 'RIDER',
+      },
+      body: JSON.stringify({ code }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'PIN verification failed');
+    }
+    return res.json();
+  },
+
+  // 13. Customer Phone Login / Registration
+  async loginCustomer(phone: string, name?: string, address?: any): Promise<AuthSessionResponse> {
+    const base = getApiBase();
+    const res = await fetch(`${base}/auth/customer/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, name, address }),
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Login failed. Please check phone number.');
+    }
+    const data: AuthSessionResponse = await res.json();
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('jr_session_token', data.sessionToken);
+      localStorage.setItem('jr_user_profile', JSON.stringify(data.user));
+    }
+    return data;
+  },
+
+  // 14. Rider Login
+  async loginRider(phone: string, password: string): Promise<AuthSessionResponse> {
+    const base = getApiBase();
+    const res = await fetch(`${base}/rider/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, password }),
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Rider login failed.');
+    }
+    const data: AuthSessionResponse = await res.json();
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('jr_rider_token', data.sessionToken);
+      localStorage.setItem('jr_rider_profile', JSON.stringify(data.user));
+    }
+    return data;
+  },
+
+  // 15. Get Current User Profile (Customer / Rider)
+  async getCurrentUser(): Promise<UserProfile | null> {
+    if (typeof window === 'undefined') return null;
+    const token = localStorage.getItem('jr_session_token') || localStorage.getItem('jr_rider_token');
+    const base = getApiBase();
+    try {
+      const res = await fetch(`${base}/auth/me`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.authenticated && data.user) {
+          localStorage.setItem('jr_user_profile', JSON.stringify(data.user));
+          return data.user;
+        }
+      }
+    } catch {
+      // Fallback
+    }
+    const cached = localStorage.getItem('jr_user_profile');
+    if (cached) {
+      try { return JSON.parse(cached); } catch { return null; }
+    }
+    return null;
+  },
+
+  // 16. Logout
+  async logout(): Promise<void> {
+    const base = getApiBase();
+    const token = typeof window !== 'undefined' ? (localStorage.getItem('jr_session_token') || localStorage.getItem('jr_rider_token')) : null;
+    try {
+      await fetch(`${base}/auth/logout`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+      });
+    } catch {
+      // ignore
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('jr_session_token');
+      localStorage.removeItem('jr_user_profile');
+      localStorage.removeItem('jr_rider_token');
+      localStorage.removeItem('jr_rider_profile');
+    }
+  },
 };
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string | null;
+  role: 'CUSTOMER' | 'RIDER' | 'ADMIN' | 'STAFF';
+  savedAddress?: {
+    flat?: string;
+    street?: string;
+    landmark?: string;
+    pincode?: string;
+  } | null;
+  orderCount?: number;
+  recentOrders?: Array<{
+    id: string;
+    orderNumber: string;
+    status: string;
+    totalAmountPaise: number;
+    deliveryAddress: any;
+    trackingToken: string;
+    createdAt: string;
+  }>;
+  riderProfile?: {
+    id: string;
+    vehicleNumber: string;
+    isAvailable: boolean;
+  } | null;
+}
+
+export interface AuthSessionResponse {
+  user: UserProfile;
+  sessionToken: string;
+  expiresAt: string;
+}

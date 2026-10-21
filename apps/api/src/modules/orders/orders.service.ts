@@ -32,9 +32,17 @@ export class OrdersService {
     private readonly configService: ConfigService,
   ) {}
 
-  async trackOrderByToken(trackingToken: string) {
-    const order = await this.prisma.order.findUnique({
-      where: { trackingToken },
+  async trackOrderByToken(identifier: string) {
+    const trimmed = identifier.trim();
+    const order = await this.prisma.order.findFirst({
+      where: {
+        OR: [
+          { trackingToken: trimmed },
+          { orderNumber: trimmed.toUpperCase() },
+          { customerPhone: trimmed },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
       include: {
         deliverySlot: true,
         items: {
@@ -47,7 +55,7 @@ export class OrdersService {
     });
 
     if (!order) {
-      throw new NotFoundException('Order not found with the provided tracking token.');
+      throw new NotFoundException('Order not found with the provided tracking token or phone number.');
     }
 
     // Mask phone number for privacy: e.g. 98XXXXXX10
@@ -62,7 +70,7 @@ export class OrdersService {
     let otpExpiresAt: string | null = null;
 
     if (order.status === 'OUT_FOR_DELIVERY') {
-      const activeOtp = await this.prisma.deliveryOtp.findFirst({
+      let activeOtp = await this.prisma.deliveryOtp.findFirst({
         where: {
           orderId: order.id,
           isUsed: false,
@@ -70,6 +78,25 @@ export class OrdersService {
         },
         orderBy: { createdAt: 'desc' },
       });
+
+      if (!activeOtp) {
+        const plainOtp = randomInt(100000, 999999).toString();
+        const secret =
+          this.configService.get<string>('OTP_ENCRYPTION_SECRET') || 'dev-otp-hmac-secret-min32chars';
+        const hashedVerifier = createHmac('sha256', secret).update(plainOtp).digest('hex');
+        const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
+
+        activeOtp = await this.prisma.deliveryOtp.create({
+          data: {
+            orderId: order.id,
+            phone: order.customerPhone,
+            otpCode: plainOtp,
+            hashedVerifier,
+            expiresAt,
+            maxAttempts: 5,
+          },
+        });
+      }
 
       if (activeOtp) {
         deliveryOtp = activeOtp.otpCode;

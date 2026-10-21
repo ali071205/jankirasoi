@@ -147,7 +147,7 @@ async function main() {
       slug: 'executive-north-indian-thali',
       description: '4 Phulkas, Paneer Butter Masala, Dal Tadka, Jeera Rice, Salad & Gulab Jamun',
       dietaryType: DietaryType.VEG,
-      imageUrl: 'https://res.cloudinary.com/jankirasoi/image/upload/v1/menu/thali.jpg',
+      imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80',
       basePricePaise: 15900, // ₹159.00
       taxRatePercent: 5,
       variants: {
@@ -191,7 +191,7 @@ async function main() {
       slug: 'homestyle-dal-khichdi-bowl',
       description: 'Comforting desi ghee khichdi served with curd, pickle, and roasted papad',
       dietaryType: DietaryType.VEG,
-      imageUrl: 'https://res.cloudinary.com/jankirasoi/image/upload/v1/menu/khichdi.jpg',
+      imageUrl: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?auto=format&fit=crop&w=800&q=80',
       basePricePaise: 12900, // ₹129.00
       taxRatePercent: 5,
       variants: {

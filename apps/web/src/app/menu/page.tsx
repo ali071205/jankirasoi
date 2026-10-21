@@ -2,17 +2,34 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api, CatalogResponse } from '../../lib/api';
+import { api, CatalogResponse, DEFAULT_FOOD_IMAGE } from '../../lib/api';
 import { useCart } from '../../context/CartContext';
 
 export default function MenuPage() {
-  const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
+  const [catalog, setCatalog] = useState<CatalogResponse | null>(() => api.getCachedCatalog());
   const [activeCategory, setActiveCategory] = useState<string>('all');
-  const [selectedVariants, setSelectedVariants] = useState<Record<string, { id: string; name: string; mod: number }>>({});
-  const [loading, setLoading] = useState(true);
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, { id: string; name: string; mod: number }>>(() => {
+    const cached = api.getCachedCatalog();
+    if (!cached) return {};
+    const defaultVariants: Record<string, { id: string; name: string; mod: number }> = {};
+    cached.categories.forEach((cat) => {
+      cat.items.forEach((item) => {
+        if (item.variants && item.variants.length > 0) {
+          const def = item.variants.find((v) => v.isDefault) || item.variants[0];
+          defaultVariants[item.id] = {
+            id: def.id,
+            name: def.name,
+            mod: def.priceModifierPaise,
+          };
+        }
+      });
+    });
+    return defaultVariants;
+  });
+  const [loading, setLoading] = useState(() => !api.getCachedCatalog());
   const [error, setError] = useState<string | null>(null);
 
-  const { addItem, totalCount } = useCart();
+  const { items, addItem, updateQty, totalCount, totalPricePaise } = useCart();
 
   useEffect(() => {
     async function loadCatalog() {
@@ -36,7 +53,9 @@ export default function MenuPage() {
         });
         setSelectedVariants(defaultVariants);
       } catch (err: any) {
-        setError(err.message || 'Could not connect to kitchen menu.');
+        if (!catalog) {
+          setError(err.message || 'Could not connect to kitchen menu.');
+        }
       } finally {
         setLoading(false);
       }
@@ -58,7 +77,12 @@ export default function MenuPage() {
     }
   };
 
-  const handleAddToCart = (item: any) => {
+  const getItemQuantity = (productId: string, variantId?: string) => {
+    const cartItem = items.find((i) => i.productId === productId && (!variantId || i.variantId === variantId));
+    return cartItem ? cartItem.quantity : 0;
+  };
+
+  const handleAdd = (item: any) => {
     const variantInfo = selectedVariants[item.id];
     const finalPrice = item.basePricePaise + (variantInfo ? variantInfo.mod : 0);
 
@@ -73,6 +97,24 @@ export default function MenuPage() {
     });
   };
 
+  const handleIncrease = (item: any) => {
+    const variantInfo = selectedVariants[item.id];
+    const idx = items.findIndex((i) => i.productId === item.id && (!variantInfo || i.variantId === variantInfo.id));
+    if (idx > -1) {
+      updateQty(idx, 1);
+    } else {
+      handleAdd(item);
+    }
+  };
+
+  const handleDecrease = (item: any) => {
+    const variantInfo = selectedVariants[item.id];
+    const idx = items.findIndex((i) => i.productId === item.id && (!variantInfo || i.variantId === variantInfo.id));
+    if (idx > -1) {
+      updateQty(idx, -1);
+    }
+  };
+
   const filteredCategories = !catalog
     ? []
     : activeCategory === 'all'
@@ -80,20 +122,26 @@ export default function MenuPage() {
     : catalog.categories.filter((c) => c.id === activeCategory);
 
   return (
-    <main className="flex-1 pt-20 pb-28 max-w-4xl mx-auto w-full px-4 flex flex-col gap-4">
+    <main className="flex-1 pt-20 pb-36 max-w-3xl mx-auto w-full px-4 flex flex-col gap-4">
       {/* Notice Bar */}
-      <div className="bg-secondary/10 rounded-xl p-3.5 flex items-center gap-2.5">
-        <span className="material-symbols-outlined text-secondary text-[22px]">restaurant</span>
-        <p className="text-xs sm:text-sm text-on-surface">
-          <span className="font-bold text-secondary">Today&apos;s Fresh Batch:</span> Prepared in pure desi ghee and groundnut oil. Homestyle goodness delivered warm.
-        </p>
+      <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl p-3.5 border border-primary/15 flex items-center justify-between shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <span className="material-symbols-outlined text-primary text-[22px]">verified</span>
+          <div>
+            <p className="text-xs sm:text-sm font-bold text-on-surface">Fresh Daily Kitchen Batch</p>
+            <p className="text-[11px] text-on-surface-variant">Cooked in Pure Desi Ghee • 100% Maida Free</p>
+          </div>
+        </div>
+        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+          HOT DISPATCH
+        </span>
       </div>
 
-      {/* Category Filter Ribbon */}
-      <div className="sticky top-16 z-30 bg-surface/95 backdrop-blur-md py-2 overflow-x-auto no-scrollbar flex items-center gap-2">
+      {/* Sticky Category Scroller (Swiggy / Zomato Pattern) */}
+      <div className="sticky top-16 z-30 bg-surface/95 backdrop-blur-md py-2 overflow-x-auto no-scrollbar flex items-center gap-2 border-b border-gray-100">
         <button
           onClick={() => setActiveCategory('all')}
-          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 ${
             activeCategory === 'all'
               ? 'bg-primary text-white shadow-xs'
               : 'bg-white text-on-surface-variant border border-gray-200 hover:bg-gray-50'
@@ -105,7 +153,7 @@ export default function MenuPage() {
           <button
             key={cat.id}
             onClick={() => setActiveCategory(cat.id)}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+            className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all shrink-0 ${
               activeCategory === cat.id
                 ? 'bg-primary text-white shadow-xs'
                 : 'bg-white text-on-surface-variant border border-gray-200 hover:bg-gray-50'
@@ -117,7 +165,7 @@ export default function MenuPage() {
       </div>
 
       {/* Live Menu Items Container */}
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         {loading ? (
           <>
             <div className="p-6 rounded-2xl bg-white shadow-xs animate-pulse h-40"></div>
@@ -131,60 +179,62 @@ export default function MenuPage() {
         ) : (
           filteredCategories.map((cat) => (
             <div key={cat.id} className="flex flex-col gap-3">
-              <h2 className="font-headline font-bold text-lg text-on-surface border-b border-gray-200 pb-1 mt-2">
-                {cat.name}
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+                <h2 className="font-headline font-bold text-lg text-on-surface">
+                  {cat.name} ({cat.items.length})
+                </h2>
+                <span className="text-xs text-primary font-semibold">Ghar Ka Khana</span>
+              </div>
+
+              {/* Swiggy/Zomato Signature Split Dish Cards */}
+              <div className="flex flex-col divide-y divide-gray-100 bg-white rounded-2xl border border-black/5 p-2 shadow-xs">
                 {cat.items.map((item) => {
                   const currentVar = selectedVariants[item.id];
                   const currentPrice = item.basePricePaise + (currentVar ? currentVar.mod : 0);
+                  const qty = getItemQuantity(item.id, currentVar?.id);
 
                   return (
-                    <div
-                      key={item.id}
-                      className="rounded-2xl bg-white shadow-xs border border-black/5 overflow-hidden flex flex-col justify-between"
-                    >
-                      <div className="relative h-44 w-full bg-gray-100">
-                        <img
-                          className="w-full h-full object-cover"
-                          src={
-                            item.imageUrl ||
-                            'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=600&q=80'
-                          }
-                          alt={item.name}
-                        />
-                        <div className="absolute top-3 left-3 flex items-center gap-1">
-                          <span className="w-4 h-4 bg-white rounded-xs flex items-center justify-center p-0.5 shadow-sm">
-                            <span className="w-2.5 h-2.5 rounded-full bg-green-600"></span>
+                    <div key={item.id} className="p-4 flex items-center justify-between gap-4">
+                      {/* Left: Dish Information */}
+                      <div className="flex flex-col gap-1.5 flex-1 min-w-0 pr-2">
+                        {/* Veg Badge & Bestseller */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-4 h-4 border border-green-600 rounded-xs flex items-center justify-center p-0.5 bg-white shrink-0">
+                            <span className="w-2 h-2 rounded-full bg-green-600 block"></span>
                           </span>
-                          <span className="px-2 py-0.5 rounded-full bg-white/90 text-primary font-bold text-[10px] uppercase shadow-xs">
-                            Pure Veg
+                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                            ★ Bestseller
                           </span>
-                        </div>
-                      </div>
-                      <div className="p-4 flex flex-col justify-between flex-1 gap-3">
-                        <div>
-                          <div className="flex items-start justify-between gap-2">
-                            <h3 className="font-headline font-bold text-base text-on-surface">{item.name}</h3>
-                            <span className="font-headline font-bold text-base text-primary whitespace-nowrap">
-                              ₹{(currentPrice / 100).toFixed(2)}
-                            </span>
-                          </div>
-                          <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">
-                            {item.description || ''}
-                          </p>
+                          <span className="text-[10px] text-gray-500 font-medium">Pure Desi Ghee</span>
                         </div>
 
-                        {/* Portion Variant Selector if available */}
+                        {/* Dish Name */}
+                        <h3 className="font-headline font-bold text-base text-on-surface leading-snug">
+                          {item.name}
+                        </h3>
+
+                        {/* Price */}
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-headline font-bold text-sm sm:text-base text-on-surface">
+                            ₹{(currentPrice / 100).toFixed(2)}
+                          </span>
+                        </div>
+
+                        {/* Description */}
+                        {item.description && (
+                          <p className="text-xs text-on-surface-variant line-clamp-2 leading-relaxed">
+                            {item.description}
+                          </p>
+                        )}
+
+                        {/* Portion Variant Selector */}
                         {item.variants && item.variants.length > 1 && (
-                          <div className="flex flex-col gap-1 text-xs">
-                            <span className="font-semibold text-gray-700">Portion:</span>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="text-[11px] font-semibold text-gray-500">Portion:</span>
                             <select
                               value={currentVar?.id || ''}
-                              onChange={(e) =>
-                                handleVariantChange(item.id, e.target.value, item.variants)
-                              }
-                              className="border border-gray-200 rounded-lg p-1.5 text-xs bg-gray-50 font-medium"
+                              onChange={(e) => handleVariantChange(item.id, e.target.value, item.variants)}
+                              className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-gray-50 font-medium text-gray-800 focus:outline-none focus:border-primary"
                             >
                               {item.variants.map((v) => (
                                 <option key={v.id} value={v.id}>
@@ -197,14 +247,50 @@ export default function MenuPage() {
                             </select>
                           </div>
                         )}
+                      </div>
 
-                        <button
-                          onClick={() => handleAddToCart(item)}
-                          className="w-full h-10 rounded-full bg-primary text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow-xs hover:bg-primary-container active:scale-95 transition-all"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">add_shopping_cart</span>
-                          <span>Add to Tray</span>
-                        </button>
+                      {/* Right: Dish Photo & Overlapping Swiggy-Style ADD Button */}
+                      <div className="relative flex flex-col items-center shrink-0">
+                        <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden bg-gray-100 shadow-xs border border-gray-100">
+                          <img
+                            className="w-full h-full object-cover"
+                            src={item.imageUrl || DEFAULT_FOOD_IMAGE}
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = DEFAULT_FOOD_IMAGE;
+                            }}
+                            alt={item.name}
+                          />
+                        </div>
+
+                        {/* Overlapping ADD + / - QTY + Controller */}
+                        <div className="absolute -bottom-2.5 inset-x-0 flex justify-center">
+                          {qty === 0 ? (
+                            <button
+                              onClick={() => handleAdd(item)}
+                              className="px-6 h-8 rounded-xl bg-white border-2 border-primary text-primary font-headline font-bold text-xs uppercase tracking-wider shadow-md hover:bg-orange-50 active:scale-95 transition-all flex items-center justify-center gap-1"
+                            >
+                              <span>ADD</span>
+                              <span className="text-sm font-bold">+</span>
+                            </button>
+                          ) : (
+                            <div className="h-8 px-2 rounded-xl bg-primary text-white font-headline font-bold text-xs shadow-md flex items-center justify-between gap-3 min-w-[90px]">
+                              <button
+                                onClick={() => handleDecrease(item)}
+                                className="w-5 h-5 flex items-center justify-center text-sm font-bold hover:bg-white/20 rounded active:scale-90"
+                              >
+                                −
+                              </button>
+                              <span className="font-mono text-sm">{qty}</span>
+                              <button
+                                onClick={() => handleIncrease(item)}
+                                className="w-5 h-5 flex items-center justify-center text-sm font-bold hover:bg-white/20 rounded active:scale-90"
+                              >
+                                +
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -215,25 +301,28 @@ export default function MenuPage() {
         )}
       </div>
 
-      {/* Sticky Bottom Cart Summary */}
+      {/* Swiggy/Zomato Signature Floating Bottom Cart Bar */}
       {totalCount > 0 && (
-        <div className="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-gray-200 py-3 px-4 shadow-lg">
-          <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <div>
-              <span className="text-xs text-on-surface-variant block">
-                <span>{totalCount}</span> Items in Tray
+        <aside aria-label="Cart summary" className="fixed bottom-16 inset-x-4 max-w-md mx-auto z-40 animate-in slide-in-from-bottom duration-200">
+          <Link
+            href="/cart"
+            className="w-full h-13 rounded-2xl bg-gradient-to-r from-orange-600 via-primary to-amber-600 text-white px-4 py-3 flex items-center justify-between shadow-xl shadow-orange-950/20 active:scale-98 transition-transform"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-xl bg-black/20 flex items-center justify-center font-bold text-xs">
+                {totalCount}
               </span>
-              <span className="font-bold text-base text-primary">View Order &amp; Checkout</span>
+              <div className="flex flex-col">
+                <span className="text-xs font-bold leading-tight">₹{(totalPricePaise / 100).toFixed(2)}</span>
+                <span className="text-[10px] text-white/80">Meals in Tray</span>
+              </div>
             </div>
-            <Link
-              href="/cart"
-              className="px-6 py-2.5 rounded-full bg-primary text-white font-bold text-sm shadow-sm hover:bg-primary-container flex items-center gap-1.5"
-            >
-              <span>Proceed</span>
+            <div className="flex items-center gap-1 font-bold text-xs">
+              <span>View Tray</span>
               <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-            </Link>
-          </div>
-        </div>
+            </div>
+          </Link>
+        </aside>
       )}
     </main>
   );

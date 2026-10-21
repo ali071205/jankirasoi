@@ -7,14 +7,14 @@ import { usePathname } from 'next/navigation';
 export default function BottomNav() {
   const pathname = usePathname();
 
-  // Don't show bottom nav on admin console
-  if (pathname === '/admin') return null;
+  // Don't show customer bottom nav on rider portal
+  if (pathname.startsWith('/rider')) return null;
 
   const links = [
     { href: '/', label: 'Home', icon: 'home' },
     { href: '/menu', label: 'Daily Menu', icon: 'restaurant_menu' },
     { href: '/cart', label: 'My Tray', icon: 'shopping_cart' },
-    { href: '/admin', label: 'Kitchen KDS', icon: 'soup_kitchen' },
+    { href: '/track', label: 'Track Order', icon: 'local_shipping' },
   ];
 
   return (
