@@ -9,13 +9,13 @@ import { AuditService } from '../audit/audit.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
-import Razorpay from 'razorpay';
 import { VerifyPaymentDto, RefundOrderDto } from './dto/payments.dto';
+const Razorpay = require('razorpay');
 
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
-  private razorpayClient: Razorpay | null = null;
+  private razorpayClient: any = null;
 
   constructor(
     private readonly prisma: PrismaService,

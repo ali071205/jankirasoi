@@ -6,7 +6,9 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { ConfigService } from '@nestjs/config';
 import { OrderStatus } from '@prisma/client';
+import { randomInt, createHmac } from 'crypto';
 
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   AWAITING_PAYMENT: ['PLACED', 'CANCELLED'],
@@ -27,6 +29,7 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly configService: ConfigService,
   ) {}
 
   async trackOrderByToken(trackingToken: string) {
@@ -185,6 +188,32 @@ export class OrdersService {
         where: { id: orderId },
         data: { status: toStatus },
       });
+
+      // If dispatched out for delivery, ensure active 6-digit verbal handover PIN is generated
+      if (toStatus === 'OUT_FOR_DELIVERY') {
+        const existingOtp = await tx.deliveryOtp.findFirst({
+          where: { orderId, isUsed: false, expiresAt: { gt: new Date() } },
+        });
+
+        if (!existingOtp) {
+          const plainOtp = randomInt(100000, 999999).toString();
+          const secret =
+            this.configService.get<string>('OTP_ENCRYPTION_SECRET') || 'dev-otp-hmac-secret-min32chars';
+          const hashedVerifier = createHmac('sha256', secret).update(plainOtp).digest('hex');
+          const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 hours TTL
+
+          await tx.deliveryOtp.create({
+            data: {
+              orderId,
+              phone: order.customerPhone,
+              otpCode: plainOtp,
+              hashedVerifier,
+              expiresAt,
+              maxAttempts: 5,
+            },
+          });
+        }
+      }
 
       await tx.orderStatusEvent.create({
         data: {

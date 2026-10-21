@@ -7,8 +7,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CalculateQuoteDto, PlaceOrderDto } from './dto/checkout.dto';
 import { randomBytes, createHmac } from 'crypto';
-import Razorpay from 'razorpay';
 import { ConfigService } from '@nestjs/config';
+const Razorpay = require('razorpay');
 
 interface CachedQuote {
   quoteToken: string;
@@ -42,7 +42,7 @@ interface CachedQuote {
 export class CheckoutService {
   private readonly logger = new Logger(CheckoutService.name);
   private quoteCache = new Map<string, CachedQuote>();
-  private razorpayClient: Razorpay | null = null;
+  private razorpayClient: any = null;
 
   constructor(
     private readonly prisma: PrismaService,
