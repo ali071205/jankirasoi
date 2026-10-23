@@ -221,6 +221,7 @@ export default function OperationsConsolePage() {
       eventSource.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data);
+          if (payload.type === 'PING') return;
           if (payload.type === 'ORDER_CREATED') {
             playKitchenOrderChime();
             showToast(`⚡ New order received: #${payload.orderNumber || ''}`);

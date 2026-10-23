@@ -325,15 +325,36 @@ export class AuthService {
       },
     });
 
+    const result = await Promise.all(
+      riders.map(async (r) => {
+        let profile = r.riderProfile;
+        if (!profile) {
+          try {
+            profile = await this.prisma.riderProfile.create({
+              data: {
+                userId: r.id,
+                vehicleNumber: 'DL-01-AB-1234',
+                isAvailable: true,
+              },
+            });
+          } catch {
+            profile = await this.prisma.riderProfile.findUnique({ where: { userId: r.id } });
+          }
+        }
+        return {
+          id: profile?.id || r.id,
+          userId: r.id,
+          name: r.name,
+          phone: r.phone,
+          vehicleNumber: profile?.vehicleNumber || 'DL-01-AB-1234',
+          isAvailable: profile?.isAvailable ?? true,
+          isActive: r.isActive,
+        };
+      }),
+    );
+
     return {
-      riders: riders.map((r) => ({
-        id: r.id,
-        name: r.name,
-        phone: r.phone,
-        vehicleNumber: r.riderProfile?.vehicleNumber || 'DL-01-AB-1234',
-        isAvailable: r.riderProfile?.isAvailable ?? true,
-        isActive: r.isActive,
-      })),
+      riders: result,
     };
   }
 

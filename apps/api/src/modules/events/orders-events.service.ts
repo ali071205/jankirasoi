@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Subject, Observable } from 'rxjs';
+import { Subject, Observable, interval, merge } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 export interface OrderStreamEvent {
-  type: 'ORDER_CREATED' | 'ORDER_UPDATED' | 'RIDER_ASSIGNED';
-  orderId: string;
+  type: 'ORDER_CREATED' | 'ORDER_UPDATED' | 'RIDER_ASSIGNED' | 'PING';
+  orderId?: string;
   orderNumber?: string;
   status?: string;
   riderId?: string;
@@ -29,6 +30,15 @@ export class OrdersEventsService {
   }
 
   getOrdersStream(): Observable<{ data: OrderStreamEvent }> {
-    return this.stream$.asObservable();
+    // 15-second heartbeat keeps the HTTP/2 connection alive through reverse proxies and browsers
+    const heartbeat$ = interval(15000).pipe(
+      map(() => ({
+        data: {
+          type: 'PING' as const,
+          timestamp: Date.now(),
+        },
+      })),
+    );
+    return merge(this.stream$.asObservable(), heartbeat$);
   }
 }

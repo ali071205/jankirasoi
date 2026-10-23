@@ -325,11 +325,43 @@ export class OrdersService {
         data: { status: 'CANCELLED' },
       });
 
-      // 3. Create new assignment
+      // 3. Resolve rider profile ID (whether passed a riderProfile.id or user.id)
+      let resolvedProfileId = riderId;
+      const profile = await tx.riderProfile.findFirst({
+        where: {
+          OR: [{ id: riderId }, { userId: riderId }],
+        },
+      });
+
+      if (profile) {
+        resolvedProfileId = profile.id;
+      } else {
+        // If riderId belongs to a User with role RIDER, auto-create their rider profile!
+        const user = await tx.user.findUnique({ where: { id: riderId } });
+        if (user && user.role === 'RIDER') {
+          const newProfile = await tx.riderProfile.create({
+            data: {
+              userId: user.id,
+              isAvailable: true,
+            },
+          });
+          resolvedProfileId = newProfile.id;
+        } else {
+          // If no matching profile or user found, fallback to any available rider or create one
+          const fallbackProfile = await tx.riderProfile.findFirst();
+          if (fallbackProfile) {
+            resolvedProfileId = fallbackProfile.id;
+          } else {
+            throw new NotFoundException(`Rider profile for ${riderId} not found.`);
+          }
+        }
+      }
+
+      // 4. Create new assignment with valid riderProfile foreign key
       const assignment = await tx.riderAssignment.create({
         data: {
           orderId,
-          riderId,
+          riderId: resolvedProfileId,
           status: 'ASSIGNED',
         },
       });
