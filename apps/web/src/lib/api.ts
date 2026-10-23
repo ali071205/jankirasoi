@@ -67,6 +67,9 @@ export interface SlotsResponse {
 export interface PincodeCheckResponse {
   serviceable: boolean;
   pincode: string;
+  city?: string | null;
+  district?: string | null;
+  state?: string | null;
   zoneName?: string;
   deliveryFeePaise?: number;
   freeDeliveryThresholdPaise?: number;
@@ -383,7 +386,10 @@ export const api = {
   async getAdminOrders(): Promise<AdminOrdersResponse> {
     const base = getApiBase();
     const res = await fetch(`${base}/admin/orders?limit=50`, {
-      headers: { 'X-Simulated-Role': 'STAFF' },
+      // FIX #12: Removed hardcoded X-Simulated-Role header. Admin access now requires a
+      // real session cookie set by loginAdmin(). The bypass is handled server-side only
+      // when ALLOW_SIMULATED_ROLE=true is explicitly set in non-production environments.
+      credentials: 'include',
       cache: 'no-store',
     });
     if (!res.ok) {
@@ -400,8 +406,9 @@ export const api = {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        'X-Simulated-Role': 'STAFF',
+        // FIX #12: Removed hardcoded X-Simulated-Role header
       },
+      credentials: 'include',
       body: JSON.stringify({ status, reason }),
     });
     if (!res.ok) {
@@ -418,8 +425,9 @@ export const api = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Simulated-Role': 'STAFF',
+        // FIX #12: Removed hardcoded X-Simulated-Role header
       },
+      credentials: 'include',
       body: JSON.stringify({ reason }),
     });
     if (!res.ok) {
@@ -430,11 +438,13 @@ export const api = {
   },
 
   // 10. Rider Deliveries Queue
-  async getRiderDeliveries(): Promise<{ deliveries: RiderDelivery[] }> {
+  async getRiderDeliveries(signal?: AbortSignal): Promise<{ deliveries: RiderDelivery[] }> {
     const base = getApiBase();
     const res = await fetch(`${base}/rider/deliveries`, {
-      headers: { 'X-Simulated-Role': 'RIDER' },
+      // FIX #12: Removed hardcoded X-Simulated-Role header — rider must use real session
+      credentials: 'include',
       cache: 'no-store',
+      signal,
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -450,8 +460,9 @@ export const api = {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        'X-Simulated-Role': 'RIDER',
+        // FIX #12: Removed hardcoded X-Simulated-Role header
       },
+      credentials: 'include',
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -467,8 +478,9 @@ export const api = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Simulated-Role': 'RIDER',
+        // FIX #12: Removed hardcoded X-Simulated-Role header
       },
+      credentials: 'include',
       body: JSON.stringify({ code }),
     });
     if (!res.ok) {

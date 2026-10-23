@@ -378,18 +378,24 @@ function TrackContent() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Initial load: catalog + all recent orders
+  // Initial load + Real-time auto sync for order tracking
   useEffect(() => {
     let isMounted = true;
 
-    async function loadAllOrders() {
+    async function loadAllOrders(isSilent = false) {
       if (typeof window === 'undefined') return;
 
+      if (!isSilent) {
+        setLoading(true);
+      }
+
       try {
-        // Fetch catalog for food images
-        api.getCatalog().then((cat) => {
-          if (isMounted) setCatalog(cat);
-        }).catch(() => {});
+        // Fetch catalog for food images (only on initial load)
+        if (!isSilent) {
+          api.getCatalog().then((cat) => {
+            if (isMounted) setCatalog(cat);
+          }).catch(() => {});
+        }
 
         // Gather order tokens from URL, recent orders array, and last token
         const tokensToFetch: string[] = [];
@@ -441,17 +447,39 @@ function TrackContent() {
         });
 
         setOrders(fetchedOrders);
-        if (fetchedOrders.length === 0 && tokensToFetch.length > 0) {
+        if (fetchedOrders.length === 0 && tokensToFetch.length > 0 && !isSilent) {
           setError('Could not find active order. Please check order number or phone.');
         }
       } catch (err: any) {
-        if (isMounted) setError(err.message || 'Failed to load live tracking.');
+        if (isMounted && !isSilent) setError(err.message || 'Failed to load live tracking.');
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted && !isSilent) setLoading(false);
       }
     }
 
-    loadAllOrders();
+    // 1. Initial full fetch
+    loadAllOrders(false);
+
+    // 2. Silent polling interval every 3.5 seconds
+    const interval = setInterval(() => {
+      loadAllOrders(true);
+    }, 3500);
+
+    // 3. Instant sync on tab visibility or window focus
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadAllOrders(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
+    };
   }, [urlToken]);
 
   // Handle Search Submission

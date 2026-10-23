@@ -21,9 +21,14 @@ export class AuditService {
 
   async log(params: RecordAuditParams) {
     try {
+      const isRealUser =
+        params.actorId &&
+        params.actorId !== 'simulated_staff_id' &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.actorId);
+
       return await this.prisma.auditLog.create({
         data: {
-          actorId: params.actorId,
+          actorId: isRealUser ? params.actorId : undefined,
           actorRole: params.actorRole,
           action: params.action,
           entity: params.entity,

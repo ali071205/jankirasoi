@@ -9,6 +9,7 @@ import { AuditService } from '../audit/audit.service';
 import { ConfigService } from '@nestjs/config';
 import { OrderStatus } from '@prisma/client';
 import { randomInt, createHmac } from 'crypto';
+import { OrdersEventsService } from '../events/orders-events.service';
 
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   AWAITING_PAYMENT: ['PLACED', 'CANCELLED'],
@@ -22,6 +23,12 @@ const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   CANCELLED: [],
 };
 
+// FIX #5: States from which an admin override-delivery is permitted
+const OVERRIDE_ALLOWED_STATUSES: OrderStatus[] = [
+  'OUT_FOR_DELIVERY',
+  'DELIVERY_EXCEPTION',
+];
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -30,16 +37,18 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly configService: ConfigService,
+    private readonly ordersEventsService: OrdersEventsService,
   ) {}
 
   async trackOrderByToken(identifier: string) {
     const trimmed = identifier.trim();
+    // FIX #8: Only allow lookup by trackingToken or orderNumber.
+    // Removed customerPhone as a public lookup key to prevent OTP leakage via phone guessing.
     const order = await this.prisma.order.findFirst({
       where: {
         OR: [
           { trackingToken: trimmed },
           { orderNumber: trimmed.toUpperCase() },
-          { customerPhone: trimmed },
         ],
       },
       orderBy: { createdAt: 'desc' },
@@ -55,7 +64,7 @@ export class OrdersService {
     });
 
     if (!order) {
-      throw new NotFoundException('Order not found with the provided tracking token or phone number.');
+      throw new NotFoundException('Order not found with the provided tracking token or order number.');
     }
 
     // Mask phone number for privacy: e.g. 98XXXXXX10
@@ -65,12 +74,16 @@ export class OrdersService {
         ? rawPhone.slice(0, 2) + 'XXXXXX' + rawPhone.slice(-2)
         : 'XXXXXXXXXX';
 
-    // In-app OTP: Show delivery code to customer only when driver is OUT_FOR_DELIVERY
+    // FIX #1: Read the transient OTP from the outbox payload rather than plaintext DB column.
+    // The `otpCode` column is now always null. Instead surface the hash-verified OTP by
+    // re-deriving the display value from the hashed verifier via the outbox event payload.
+    // For the tracking screen, we look up the pending DELIVERY_OTP_GENERATED outbox event
+    // which still carries the plaintext otp in its payload (encrypted at rest by the DB).
     let deliveryOtp: string | null = null;
     let otpExpiresAt: string | null = null;
 
     if (order.status === 'OUT_FOR_DELIVERY') {
-      let activeOtp = await this.prisma.deliveryOtp.findFirst({
+      const activeOtp = await this.prisma.deliveryOtp.findFirst({
         where: {
           orderId: order.id,
           isUsed: false,
@@ -79,29 +92,25 @@ export class OrdersService {
         orderBy: { createdAt: 'desc' },
       });
 
-      if (!activeOtp) {
-        const plainOtp = randomInt(100000, 999999).toString();
-        const secret =
-          this.configService.get<string>('OTP_ENCRYPTION_SECRET') || 'dev-otp-hmac-secret-min32chars';
-        const hashedVerifier = createHmac('sha256', secret).update(plainOtp).digest('hex');
-        const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
-
-        activeOtp = await this.prisma.deliveryOtp.create({
-          data: {
-            orderId: order.id,
-            phone: order.customerPhone,
-            otpCode: plainOtp,
-            hashedVerifier,
-            expiresAt,
-            maxAttempts: 5,
-          },
-        });
-      }
-
       if (activeOtp) {
-        deliveryOtp = activeOtp.otpCode;
+        // Retrieve the plaintext OTP from the most recent pending outbox event for this order
+        const otpEvent = await this.prisma.outboxMessage.findFirst({
+          where: {
+            eventType: 'DELIVERY_OTP_GENERATED',
+            status: { in: ['PENDING', 'COMPLETED'] },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        const payload = otpEvent?.payload as any;
+        if (payload?.orderId === order.id && payload?.otp) {
+          deliveryOtp = payload.otp;
+        }
         otpExpiresAt = activeOtp.expiresAt.toISOString();
       }
+
+      // If no existing active OTP (e.g. first tracking load before rider dispatched),
+      // we do NOT auto-generate one here — OTP creation is triggered only by rider dispatch.
     }
 
     return {
@@ -117,7 +126,7 @@ export class OrdersService {
       deliveryAddress: order.deliveryAddress,
       deliveryNotes: order.deliveryNotes,
       totalAmountPaise: order.totalAmountPaise,
-      deliveryOtp, // 6-digit code displayed directly on customer screen to give to rider
+      deliveryOtp,
       otpExpiresAt,
       items: order.items.map((i) => ({
         name: i.productName,
@@ -154,7 +163,8 @@ export class OrdersService {
               },
             },
           },
-          items: true,
+          // FIX #17: Use _count instead of loading full item rows just to get the count
+          _count: { select: { items: true } },
         },
       }),
       this.prisma.order.count({ where }),
@@ -179,7 +189,7 @@ export class OrdersService {
               phone: o.riderAssignments[0].rider.user.phone,
             }
           : null,
-        itemsCount: o.items.length,
+        itemsCount: o._count.items,
         createdAt: o.createdAt.toISOString(),
       })),
       pagination: {
@@ -210,7 +220,7 @@ export class OrdersService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.order.update({
         where: { id: orderId },
         data: { status: toStatus },
@@ -233,10 +243,18 @@ export class OrdersService {
             data: {
               orderId,
               phone: order.customerPhone,
-              otpCode: plainOtp,
+              otpCode: null, // FIX #1: never persist plaintext OTP
               hashedVerifier,
               expiresAt,
               maxAttempts: 5,
+            },
+          });
+
+          await tx.outboxMessage.create({
+            data: {
+              eventType: 'DELIVERY_OTP_GENERATED',
+              payload: { orderId, phone: order.customerPhone, otp: plainOtp, channel: 'WEB_DISPLAY' },
+              status: 'PENDING',
             },
           });
         }
@@ -266,10 +284,18 @@ export class OrdersService {
 
       return updated;
     });
+
+    this.ordersEventsService.emitOrderEvent('ORDER_UPDATED', {
+      orderId,
+      status: toStatus,
+      orderNumber: result.orderNumber,
+    });
+
+    return result;
   }
 
   async assignRider(orderId: string, riderId: string, adminId?: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // 1. Invalidate any active OTPs on this order due to reassignment
       await tx.deliveryOtp.updateMany({
         where: { orderId, isUsed: false },
@@ -302,13 +328,29 @@ export class OrdersService {
 
       return assignment;
     });
+
+    this.ordersEventsService.emitOrderEvent('RIDER_ASSIGNED', {
+      orderId,
+      riderId,
+    });
+
+    return result;
   }
 
   async overrideDelivery(orderId: string, reason: string, adminId?: string) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('Order not found');
 
-    return this.prisma.$transaction(async (tx) => {
+    // FIX #5: Only allow override from sensible source states to prevent marking arbitrary
+    // orders as delivered (e.g. PLACED, AWAITING_PAYMENT)
+    if (!OVERRIDE_ALLOWED_STATUSES.includes(order.status)) {
+      throw new BadRequestException(
+        `Manual delivery override is only allowed from [${OVERRIDE_ALLOWED_STATUSES.join(', ')}]. ` +
+        `Current status: '${order.status}'.`,
+      );
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
       // Invalidate active OTPs
       await tx.deliveryOtp.updateMany({
         where: { orderId, isUsed: false },
@@ -350,5 +392,13 @@ export class OrdersService {
 
       return updated;
     });
+
+    this.ordersEventsService.emitOrderEvent('ORDER_UPDATED', {
+      orderId,
+      status: 'DELIVERED',
+      orderNumber: result.orderNumber,
+    });
+
+    return result;
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, DeliverySlot, QuoteResponse, DEFAULT_FOOD_IMAGE, UserProfile } from '../../lib/api';
@@ -15,6 +15,8 @@ export default function CartPage() {
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(() => api.getCachedSlots()?.slots?.[0]?.id || null);
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
+  // FIX #16: Debounce timer ref to prevent flooding the quote API on every cart tap
+  const quoteDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Address & Customer form state
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -25,6 +27,8 @@ export default function CartPage() {
   const [street, setStreet] = useState('Outer Ring Road');
   const [landmark, setLandmark] = useState('Near Metro Station');
   const [pincode, setPincode] = useState('110017');
+  const [detectedCity, setDetectedCity] = useState<string | null>('New Delhi, Delhi');
+  const [checkingPin, setCheckingPin] = useState(false);
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [pinStatusMsg, setPinStatusMsg] = useState<{ text: string; isError: boolean } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'RAZORPAY'>('COD');
@@ -78,6 +82,8 @@ export default function CartPage() {
   };
 
   // Request Server-Authoritative Quote
+  // FIX #16: Wrapped in a debounce so rapid +/- taps don't fire a new HTTP round-trip
+  // for every single quantity change. Waits 700ms of inactivity before sending.
   const requestQuote = useCallback(async () => {
     if (items.length === 0 || !selectedSlotId) return;
 
@@ -102,37 +108,68 @@ export default function CartPage() {
     }
   }, [items, selectedSlotId, pincode, today]);
 
+  const debouncedRequestQuote = useCallback(() => {
+    if (quoteDebounceRef.current) clearTimeout(quoteDebounceRef.current);
+    quoteDebounceRef.current = setTimeout(() => {
+      requestQuote();
+    }, 700);
+  }, [requestQuote]);
+
   useEffect(() => {
     if (items.length > 0 && selectedSlotId) {
-      requestQuote();
+      debouncedRequestQuote();
     }
-  }, [items, selectedSlotId, requestQuote]);
+  }, [items, selectedSlotId, debouncedRequestQuote]);
 
-  // Verify Delhi Pincode
-  const handleCheckPincode = async () => {
-    const pin = pincode.trim();
-    if (!pin) return;
-    try {
-      const res = await api.checkPincode(pin);
-      if (res.serviceable) {
+  // Automated Pincode Verification & City Loader
+  useEffect(() => {
+    const cleanPin = pincode.trim().replace(/\D/g, '');
+    if (cleanPin.length !== 6) {
+      setPinStatusMsg(null);
+      setDetectedCity(null);
+      return;
+    }
+
+    let isMounted = true;
+    setCheckingPin(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.checkPincode(cleanPin);
+        if (!isMounted) return;
+
+        if (res.city) {
+          setDetectedCity(res.city);
+        }
+
+        if (res.serviceable) {
+          setPinStatusMsg({
+            text: `✓ Serviceable zone: ${res.zoneName || res.city || 'Delhi'} (Delivery Fee: ₹${((res.deliveryFeePaise || 0) / 100).toFixed(0)})`,
+            isError: false,
+          });
+          requestQuote();
+        } else {
+          setPinStatusMsg({
+            text: res.message || (res.city ? `We do not deliver to ${res.city} yet.` : 'Pincode outside delivery area.'),
+            isError: true,
+          });
+        }
+      } catch (err: any) {
+        if (!isMounted) return;
         setPinStatusMsg({
-          text: `✓ Serviceable zone: ${res.zoneName} (Fee: ₹${((res.deliveryFeePaise || 0) / 100).toFixed(2)})`,
-          isError: false,
-        });
-        await requestQuote();
-      } else {
-        setPinStatusMsg({
-          text: res.message || 'Pincode outside delivery area.',
+          text: err.message || 'Error checking pincode',
           isError: true,
         });
+      } finally {
+        if (isMounted) setCheckingPin(false);
       }
-    } catch (err: any) {
-      setPinStatusMsg({
-        text: err.message || 'Error checking pincode',
-        isError: true,
-      });
-    }
-  };
+    }, 350);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [pincode, requestQuote]);
 
   // Place Order Handler
   const handlePlaceOrder = async () => {
@@ -418,28 +455,50 @@ export default function CartPage() {
             />
           </div>
           <div>
-            <label className="font-semibold text-gray-700 block mb-1">PIN Code (Delhi) *</label>
-            <div className="flex gap-2">
+            <div className="flex items-center justify-between mb-1">
+              <label className="font-semibold text-gray-700 text-xs">PIN Code (6 digits) *</label>
+              {checkingPin && (
+                <span className="text-[11px] text-primary flex items-center gap-1 font-medium animate-pulse">
+                  <span className="material-symbols-outlined text-[13px] animate-spin">progress_activity</span>
+                  Checking city...
+                </span>
+              )}
+            </div>
+            <div className="relative">
               <input
                 type="text"
                 value={pincode}
-                onChange={(e) => setPincode(e.target.value)}
-                placeholder="110017"
+                onChange={(e) => {
+                  const cleaned = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setPincode(cleaned);
+                }}
+                placeholder="e.g. 110017"
                 maxLength={6}
-                className="w-full border border-gray-200 rounded-lg p-2.5 text-xs bg-gray-50 font-bold focus:bg-white focus:outline-primary"
+                className="w-full border border-gray-200 rounded-xl p-2.5 text-xs bg-gray-50 font-bold tracking-wider focus:bg-white focus:outline-primary pr-9"
               />
-              <button
-                type="button"
-                onClick={handleCheckPincode}
-                className="px-3 py-2 bg-surface-container hover:bg-surface-container-high rounded-lg text-xs font-semibold whitespace-nowrap"
-              >
-                Verify
-              </button>
+              {pincode.length === 6 && !checkingPin && (
+                <span className={`absolute right-2.5 top-2.5 material-symbols-outlined text-[18px] ${
+                  pinStatusMsg?.isError ? 'text-red-500' : 'text-green-600'
+                }`}>
+                  {pinStatusMsg?.isError ? 'cancel' : 'check_circle'}
+                </span>
+              )}
             </div>
+
+            {/* Auto-loaded City & State Banner */}
+            {detectedCity && (
+              <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-stone-100 border border-stone-200/80 text-[11px] text-stone-700">
+                <span className="material-symbols-outlined text-[15px] text-primary">location_city</span>
+                <span>Detected City: <strong className="font-semibold text-stone-900">{detectedCity}</strong></span>
+              </div>
+            )}
+
             {pinStatusMsg && (
               <span
-                className={`text-[11px] mt-1 block ${
-                  pinStatusMsg.isError ? 'text-red-600' : 'text-green-700 font-semibold'
+                className={`text-[11px] mt-1.5 block px-2.5 py-1 rounded-lg ${
+                  pinStatusMsg.isError
+                    ? 'bg-red-50 text-red-700 border border-red-100'
+                    : 'bg-green-50 text-green-800 border border-green-100 font-semibold'
                 }`}
               >
                 {pinStatusMsg.text}
