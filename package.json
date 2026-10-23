@@ -15,9 +15,14 @@
     "web:dev": "pnpm --filter ./apps/web dev",
     "admin:dev": "pnpm --filter @jankirasoi/admin dev",
     "start:worker": "pnpm --filter ./apps/api start:worker",
-    "prisma:generate": "pnpm --filter ./apps/api prisma:generate",
+    "postinstall": "pnpm --filter ./apps/api prisma:generate || true",
     "lint": "pnpm --filter ./apps/api lint",
     "test": "pnpm --filter ./apps/api test"
+  },
+  "dependencies": {
+    "next": "^14.2.23",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "typescript": "^5.7.3"
