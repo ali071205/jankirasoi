@@ -436,18 +436,21 @@ export default function CartPage() {
       </header>
 
       <div className="flex flex-col w-full max-w-xl mx-auto pb-4">
-        {/* 3. Simplified Items Pill & Lunch/Dinner Slot Switching Pills */}
-        <div className="px-3 pt-3 flex flex-wrap items-center justify-between gap-2">
-          {/* Simplified Orange Items Badge */}
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-50 border border-orange-200 text-orange-950 text-xs font-bold shadow-2xs">
-            <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
-            <span>{items.reduce((a, b) => a + b.quantity, 0)} items</span>
-            <span className="text-orange-400">•</span>
-            <span className="font-extrabold">₹{(itemsTotalPaise / 100).toFixed(0)}</span>
+        {/* 3. Minimalistic Items Count & Lunch/Dinner Slot Switcher */}
+        <div className="px-3 pt-3 flex items-center justify-between gap-2">
+          {/* Minimalist Items Count */}
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="font-bold text-slate-800">
+              {items.reduce((a, b) => a + b.quantity, 0)} {items.reduce((a, b) => a + b.quantity, 0) === 1 ? 'item' : 'items'}
+            </span>
+            <span className="text-slate-300">•</span>
+            <span className="font-extrabold text-slate-900">
+              ₹{(itemsTotalPaise / 100).toFixed(0)}
+            </span>
           </div>
 
-          {/* Lunch vs Dinner Switching Pills */}
-          <div className="inline-flex items-center gap-1 bg-white p-1 rounded-full border border-slate-200/90 shadow-2xs">
+          {/* Lunch vs Dinner Switching Pills with Clean SVG Icons */}
+          <div className="inline-flex items-center gap-1 bg-white p-0.5 rounded-full border border-slate-200/90 shadow-2xs">
             {(slots.length > 0
               ? slots
               : [
@@ -462,13 +465,30 @@ export default function CartPage() {
                   key={slot.id}
                   type="button"
                   onClick={() => setSelectedSlotId(slot.id)}
-                  className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
                     isSelected
                       ? 'bg-[#008848] text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
-                  <span>{isLunch ? '☀️ Lunch' : '🌙 Dinner'}</span>
+                  {isLunch ? (
+                    <svg className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-amber-200' : 'text-amber-500'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="4"/>
+                      <path d="M12 2v2"/>
+                      <path d="M12 20v2"/>
+                      <path d="m4.93 4.93 1.41 1.41"/>
+                      <path d="m17.66 17.66 1.41 1.41"/>
+                      <path d="M2 12h2"/>
+                      <path d="M20 12h2"/>
+                      <path d="m6.34 17.66-1.41 1.41"/>
+                      <path d="m19.07 4.93-1.41 1.41"/>
+                    </svg>
+                  ) : (
+                    <svg className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-indigo-200' : 'text-indigo-500'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+                    </svg>
+                  )}
+                  <span>{isLunch ? 'Lunch' : 'Dinner'}</span>
                   <span className={`text-[10px] font-medium hidden xs:inline ${isSelected ? 'text-emerald-100' : 'text-slate-400'}`}>
                     ({slot.startTime}–{slot.endTime})
                   </span>
@@ -593,23 +613,6 @@ export default function CartPage() {
           </div>
         </div>
 
-        {/* 6. Savings Corner */}
-        <div className="px-3 pt-3">
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-orange-500 text-white flex items-center justify-center text-xs font-bold shadow-xs">
-                %
-              </div>
-              <div>
-                <p className="text-xs font-extrabold text-slate-900">Saved ₹29 on Janki Rasoi</p>
-                <p className="text-[10px] text-slate-500 font-medium">View all coupons ›</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 text-emerald-700 text-xs font-extrabold">
-              <span>✓ Applied</span>
-            </div>
-          </div>
-        </div>
 
         {/* 7. Rider Delivery Instructions (Exact 1:1 with Reference Image 2) */}
         <div className="px-3 pt-3">
