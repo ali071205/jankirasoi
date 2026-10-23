@@ -266,7 +266,13 @@ function setCached<T>(key: string, data: T, ttlMs = 180000): T {
 
 const getApiBase = () => {
   if (typeof window === 'undefined') {
-    return process.env.NEXT_PUBLIC_INTERNAL_API_URL || 'http://localhost:3000/api/v1';
+    const raw =
+      process.env.NEXT_PUBLIC_INTERNAL_API_URL ||
+      process.env.API_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      'http://localhost:3000';
+    const cleanBase = raw.replace(/\/api\/v1\/?$/, '').replace(/\/+$/, '');
+    return `${cleanBase}/api/v1`;
   }
   return '/api/v1';
 };
