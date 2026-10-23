@@ -551,11 +551,6 @@ export default function CartPage() {
                 {pinStatusMsg.text}
               </p>
             )}
-                }`}
-              >
-                {pinStatusMsg.text}
-              </p>
-            )}
 
             <div>
               <label className="text-xs font-semibold text-[#77786F] block mb-1">
