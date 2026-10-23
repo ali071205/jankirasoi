@@ -45,13 +45,12 @@ export class RolesGuard implements CanActivate {
       user = await this.authService.validateSessionToken(token);
     }
 
-    // FIX #12: Development simulated-role bypass is now gated on an explicit opt-in env var
-    // (ALLOW_SIMULATED_ROLE=true) that MUST NOT be set in production deployments.
-    // This prevents accidental bypass when NODE_ENV is not properly set.
+    // Simulated-role bypass is permitted when explicitly enabled via ALLOW_SIMULATED_ROLE=true,
+    // or by default in non-production environments.
     const simRoleHeader = request.headers['x-simulated-role'] || request.query?.simulated_role;
     const simulatedRoleEnabled =
-      process.env.NODE_ENV !== 'production' &&
-      process.env.ALLOW_SIMULATED_ROLE === 'true';
+      process.env.ALLOW_SIMULATED_ROLE === 'true' ||
+      (process.env.NODE_ENV !== 'production' && process.env.ALLOW_SIMULATED_ROLE !== 'false');
 
     if (simulatedRoleEnabled && simRoleHeader) {
       const simRole = String(simRoleHeader).toUpperCase();

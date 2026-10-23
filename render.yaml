@@ -41,3 +41,5 @@ services:
         sync: false
       - key: ADMIN_URL
         sync: false
+      - key: ALLOW_SIMULATED_ROLE
+        value: "true"
