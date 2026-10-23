@@ -8,16 +8,13 @@ import { api, TrackOrderResponse, DEFAULT_FOOD_IMAGE } from '../../lib/api';
 const PROGRESS_STEPS = [
   { key: 'ACCEPTED', label: 'Order Confirmed', icon: 'check', desc: 'Kitchen accepted your wholesome meal request.' },
   { key: 'PREPARING', label: 'Preparing in Kitchen', icon: 'skillet', desc: 'Fresh rotis right off the tawa & piping hot dal packaging.' },
-  { key: 'READY_FOR_PICKUP', label: 'Packed & Ready', icon: 'inventory_2', desc: 'Sealed warm in spill-proof insulated foil tray.' },
   { key: 'OUT_FOR_DELIVERY', label: 'Out for Delivery', icon: 'moped', desc: 'Rider is on the way to your delivery address.' },
-  { key: 'DELIVERED', label: 'Delivered', icon: 'task_alt', desc: 'Meal delivered fresh to your door.' },
 ];
 
 function getProgressIndex(status: string) {
-  if (status === 'DELIVERED') return 4;
-  if (status === 'OUT_FOR_DELIVERY') return 3;
-  if (status === 'READY_FOR_PICKUP') return 2;
-  if (status === 'PREPARING') return 1;
+  if (status === 'DELIVERED') return 3;
+  if (status === 'OUT_FOR_DELIVERY') return 2;
+  if (status === 'READY_FOR_PICKUP' || status === 'PREPARING') return 1;
   return 0;
 }
 
@@ -29,13 +26,19 @@ function OrderTrackingContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copiedOtp, setCopiedOtp] = useState(false);
+  const [trackingToken, setTrackingToken] = useState<string | null>(tokenFromUrl);
 
-  const trackingToken = useMemo(() => {
-    if (tokenFromUrl) return tokenFromUrl;
-    if (typeof window !== 'undefined') {
-      return window.localStorage.getItem('jr_last_tracking_token') || null;
+  useEffect(() => {
+    if (tokenFromUrl) {
+      setTrackingToken(tokenFromUrl);
+    } else if (typeof window !== 'undefined') {
+      const stored = window.localStorage.getItem('jr_last_tracking_token');
+      if (stored) {
+        setTrackingToken(stored);
+      } else {
+        setLoading(false);
+      }
     }
-    return null;
   }, [tokenFromUrl]);
 
   useEffect(() => {
@@ -254,13 +257,13 @@ function OrderTrackingContent() {
                 <h2 className="text-sm sm:text-base text-[#292D26] font-bold truncate">Kitchen Live Tracker</h2>
               </div>
               <span className="text-xs text-[#38754A] bg-[#EAF4ED] px-2.5 py-0.5 rounded-full font-bold shrink-0 whitespace-nowrap">
-                Step {currentStep + 1} of 4
+                Step {Math.min(currentStep + 1, 3)} of 3
               </span>
             </div>
 
             {/* Stepper Vertical Stack */}
             <div className="relative flex flex-col gap-3">
-              {PROGRESS_STEPS.slice(0, 4).map((step, idx) => {
+              {PROGRESS_STEPS.map((step, idx) => {
                 const isCompleted = currentStep > idx;
                 const isCurrent = currentStep === idx;
 

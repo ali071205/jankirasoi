@@ -146,14 +146,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       {/* Toast Notification */}
       {toastMessage && (
         <div
-          className={`fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full text-xs font-semibold text-white shadow-xl transition-all flex items-center gap-2 ${
-            isToastError ? 'bg-red-600' : 'bg-primary-container'
+          className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-full text-xs sm:text-sm font-bold text-white shadow-2xl transition-all flex items-center gap-2.5 max-w-[92vw] border ${
+            isToastError
+              ? 'bg-[#B71C1C] text-white border-red-400'
+              : 'bg-[#1C1C1E] text-white border-slate-700'
           }`}
         >
-          <span className="material-symbols-outlined text-[16px]">
-            {isToastError ? 'error' : 'check_circle'}
+          <span className="material-symbols-outlined text-[18px] text-amber-300 shrink-0">
+            {isToastError ? 'error' : 'info'}
           </span>
-          <span>{toastMessage}</span>
+          <span className="text-white font-extrabold tracking-wide drop-shadow-sm">{toastMessage}</span>
         </div>
       )}
     </CartContext.Provider>

@@ -4,10 +4,13 @@ import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { api, MenuItem, CatalogResponse, DEFAULT_FOOD_IMAGE } from '../lib/api';
 import { useCart } from '../context/CartContext';
+import DishDetailModal from '../components/DishDetailModal';
 
 export default function HomePage() {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedSlot, setSelectedSlot] = useState<'lunch' | 'dinner'>('lunch');
+  const [selectedDishModal, setSelectedDishModal] = useState<MenuItem | null>(null);
 
   const { items, addItem, updateQty, showToast } = useCart();
 
@@ -191,328 +194,219 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Hero Actions & Prominent Explore Button */}
-          <div className="p-4 sm:p-5 flex flex-col gap-3 bg-white">
-            <p className="text-xs sm:text-sm text-[#77786F] leading-relaxed">
-              Freshly prepared meals for your everyday lunch and dinner. Cooked daily with mild spices, pure ghee &amp; zero preservatives.
-            </p>
-            <div className="pt-1 flex flex-col sm:flex-row gap-2.5">
-              {/* Primary button matching user image exactly */}
-              <Link
-                href="/menu"
-                className="h-12 flex-1 rounded-xl bg-[#38754A] hover:bg-[#285C38] text-white font-bold text-sm sm:text-base flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-sm"
-              >
-                <span>Explore today's menu</span>
-                <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
-              </Link>
-              <Link
-                href="/menu?slot=dinner"
-                className="h-12 sm:w-52 rounded-xl bg-[#EEE7DC] hover:bg-[#e4ddd1] text-[#292D26] font-semibold text-sm flex items-center justify-center gap-1 active:scale-[0.98] transition-all"
-              >
-                <span>Explore Dinner</span>
-                <span className="material-symbols-outlined text-[18px]">chevron_right</span>
-              </Link>
-            </div>
-          </div>
         </div>
 
-        {/* 3. Meal Slot Selection (Lunch / Dinner Split) */}
-        <div className="mt-6 flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg sm:text-xl text-[#292D26] font-bold font-headline">Daily Meals Schedule</h2>
-            <Link
-              href="/menu"
-              className="text-xs sm:text-sm text-[#38754A] font-semibold flex items-center gap-0.5 hover:underline"
+        {/* 3. Meal Slot Segmented Pill Filter matching reference UI */}
+        <div className="mt-4 flex flex-col gap-2">
+          {/* Segmented Capsule Track matching reference UI exactly */}
+          <div className="w-full bg-[#EFECE4] p-1 rounded-full flex items-center border border-[#E2DBD0] shadow-2xs">
+            {/* Lunch Tab */}
+            <button
+              type="button"
+              onClick={() => setSelectedSlot('lunch')}
+              className={`flex-1 py-2 sm:py-2.5 px-2 sm:px-3 rounded-full text-center transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${
+                selectedSlot === 'lunch'
+                  ? 'bg-white text-[#E85D04] shadow-xs font-extrabold'
+                  : 'text-[#2D312E] hover:text-black font-bold'
+              }`}
             >
-              Today's Menu
-              <span className="material-symbols-outlined text-[16px]">chevron_right</span>
-            </Link>
-          </div>
+              <span className="text-[11px] sm:text-xs uppercase tracking-wide truncate">
+                LUNCH &bull; 12:00 PM &ndash; 2:30 PM
+              </span>
+            </button>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            {/* 1. Lunch Card */}
-            <div className="rounded-2xl bg-white p-4 sm:p-5 shadow-xs relative overflow-hidden flex flex-col justify-between gap-3.5 border border-[#EEE7DC]">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-[#38754A] text-white text-[11px] uppercase font-bold tracking-wider shrink-0 shadow-xs">
-                      Available Now
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 text-xs text-[#292D26] font-semibold whitespace-nowrap bg-[#FFF9F0] px-2.5 py-0.5 rounded-lg border border-[#EEE7DC]">
-                      <span className="material-symbols-outlined text-[15px] text-[#38754A]">schedule</span>
-                      12:00 PM – 2:30 PM
-                    </span>
-                  </div>
-                  <h3 className="text-base sm:text-lg text-[#292D26] font-bold mt-1">Lunch Meal</h3>
-                </div>
-                <div className="w-11 h-11 rounded-2xl bg-[#EAF4ED] border border-[#38754A]/20 flex items-center justify-center text-[#38754A] shrink-0">
-                  <span className="material-symbols-outlined text-[24px]">wb_sunny</span>
-                </div>
-              </div>
-              <p className="text-xs sm:text-sm text-[#77786F] leading-relaxed">
-                Fresh Chapati, Dal Makhani, Aloo Gobi &amp; fragrant Jeera Pulao cooked in pure sunflower oil.
-              </p>
-              <div className="flex items-center justify-between pt-1 border-t border-[#EEE7DC]/60">
-                <div>
-                  <span className="text-[11px] text-[#77786F] block">Starts from</span>
-                  <span className="text-base font-bold text-[#292D26]">₹130</span>
-                </div>
-                <Link
-                  href="/menu"
-                  className="h-10 px-4 rounded-xl bg-[#38754A] hover:bg-[#285C38] text-white text-xs sm:text-sm flex items-center gap-1.5 active:scale-95 transition-transform shadow-xs font-semibold"
-                >
-                  <span className="material-symbols-outlined text-[18px]">restaurant</span>
-                  Order Lunch
-                </Link>
-              </div>
-            </div>
-
-            {/* 2. Dinner Card */}
-            <div className="rounded-2xl bg-white p-4 sm:p-5 shadow-xs relative overflow-hidden flex flex-col justify-between gap-3.5 border border-[#EEE7DC]">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-[#E99A32] text-white text-[11px] uppercase font-bold tracking-wider shrink-0 shadow-xs">
-                      Pre-order Open
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 text-xs text-[#292D26] font-semibold whitespace-nowrap bg-[#FFF9F0] px-2.5 py-0.5 rounded-lg border border-[#EEE7DC]">
-                      <span className="material-symbols-outlined text-[15px] text-[#E99A32]">schedule</span>
-                      7:30 PM – 10:00 PM
-                    </span>
-                  </div>
-                  <h3 className="text-base sm:text-lg text-[#292D26] font-bold mt-1">Dinner Meal</h3>
-                </div>
-                <div className="w-11 h-11 rounded-2xl bg-[#FFF1DC] border border-[#E99A32]/30 flex items-center justify-center text-[#E99A32] shrink-0">
-                  <span className="material-symbols-outlined text-[24px]">nights_stay</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FFF1DC] text-[#292D26] text-xs font-medium">
-                <span className="material-symbols-outlined text-[16px] text-[#E99A32]">alarm</span>
-                Book by 6:30 PM for on-time night delivery
-              </div>
-              <div className="flex items-center justify-between pt-1 border-t border-[#EEE7DC]/60">
-                <div>
-                  <span className="text-[11px] text-[#77786F] block">Starts from</span>
-                  <span className="text-base font-bold text-[#292D26]">₹130</span>
-                </div>
-                <Link
-                  href="/menu?slot=dinner"
-                  className="h-10 px-4 rounded-xl bg-[#EEE7DC] hover:bg-[#e4ddd1] text-[#292D26] text-xs sm:text-sm flex items-center gap-1 active:scale-95 transition-transform font-semibold"
-                >
-                  Explore Dinner
-                  <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-                </Link>
-              </div>
-            </div>
+            {/* Dinner Tab */}
+            <button
+              type="button"
+              onClick={() => setSelectedSlot('dinner')}
+              className={`flex-1 py-2 sm:py-2.5 px-2 sm:px-3 rounded-full text-center transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${
+                selectedSlot === 'dinner'
+                  ? 'bg-white text-[#E85D04] shadow-xs font-extrabold'
+                  : 'text-[#2D312E] hover:text-black font-bold'
+              }`}
+            >
+              <span className="text-[11px] sm:text-xs uppercase tracking-wide truncate">
+                DINNER &bull; 7:30 PM &ndash; 10:00 PM
+              </span>
+            </button>
           </div>
         </div>
 
-        {/* 4. Featured Combos & Today's Specials */}
-        <div className="mt-7 flex flex-col gap-3">
-          <div className="flex items-baseline justify-between">
-            <div>
-              <h2 className="text-lg sm:text-xl text-[#292D26] font-bold font-headline">Today's Specials &amp; Combos</h2>
-              <p className="text-xs sm:text-sm text-[#77786F]">Cooked daily with mild spices &amp; zero preservatives</p>
-            </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#FFF1DC] text-[#E99A32] shrink-0 uppercase tracking-wide">
-              TOP PICKS
+        {/* 4. Swiggy Quick Filter Pills Ribbon */}
+        <div className="mt-5 flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+          <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-emerald-600 bg-emerald-50 text-emerald-800 text-xs font-bold shadow-2xs">
+            <span className="w-3.5 h-3.5 rounded-2xs border border-emerald-600 flex items-center justify-center p-0.5 bg-white">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
             </span>
+            <span>Pure Veg</span>
           </div>
+          <div className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full border border-slate-200 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 shadow-2xs">
+            <span className="text-red-500 text-xs">♥</span>
+            <span>EatRight</span>
+          </div>
+          <div className="shrink-0 px-3 py-1.5 rounded-full border border-slate-200 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 shadow-2xs">
+            <span>Ratings 4.0+</span>
+          </div>
+          <div className="shrink-0 px-3 py-1.5 rounded-full border border-slate-200 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 shadow-2xs">
+            <span>Bestseller</span>
+          </div>
+        </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-            {topSpecials.map((spec) => {
-              const qty = getItemQuantity(spec.id);
-              return (
+        {/* 5. Recommended (Count) Header matching 2nd Image */}
+        <div className="mt-4 flex items-center justify-between">
+          <div className="flex items-center gap-1 cursor-pointer">
+            <h2 className="text-base sm:text-lg font-extrabold text-slate-900 font-headline">
+              Recommended ({allDishes.length > 0 ? allDishes.length : topSpecials.length})
+            </h2>
+            <span className="material-symbols-outlined text-[18px] text-slate-700">keyboard_arrow_down</span>
+          </div>
+          <Link
+            href={`/menu?slot=${selectedSlot}`}
+            className="text-xs text-[#008848] font-bold hover:underline"
+          >
+            View All ({allDishes.length}) →
+          </Link>
+        </div>
+
+        {/* 6. Exact 2-Column Food Card Grid (1:1 with 2nd Image Reference) */}
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:gap-4">
+          {(allDishes.length > 0
+            ? allDishes
+            : topSpecials.map((spec) => ({
+                id: spec.id,
+                name: spec.name,
+                slug: spec.slug,
+                description: spec.desc,
+                dietaryType: 'VEG' as const,
+                imageUrl: spec.image,
+                basePricePaise: spec.pricePaise,
+                taxRatePercent: 5,
+                isSoldOut: false,
+                variants: [],
+                addonGroups: [],
+              }))
+          ).map((dish) => {
+            const qty = getItemQuantity(dish.id);
+            return (
+              <div
+                key={dish.id}
+                onClick={() => setSelectedDishModal(dish)}
+                className="flex flex-col justify-between group cursor-pointer select-none"
+              >
+                {/* 1. Strictly Equal Square Food Image (aspect-square with inline ratio) */}
                 <div
-                  key={spec.id}
-                  className="rounded-2xl bg-white shadow-xs overflow-hidden flex flex-col border border-[#EEE7DC] hover:shadow-md transition-shadow"
+                  className="relative w-full rounded-2xl overflow-hidden bg-slate-100 shadow-2xs border border-slate-200/60"
+                  style={{ aspectRatio: '1 / 1' }}
                 >
-                  <div className="relative h-44 w-full bg-[#FFF9F0]">
-                    <img
-                      className="w-full h-full object-cover"
-                      alt={spec.name}
-                      src={spec.image}
-                    />
-                    <span className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-[#E99A32] text-white text-[11px] font-bold shadow-xs flex items-center gap-1">
-                      <span
-                        className="material-symbols-outlined text-[13px]"
-                        style={{ fontVariationSettings: "'FILL' 1" }}
-                      >
-                        star
+                  <img
+                    className="w-full h-full object-cover group-hover:scale-104 transition-transform duration-300"
+                    style={{ aspectRatio: '1 / 1' }}
+                    src={dish.imageUrl || DEFAULT_FOOD_IMAGE}
+                    alt={dish.name}
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = DEFAULT_FOOD_IMAGE;
+                    }}
+                  />
+                </div>
+
+                {/* 2. Content below image */}
+                <div className="flex flex-col gap-1 mt-2 flex-1 justify-between">
+                  <div>
+                    {/* Veg Mark + Bestseller Badge + Rating */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="w-3.5 h-3.5 rounded-2xs border border-emerald-600 flex items-center justify-center p-0.5 bg-white shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
                       </span>
-                      {spec.badge}
-                    </span>
+                      <span className="text-[10px] font-bold text-[#E23744] flex items-center gap-0.5 uppercase tracking-wide">
+                        <span className="text-[11px]">⭐</span> Bestseller
+                      </span>
+                      <span className="text-[10px] font-bold text-[#008848] bg-[#EAF4ED] px-1.5 py-0.2 rounded border border-emerald-200/60">
+                        ★ 4.2 (12)
+                      </span>
+                    </div>
+
+                    {/* Dish Name (Fixed 2-line height so all cards align perfectly!) */}
+                    <h3 className="font-extrabold text-xs sm:text-sm text-slate-900 line-clamp-2 leading-snug mt-1 h-8 sm:h-9 group-hover:text-emerald-700 transition-colors">
+                      {dish.name}
+                    </h3>
+
+                    {/* Subtitle / Description (Amber tone like Swiggy) */}
+                    <p className="text-[11px] text-[#A05A00] font-semibold line-clamp-1 mt-0.5">
+                      {dish.description || 'Cooked in pure desi ghee • Homestyle'}
+                    </p>
                   </div>
-                  <div className="p-4 flex flex-col gap-2 flex-1 justify-between">
-                    <div>
-                      <div className="flex items-start justify-between gap-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-3.5 h-3.5 rounded-[2px] bg-white border border-[#EEE7DC] flex items-center justify-center shrink-0">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#38754A]"></span>
-                          </span>
-                          <h3 className="text-sm sm:text-base text-[#292D26] font-bold">{spec.name}</h3>
-                        </div>
-                        <span className="text-sm sm:text-base font-bold text-[#292D26] shrink-0">
-                          ₹{(spec.pricePaise / 100).toFixed(0)}
-                        </span>
-                      </div>
-                      <p className="text-xs text-[#77786F] leading-relaxed mt-1">
-                        {spec.desc}
-                      </p>
-                    </div>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-[#EEE7DC]/60 mt-1">
-                      <span className="text-[11px] text-[#38754A] font-semibold flex items-center gap-1 bg-[#EAF4ED] px-2 py-0.5 rounded-md">
-                        <span className="material-symbols-outlined text-[13px]">eco</span>
-                        {spec.tag}
-                      </span>
+                  {/* Price & Swiggy-Style ADD Button */}
+                  <div className="flex items-center justify-between pt-1 mt-auto">
+                    <span className="font-extrabold text-xs sm:text-sm text-slate-900">
+                      ₹{(dish.basePricePaise / 100).toFixed(0)}
+                    </span>
 
-                      {qty > 0 ? (
-                        <div className="flex items-center bg-[#38754A] text-white rounded-full px-2 py-0.5 shadow-xs gap-2">
-                          <button
-                            onClick={() => handleDecrease(spec.id)}
-                            className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-black/10 active:scale-90 font-bold"
-                          >
-                            -
-                          </button>
-                          <span className="font-bold text-xs min-w-[14px] text-center">{qty}</span>
-                          <button
-                            onClick={() =>
-                              handleIncrease({
-                                id: spec.id,
-                                name: spec.name,
-                                pricePaise: spec.pricePaise,
-                                imageUrl: spec.image,
-                                variantId: spec.variantId,
-                                variantName: spec.variantName,
-                              })
-                            }
-                            className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-black/10 active:scale-90 font-bold"
-                          >
-                            +
-                          </button>
-                        </div>
-                      ) : (
+                    {qty > 0 ? (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center bg-[#008848] text-white rounded-lg px-2 py-0.5 shadow-xs gap-2 font-bold text-xs"
+                      >
                         <button
-                          onClick={() =>
-                            handleAdd({
-                              id: spec.id,
-                              name: spec.name,
-                              pricePaise: spec.pricePaise,
-                              imageUrl: spec.image,
-                              variantId: spec.variantId,
-                              variantName: spec.variantName,
-                            })
-                          }
-                          className="h-8 px-4 rounded-xl bg-[#38754A] hover:bg-[#285C38] text-white text-xs flex items-center gap-1 active:scale-95 transition-transform shadow-xs font-semibold"
                           type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDecrease(dish.id);
+                          }}
+                          className="w-5 h-5 flex items-center justify-center hover:bg-black/10 active:scale-90 font-bold"
                         >
-                          <span>Add</span>
-                          <span className="material-symbols-outlined text-[15px]">add</span>
+                          -
                         </button>
-                      )}
-                    </div>
+                        <span className="min-w-[12px] text-center font-bold">{qty}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleIncrease({
+                              id: dish.id,
+                              name: dish.name,
+                              pricePaise: dish.basePricePaise,
+                              imageUrl: dish.imageUrl,
+                            });
+                          }}
+                          className="w-5 h-5 flex items-center justify-center hover:bg-black/10 active:scale-90 font-bold"
+                        >
+                          +
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAdd({
+                            id: dish.id,
+                            name: dish.name,
+                            pricePaise: dish.basePricePaise,
+                            imageUrl: dish.imageUrl,
+                          });
+                        }}
+                        className="px-4 py-1 rounded-lg border border-[#008848] text-[#008848] bg-white hover:bg-[#EAF4ED] font-extrabold text-xs shadow-2xs active:scale-95 transition-all cursor-pointer"
+                      >
+                        ADD
+                      </button>
+                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-
-          {/* Dynamic items from API */}
-          {allDishes.length > 0 && (
-            <div className="mt-5 flex flex-col gap-2.5">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base sm:text-lg font-bold text-[#292D26]">Kitchen Fresh Additions</h3>
-                <Link href="/menu" className="text-xs text-[#38754A] font-bold hover:underline">
-                  View Full Menu →
-                </Link>
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                {allDishes.slice(0, 4).map((dish) => {
-                  const qty = getItemQuantity(dish.id);
-                  return (
-                    <div
-                      key={dish.id}
-                      className="rounded-2xl bg-white p-4 shadow-xs flex items-center justify-between gap-3 border border-[#EEE7DC] hover:shadow-xs transition-shadow"
-                    >
-                      <div className="flex flex-col gap-1 min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-3.5 h-3.5 rounded-[2px] bg-white border border-[#EEE7DC] flex items-center justify-center shrink-0">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#38754A]"></span>
-                          </span>
-                          <h4 className="text-sm font-bold text-[#292D26] truncate">
-                            {dish.name}
-                          </h4>
-                        </div>
-                        <p className="text-xs text-[#77786F] line-clamp-2">
-                          {dish.description || 'Prepared fresh in hygienic home kitchen with pure ghee.'}
-                        </p>
-                        <span className="text-sm font-bold text-[#292D26] mt-1">
-                          ₹{(dish.basePricePaise / 100).toFixed(0)}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-col items-end gap-2 shrink-0">
-                        <div className="w-20 h-20 rounded-xl overflow-hidden bg-[#FFF9F0] border border-[#EEE7DC]/50 relative">
-                          <img
-                            className="w-full h-full object-cover"
-                            src={dish.imageUrl || DEFAULT_FOOD_IMAGE}
-                            alt={dish.name}
-                            onError={(e) => {
-                              e.currentTarget.onerror = null;
-                              e.currentTarget.src = DEFAULT_FOOD_IMAGE;
-                            }}
-                          />
-                        </div>
-                        {qty > 0 ? (
-                          <div className="flex items-center bg-[#38754A] text-white rounded-full px-2 py-0.5 shadow-xs gap-2">
-                            <button
-                              onClick={() => handleDecrease(dish.id)}
-                              className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-black/10 active:scale-90 font-bold text-xs"
-                            >
-                              -
-                            </button>
-                            <span className="font-bold text-xs min-w-[12px] text-center">{qty}</span>
-                            <button
-                              onClick={() =>
-                                handleIncrease({
-                                  id: dish.id,
-                                  name: dish.name,
-                                  pricePaise: dish.basePricePaise,
-                                  imageUrl: dish.imageUrl,
-                                })
-                              }
-                              className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-black/10 active:scale-90 font-bold text-xs"
-                            >
-                              +
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() =>
-                              handleAdd({
-                                id: dish.id,
-                                name: dish.name,
-                                pricePaise: dish.basePricePaise,
-                                imageUrl: dish.imageUrl,
-                              })
-                            }
-                            className="h-8 px-4 rounded-xl bg-[#38754A] hover:bg-[#285C38] text-white text-xs flex items-center gap-1 active:scale-95 transition-transform shadow-xs font-semibold"
-                            type="button"
-                          >
-                            <span>Add</span>
-                            <span className="material-symbols-outlined text-[14px]">add</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+            );
+          })}
         </div>
+
+        {/* Floating ITEMS Quick Menu Button (Matching 2nd Image) */}
+        <Link
+          href={`/menu?slot=${selectedSlot}`}
+          className="fixed bottom-24 right-4 z-40 w-14 h-14 rounded-full bg-[#1C1C1C] text-white shadow-xl flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-transform border border-white/20"
+        >
+          <span className="material-symbols-outlined text-[18px]">menu_book</span>
+          <span className="text-[9px] font-extrabold tracking-wider uppercase">ITEMS</span>
+        </Link>
 
         {/* 5. Trust Badges Section */}
         <div className="mt-8">
@@ -587,6 +481,12 @@ export default function HomePage() {
           </Link>
         </div>
       </div>
+
+      {/* Food Item Detail Bottom Sheet / Modal matching reference screenshot */}
+      <DishDetailModal
+        dish={selectedDishModal}
+        onClose={() => setSelectedDishModal(null)}
+      />
     </main>
   );
 }

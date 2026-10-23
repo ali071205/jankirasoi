@@ -48,12 +48,16 @@ export default function CustomerAuthModal({
       setError('Please enter a valid 10-digit Indian mobile number');
       return;
     }
+    if (!name.trim()) {
+      setError('Please enter your full name');
+      return;
+    }
     setError(null);
     setLoading(true);
 
     try {
       // Direct instant passwordless login/register
-      const res = await api.loginCustomer(clean, name.trim() || undefined);
+      const res = await api.loginCustomer(clean, name.trim());
       setCurrentUser(res.user);
       setStep('PROFILE');
       if (onLoginSuccess) {
@@ -265,10 +269,11 @@ export default function CustomerAuthModal({
               {/* Name Input */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                  Your Name (Optional)
+                  Your Full Name <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
+                  required
                   placeholder="e.g. Rahul Sharma"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -279,7 +284,7 @@ export default function CustomerAuthModal({
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={loading || phone.length < 10}
+                disabled={loading || phone.length < 10 || !name.trim()}
                 className="w-full py-3.5 bg-[#38754A] hover:bg-[#285C38] disabled:opacity-50 text-white rounded-xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
               >
                 {loading ? (
