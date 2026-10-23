@@ -12,9 +12,14 @@ export class HealthController {
   @ApiOperation({ summary: 'Process Liveness Probe' })
   @ApiResponse({ status: 200, description: 'Process is alive and responding.' })
   getLiveness() {
+    const memory = process.memoryUsage();
     return {
       status: 'UP',
       uptimeSeconds: Math.floor(process.uptime()),
+      memory: {
+        heapUsedMb: Math.round(memory.heapUsed / 1024 / 1024),
+        rssMb: Math.round(memory.rss / 1024 / 1024),
+      },
       timestamp: new Date().toISOString(),
     };
   }

@@ -22,7 +22,10 @@ function loadLocalEnv() {
           if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
             val = val.substring(1, val.length - 1);
           }
-          process.env[key] = val;
+          // Preserve environment variables already injected by the platform/runtime (especially PORT and secrets)
+          if (process.env[key] === undefined || (process.env.NODE_ENV !== 'production' && key !== 'PORT')) {
+            process.env[key] = val;
+          }
         }
       }
     }
@@ -35,7 +38,7 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
-import { json, urlencoded } from 'express';
+const compression = require('compression');
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -43,27 +46,62 @@ async function bootstrap() {
     rawBody: true,
   });
 
+  // Enable HTTP response compression (gzip/deflate) to minimize payload sizes over free cloud bandwidth
+  app.use(compression());
+
   // Global Prefix
   app.setGlobalPrefix('api/v1');
 
-  // CORS configuration supporting localhost, mobile LAN IP, and production domains
+  // CORS configuration supporting localhost, mobile LAN IP, and production Vercel / custom domains
+  const allowedOrigins = [
+    'https://jankirasoi.in',
+    'https://www.jankirasoi.in',
+    process.env.FRONTEND_URL,
+    process.env.ADMIN_URL,
+  ].filter(Boolean) as string[];
+
   app.enableCors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile webviews, curl, server-to-server) or matching local/LAN patterns
+      // Allow requests with no origin (mobile apps, curl, server-to-server)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // Check explicit allowed origins
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      // Allow any Vercel deployment preview / production domain (*.vercel.app)
+      if (origin.endsWith('.vercel.app')) {
+        return callback(null, true);
+      }
+
+      // Allow localhost and local LAN IPs for dev & testing
       if (
-        !origin ||
         /^http:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(
           origin,
-        ) ||
-        origin === 'https://jankirasoi.in'
+        )
       ) {
         return callback(null, true);
       }
-      return callback(null, true); // Permissive in dev/testing
+
+      // Default fallback for preview branches
+      return callback(null, true);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Razorpay-Signature', 'X-Simulated-Role'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Idempotency-Key',
+      'X-Razorpay-Signature',
+      'X-Simulated-Role',
+      'Accept',
+      'Cache-Control',
+      'X-Requested-With',
+    ],
+    maxAge: 86400, // 24 hours preflight cache to eliminate redundant OPTIONS roundtrips
   });
 
   // Global Exception Filter (RFC 7807)
@@ -100,11 +138,19 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = process.env.PORT || 3000;
-  await app.listen(port);
+  const port = Number(process.env.PORT) || 3000;
+  // Listen on 0.0.0.0 so Render container reverse-proxy correctly forwards traffic
+  await app.listen(port, '0.0.0.0');
 
-  logger.log(`🚀 Janki Rasoi API is running on http://localhost:${port}/api/v1`);
-  logger.log(`📖 OpenAPI Swagger Documentation available at http://localhost:${port}/api/docs`);
+  // Tune HTTP keep-alive timeouts to avoid connection drops behind Render / Cloudflare reverse proxies
+  const httpServer = app.getHttpServer();
+  if (httpServer && typeof httpServer.keepAliveTimeout === 'number') {
+    httpServer.keepAliveTimeout = 65000;
+    httpServer.headersTimeout = 66000;
+  }
+
+  logger.log(`🚀 Janki Rasoi API is running on http://0.0.0.0:${port}/api/v1`);
+  logger.log(`📖 OpenAPI Swagger Documentation available at http://0.0.0.0:${port}/api/docs`);
 }
 
 bootstrap();

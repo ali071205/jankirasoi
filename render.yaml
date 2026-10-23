@@ -1,0 +1,41 @@
+services:
+  # ----------------------------------------------------------------------------
+  # Janki Rasoi Authoritative Backend API (NestJS + Prisma + Fastify/Express)
+  # Optimized for Render Free Tier (512 MB RAM, 0.1 vCPU, 15m idle sleep)
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: jankirasoi-api
+    env: node
+    plan: free
+    region: oregon # or ohio / frankfurt / singapore
+    autoDeploy: true
+    buildCommand: corepack enable pnpm && pnpm install --frozen-lockfile && pnpm run build:api
+    startCommand: pnpm run start:api
+    healthCheckPath: /api/v1/health/live
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      # Critical: Restrict Node V8 heap to 384MB to prevent hard SIGKILL OOM on 512MB free tier
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=384
+      # Database connection string (PostgreSQL e.g. Neon, Supabase, or Render PostgreSQL)
+      # Append ?connection_limit=5&pool_timeout=10 to optimize for free pool limits
+      - key: DATABASE_URL
+        sync: false
+      # Production JWT signing secret (generate with: openssl rand -hex 32)
+      - key: JWT_SECRET
+        sync: false
+      # Razorpay payment gateway credentials
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      # Frontend client URLs for CORS allowlisting
+      - key: FRONTEND_URL
+        sync: false
+      - key: ADMIN_URL
+        sync: false
