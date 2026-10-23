@@ -36,8 +36,12 @@ export class OutboxService {
 
       for (const msg of messages) {
         try {
-          this.logger.log(`Processing outbox task: ${msg.id} [${msg.event_type}]`);
-          // Dispatch according to event type (e.g. SEND_SMS_OTP, SEND_CONFIRMATION)
+          // FIX #18: Dispatch based on event type instead of silently marking as completed.
+          // Add concrete handlers for each event. SMS/WhatsApp integration can be plugged
+          // in here per event type once a provider (MSG91, Twilio, etc.) is configured.
+          await this.dispatchEvent(msg.event_type, msg.payload);
+
+          this.logger.log(`Dispatched outbox task: ${msg.id} [${msg.event_type}]`);
           await tx.outboxMessage.update({
             where: { id: msg.id },
             data: {
@@ -48,6 +52,9 @@ export class OutboxService {
         } catch (err) {
           const retries = msg.retry_count + 1;
           const status = retries >= msg.max_retries ? 'FAILED' : 'PENDING';
+          this.logger.error(
+            `Outbox task ${msg.id} [${msg.event_type}] failed (attempt ${retries}): ${(err as Error).message}`,
+          );
           await tx.outboxMessage.update({
             where: { id: msg.id },
             data: {
@@ -59,5 +66,53 @@ export class OutboxService {
         }
       }
     });
+  }
+
+  /**
+   * Dispatch an outbox event to the appropriate notification channel.
+   * Each case should call the relevant provider SDK (SMS, push, email, webhook).
+   * Currently logs the intent — wire in your provider under each case.
+   */
+  private async dispatchEvent(eventType: string, payload: any): Promise<void> {
+    switch (eventType) {
+      case 'ORDER_CREATED':
+        // TODO: Send order confirmation SMS to payload.phone
+        this.logger.log(
+          `[NOTIFY] ORDER_CREATED → SMS to ${payload.phone}: Order ${payload.orderNumber} confirmed.`,
+        );
+        break;
+
+      case 'PAYMENT_CONFIRMED':
+        // TODO: Send payment receipt SMS/email
+        this.logger.log(
+          `[NOTIFY] PAYMENT_CONFIRMED → SMS to ${payload.phone}: ₹${(payload.amountPaise / 100).toFixed(2)} received for ${payload.orderNumber}.`,
+        );
+        break;
+
+      case 'DELIVERY_OTP_GENERATED':
+        // TODO: Optionally send OTP via SMS as a fallback to the web display
+        // For now it is shown on the customer tracking screen; log only.
+        this.logger.log(
+          `[NOTIFY] DELIVERY_OTP_GENERATED → Web display for order ${payload.orderId}. ` +
+          `(SMS fallback: to ${payload.phone})`,
+        );
+        break;
+
+      case 'DELIVERY_COMPLETED':
+        // TODO: Send delivery confirmation SMS
+        this.logger.log(
+          `[NOTIFY] DELIVERY_COMPLETED → SMS to ${payload.phone}: Your order has been delivered.`,
+        );
+        break;
+
+      case 'QUOTE_CACHE':
+        // Internal event — no external notification needed
+        this.logger.debug(`[INTERNAL] QUOTE_CACHE record processed for order ${payload.quoteToken}`);
+        break;
+
+      default:
+        this.logger.warn(`[OUTBOX] Unknown event type '${eventType}' — no handler registered.`);
+        break;
+    }
   }
 }

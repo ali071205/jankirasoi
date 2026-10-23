@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CalculateQuoteDto, PlaceOrderDto } from './dto/checkout.dto';
 import { randomBytes, createHmac } from 'crypto';
 import { ConfigService } from '@nestjs/config';
+import { OrdersEventsService } from '../events/orders-events.service';
 const Razorpay = require('razorpay');
 
 interface CachedQuote {
@@ -41,18 +42,65 @@ interface CachedQuote {
 @Injectable()
 export class CheckoutService {
   private readonly logger = new Logger(CheckoutService.name);
-  private quoteCache = new Map<string, CachedQuote>();
   private razorpayClient: any = null;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly ordersEventsService: OrdersEventsService,
   ) {
     const key_id = this.configService.get<string>('RAZORPAY_KEY_ID');
     const key_secret = this.configService.get<string>('RAZORPAY_KEY_SECRET');
     if (key_id && key_secret) {
       this.razorpayClient = new Razorpay({ key_id, key_secret });
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // FIX #11: Quote persistence — store quotes in PostgreSQL instead of in-process
+  // memory so all API instances share the same quote state. A quote row has a
+  // short TTL (15 min) and is cleaned up after use or expiry.
+  // ---------------------------------------------------------------------------
+
+  private async saveQuote(quote: CachedQuote): Promise<void> {
+    await this.prisma.outboxMessage.create({
+      data: {
+        eventType: 'QUOTE_CACHE',
+        payload: quote as any,
+        status: 'PENDING',
+        scheduledFor: quote.expiresAt, // reuse scheduledFor as expiry marker
+      },
+    });
+  }
+
+  private async loadQuote(quoteToken: string): Promise<CachedQuote | null> {
+    const record = await this.prisma.outboxMessage.findFirst({
+      where: {
+        eventType: 'QUOTE_CACHE',
+        status: 'PENDING',
+        scheduledFor: { gt: new Date() }, // not yet expired
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!record) return null;
+    const payload = record.payload as any;
+    if (payload.quoteToken !== quoteToken) return null;
+    // Convert date strings back to Date objects
+    return {
+      ...payload,
+      expiresAt: new Date(payload.expiresAt),
+      serviceDate: new Date(payload.serviceDate),
+    } as CachedQuote;
+  }
+
+  private async expireQuote(quoteToken: string): Promise<void> {
+    await this.prisma.outboxMessage.updateMany({
+      where: {
+        eventType: 'QUOTE_CACHE',
+        status: 'PENDING',
+      },
+      data: { status: 'COMPLETED' },
+    });
   }
 
   async calculateQuote(dto: CalculateQuoteDto) {
@@ -93,25 +141,29 @@ export class CheckoutService {
       });
     }
 
-    // 3. Authoritatively fetch and compute item prices
+    // 3. FIX #13: Batch-fetch all products in ONE query instead of N individual queries.
+    const productIds = dto.items.map((i) => i.productId);
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+      include: {
+        variants: true,
+        availabilities: { where: { serviceDate } },
+        addonGroups: {
+          include: {
+            addonGroup: {
+              include: { options: true },
+            },
+          },
+        },
+      },
+    });
+    const productMap = new Map(products.map((p) => [p.id, p]));
+
     let subtotalPaise = 0;
     const computedItems: CachedQuote['items'] = [];
 
     for (const item of dto.items) {
-      const product = await this.prisma.product.findUnique({
-        where: { id: item.productId },
-        include: {
-          variants: true,
-          availabilities: { where: { serviceDate } },
-          addonGroups: {
-            include: {
-              addonGroup: {
-                include: { options: true },
-              },
-            },
-          },
-        },
-      });
+      const product = productMap.get(item.productId);
 
       if (!product || !product.isActive) {
         throw new NotFoundException(`Product not found or unavailable: ${item.productId}`);
@@ -212,7 +264,8 @@ export class CheckoutService {
       totalAmountPaise,
     };
 
-    this.quoteCache.set(quoteToken, cachedQuote);
+    // FIX #11: Persist to DB instead of in-memory map
+    await this.saveQuote(cachedQuote);
 
     return {
       quoteToken,
@@ -229,7 +282,8 @@ export class CheckoutService {
   }
 
   async placeOrder(dto: PlaceOrderDto, idempotencyKey?: string) {
-    const cached = this.quoteCache.get(dto.quoteToken);
+    // FIX #11: Load quote from DB instead of in-process map
+    const cached = await this.loadQuote(dto.quoteToken);
     if (!cached || cached.expiresAt < new Date()) {
       throw new BadRequestException('Quotation has expired or is invalid. Please review your cart.');
     }
@@ -259,7 +313,7 @@ export class CheckoutService {
     }
 
     // Atomic DB Transaction: Capacity Reservation + Order Creation + Payment Attempt
-    return this.prisma.$transaction(async (tx) => {
+    const orderResult = await this.prisma.$transaction(async (tx) => {
       // 1. Lock and increment slot capacity
       const capacity = await tx.deliverySlotCapacity.upsert({
         where: {
@@ -277,7 +331,8 @@ export class CheckoutService {
         },
       });
 
-      if (capacity.bookedCount > capacity.maxCapacity) {
+      // FIX #2: Off-by-one fixed — use >= instead of > so capacity is never exceeded
+      if (capacity.bookedCount >= capacity.maxCapacity) {
         throw new BadRequestException({
           code: 'SLOT_CAPACITY_EXCEEDED',
           message: 'Delivery slot capacity was filled by another order just now.',
@@ -386,8 +441,8 @@ export class CheckoutService {
         },
       });
 
-      // Clear cached quote
-      this.quoteCache.delete(dto.quoteToken);
+      // FIX #11: Expire the quote in the DB after use
+      await this.expireQuote(dto.quoteToken);
 
       return {
         orderId: order.id,
@@ -404,5 +459,14 @@ export class CheckoutService {
         },
       };
     });
+
+    // Real-time instant notification to kitchen admin console
+    this.ordersEventsService.emitOrderEvent('ORDER_CREATED', {
+      orderId: orderResult.orderId,
+      orderNumber: orderResult.orderNumber,
+      status: orderResult.status,
+    });
+
+    return orderResult;
   }
 }

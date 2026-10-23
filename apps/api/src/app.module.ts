@@ -15,6 +15,7 @@ import { CheckoutModule } from './modules/checkout/checkout.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { RidersModule } from './modules/riders/riders.module';
+import { EventsModule } from './modules/events/events.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { RidersModule } from './modules/riders/riders.module';
     OrdersModule,
     PaymentsModule,
     RidersModule,
+    EventsModule,
   ],
   providers: [
     {

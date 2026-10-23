@@ -265,17 +265,29 @@ export class AuthService {
       take: 50,
     });
 
-    const orders = await this.prisma.order.findMany({
-      select: {
-        customerPhone: true,
-        customerName: true,
-        totalAmountPaise: true,
-        deliveryAddress: true,
-        createdAt: true,
-        status: true,
-      },
-      orderBy: { createdAt: 'desc' },
+    // FIX #10: Use Prisma groupBy aggregation instead of fetching all order rows and
+    // computing totals in JS. This replaces an unbounded full-table scan with a single
+    // indexed GROUP BY query.
+    const orderStats = await this.prisma.order.groupBy({
+      by: ['customerPhone'],
+      _count: { id: true },
+      _sum: { totalAmountPaise: true },
+      _max: { createdAt: true },
     });
+
+    // Fetch one saved address per phone (most recent order's address)
+    const recentAddresses = await this.prisma.order.findMany({
+      where: {
+        customerPhone: { in: customerUsers.map((u) => u.phone) },
+        deliveryAddress: { not: undefined },
+      },
+      select: { customerPhone: true, deliveryAddress: true },
+      orderBy: { createdAt: 'desc' },
+      distinct: ['customerPhone'],
+    });
+    const addressMap = new Map(recentAddresses.map((r) => [r.customerPhone, r.deliveryAddress]));
+
+    const statsMap = new Map(orderStats.map((s) => [s.customerPhone, s]));
 
     const phoneMap = new Map<string, {
       id?: string;
@@ -288,35 +300,16 @@ export class AuthService {
     }>();
 
     for (const u of customerUsers) {
+      const stats = statsMap.get(u.phone);
       phoneMap.set(u.phone, {
         id: u.id,
         name: u.name,
         phone: u.phone,
-        orderCount: 0,
-        totalSpendPaise: 0,
-        lastOrderDate: u.createdAt.toISOString(),
-        savedAddress: null,
+        orderCount: stats?._count.id ?? 0,
+        totalSpendPaise: stats?._sum.totalAmountPaise ?? 0,
+        lastOrderDate: stats?._max.createdAt?.toISOString() ?? u.createdAt.toISOString(),
+        savedAddress: addressMap.get(u.phone) ?? null,
       });
-    }
-
-    for (const ord of orders) {
-      const existing = phoneMap.get(ord.customerPhone);
-      if (existing) {
-        existing.orderCount += 1;
-        existing.totalSpendPaise += ord.totalAmountPaise;
-        if (!existing.savedAddress && ord.deliveryAddress) {
-          existing.savedAddress = ord.deliveryAddress;
-        }
-      } else {
-        phoneMap.set(ord.customerPhone, {
-          name: ord.customerName,
-          phone: ord.customerPhone,
-          orderCount: 1,
-          totalSpendPaise: ord.totalAmountPaise,
-          lastOrderDate: ord.createdAt.toISOString(),
-          savedAddress: ord.deliveryAddress,
-        });
-      }
     }
 
     return {

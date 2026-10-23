@@ -41,10 +41,13 @@ function OrderTrackingContent() {
   useEffect(() => {
     let isMounted = true;
 
-    async function fetchStatus() {
+    async function fetchStatus(isSilent = false) {
       if (!trackingToken) {
-        setLoading(false);
+        if (isMounted) setLoading(false);
         return;
+      }
+      if (!isSilent && isMounted) {
+        setLoading(true);
       }
       try {
         const data = await api.trackOrder(trackingToken);
@@ -53,17 +56,34 @@ function OrderTrackingContent() {
           setError(null);
         }
       } catch (err: any) {
-        if (isMounted) setError(err.message || 'Unable to fetch order status');
+        if (isMounted && !isSilent) setError(err.message || 'Unable to fetch order status');
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted && !isSilent) setLoading(false);
       }
     }
 
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 8000); // 8s polling
+    // 1. Initial full fetch
+    fetchStatus(false);
+
+    // 2. Silent fast polling every 3.5 seconds
+    const interval = setInterval(() => {
+      fetchStatus(true);
+    }, 3500);
+
+    // 3. Instant sync on visibility change or window focus
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchStatus(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+
     return () => {
       isMounted = false;
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
     };
   }, [trackingToken]);
 

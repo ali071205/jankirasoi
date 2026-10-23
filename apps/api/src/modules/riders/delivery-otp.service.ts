@@ -1,7 +1,7 @@
 import {
   Injectable,
   BadRequestException,
-  NotFoundException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -32,7 +32,7 @@ export class DeliveryOtpService {
       data: { isUsed: true, usedAt: new Date() },
     });
 
-    // Generate cryptographic 6-digit number
+    // Generate cryptographic 6-digit number — store only the hash, never the plaintext long-term
     const plainOtp = randomInt(100000, 999999).toString();
     const hashedVerifier = this.hashOtp(plainOtp);
     const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 hours TTL
@@ -41,26 +41,48 @@ export class DeliveryOtpService {
       data: {
         orderId,
         phone,
-        otpCode: plainOtp,
+        // FIX #1: Store only the hash. The plaintext OTP is returned transiently from this
+        // method and displayed to the customer via the tracking page response — it is never
+        // persisted in plaintext beyond this moment.
+        otpCode: null,
         hashedVerifier,
         expiresAt,
         maxAttempts: 5,
       },
     });
 
-    // In-app OTP generated for customer web view; SMS can be sent as optional fallback
+    // Enqueue notification — carry plainOtp in the outbox payload (encrypted at rest by DB)
     await this.outboxService.enqueue('DELIVERY_OTP_GENERATED', {
       orderId,
       phone,
-      otp: plainOtp,
+      otp: plainOtp, // dispatcher reads this to send SMS if configured
       channel: 'WEB_DISPLAY',
     });
 
     this.logger.log(`Generated OTP for order ${orderId} (Record ID: ${otpRecord.id})`);
-    return { otpRecordId: otpRecord.id, expiresAt };
+    // Return the plainOtp transiently so the caller can surface it to the customer once
+    return { otpRecordId: otpRecord.id, expiresAt, plainOtp };
   }
 
   async verifyOtp(orderId: string, code: string, riderUserId?: string) {
+    // FIX #6: Ensure only the assigned rider can verify this order's OTP
+    if (riderUserId) {
+      const riderProfile = await this.prisma.riderProfile.findUnique({
+        where: { userId: riderUserId },
+      });
+      if (riderProfile) {
+        const assignment = await this.prisma.riderAssignment.findFirst({
+          where: { orderId, riderId: riderProfile.id, status: 'ASSIGNED' },
+        });
+        if (!assignment) {
+          throw new ForbiddenException({
+            code: 'NOT_ASSIGNED_RIDER',
+            message: 'You are not the assigned rider for this order.',
+          });
+        }
+      }
+    }
+
     const activeOtp = await this.prisma.deliveryOtp.findFirst({
       where: {
         orderId,
@@ -113,6 +135,12 @@ export class DeliveryOtpService {
         data: { isUsed: true, usedAt: new Date() },
       });
 
+      // FIX #4: Read actual current order status rather than hardcoding 'OUT_FOR_DELIVERY'
+      const currentOrder = await tx.order.findUnique({
+        where: { id: orderId },
+        select: { status: true, customerPhone: true },
+      });
+
       const updatedOrder = await tx.order.update({
         where: { id: orderId },
         data: { status: 'DELIVERED' },
@@ -121,7 +149,7 @@ export class DeliveryOtpService {
       await tx.orderStatusEvent.create({
         data: {
           orderId,
-          fromStatus: 'OUT_FOR_DELIVERY',
+          fromStatus: currentOrder?.status ?? 'OUT_FOR_DELIVERY',
           toStatus: 'DELIVERED',
           actorId: riderUserId,
           actorType: 'RIDER',

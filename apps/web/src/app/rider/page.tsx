@@ -72,27 +72,45 @@ export default function RiderPage() {
   };
 
   // Fetch Assigned Deliveries
-  const loadDeliveries = useCallback(async (isBackground = false) => {
+  // FIX #15: Accept an AbortSignal so in-flight fetches can be cancelled on unmount
+  // or when the interval fires before the previous request completes.
+  const loadDeliveries = useCallback(async (isBackground = false, signal?: AbortSignal) => {
     if (!isBackground) setLoading(true);
     setIsRefreshing(true);
     try {
-      const data = await api.getRiderDeliveries();
+      const data = await api.getRiderDeliveries(signal);
+      // Guard against setting state after abort/unmount
+      if (signal?.aborted) return;
       if (data && data.deliveries) {
         setDeliveries(data.deliveries);
       }
     } catch (err: any) {
+      if (err.name === 'AbortError') return; // expected on cleanup — suppress
       console.warn('Rider deliveries fetch notice:', err.message);
     } finally {
-      setLoading(false);
-      setIsRefreshing(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+        setIsRefreshing(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     if (riderUser) {
-      loadDeliveries();
-      const interval = setInterval(() => loadDeliveries(true), 10000);
-      return () => clearInterval(interval);
+      // FIX #15: Use an AbortController so that when the component unmounts or
+      // a new interval tick fires, any in-flight fetch is cleanly cancelled.
+      const controller = new AbortController();
+      loadDeliveries(false, controller.signal);
+
+      const interval = setInterval(() => {
+        const tickController = new AbortController();
+        loadDeliveries(true, tickController.signal);
+      }, 10000);
+
+      return () => {
+        controller.abort();
+        clearInterval(interval);
+      };
     } else {
       setLoading(false);
     }

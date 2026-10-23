@@ -199,8 +199,53 @@ export default function OperationsConsolePage() {
     loadOrders();
     loadRiders();
     loadSlots();
-    const interval = setInterval(() => loadOrders(true), 5000);
-    return () => clearInterval(interval);
+
+    // 1. Resilient polling fallback every 6 seconds
+    const interval = setInterval(() => loadOrders(true), 6000);
+
+    // 2. Instant sync when browser tab regains focus or visibility
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        loadOrders(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+
+    // 3. Real-time Server-Sent Events (SSE) for instant sub-second order arrival
+    let eventSource: EventSource | null = null;
+    try {
+      const streamUrl = '/api/v1/admin/orders/stream?simulated_role=STAFF';
+      eventSource = new EventSource(streamUrl);
+
+      eventSource.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.type === 'ORDER_CREATED') {
+            playKitchenOrderChime();
+            showToast(`⚡ New order received: #${payload.orderNumber || ''}`);
+          }
+          loadOrders(true);
+        } catch {
+          loadOrders(true);
+        }
+      };
+
+      eventSource.onerror = () => {
+        // EventSource will automatically attempt reconnection
+      };
+    } catch (e) {
+      console.warn('Real-time SSE connection failed, relying on polling fallback', e);
+    }
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
   }, [loadOrders, loadRiders, loadSlots]);
 
   useEffect(() => {
