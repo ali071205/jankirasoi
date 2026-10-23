@@ -106,25 +106,29 @@ export default function CustomerAuthModal({
       {/* Modal Card */}
       <div className="relative w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden z-10 max-h-[90vh] flex flex-col">
         {/* Header Strip */}
-        <div className="bg-gradient-to-r from-emerald-800 to-emerald-950 text-white p-5 flex items-center justify-between">
+        <div className="bg-[#38754A] text-white p-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-xl font-bold">
-              {currentUser ? currentUser.name.charAt(0).toUpperCase() : '👤'}
+            <span className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-bold">
+              {currentUser ? (
+                currentUser.name.charAt(0).toUpperCase()
+              ) : (
+                <span className="material-symbols-outlined text-[20px]">person</span>
+              )}
             </span>
             <div>
               <h3 className="font-bold text-base leading-tight">
                 {currentUser ? currentUser.name : 'Welcome to Janki Rasoi'}
               </h3>
-              <p className="text-xs text-emerald-200">
+              <p className="text-xs text-white/80">
                 {currentUser ? `+91 ${currentUser.phone}` : 'Fresh Ghar Jaisa Khana, Daily'}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-lg transition-colors"
+            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
           >
-            ✕
+            <span className="material-symbols-outlined text-[18px]">close</span>
           </button>
         </div>
 
@@ -243,7 +247,7 @@ export default function CustomerAuthModal({
                 </label>
                 <div className="flex items-center border border-gray-300 rounded-xl overflow-hidden focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-100">
                   <div className="px-3 py-3 bg-gray-100 text-gray-700 font-bold text-sm border-r border-gray-200">
-                    🇮🇳 +91
+                    +91
                   </div>
                   <input
                     type="tel"
@@ -276,14 +280,14 @@ export default function CustomerAuthModal({
               <button
                 type="submit"
                 disabled={loading || phone.length < 10}
-                className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
+                className="w-full py-3.5 bg-[#38754A] hover:bg-[#285C38] disabled:opacity-50 text-white rounded-xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <>
                     <span>Instant Login / Continue</span>
-                    <span>→</span>
+                    <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                   </>
                 )}
               </button>
@@ -294,15 +298,16 @@ export default function CustomerAuthModal({
                   type="button"
                   onClick={handleQuickDemo}
                   disabled={loading}
-                  className="w-full py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+                  className="w-full py-2.5 px-3 bg-[#EAF4ED] hover:bg-[#d8eed7] border border-[#38754A]/30 text-[#38754A] rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
                 >
-                  <span>⚡ 1-Tap Quick Demo (Rohan Verma)</span>
+                  <span className="material-symbols-outlined text-[16px]">touch_app</span>
+                  <span>1-Tap Test Customer (Rohan Verma)</span>
                 </button>
               </div>
 
               {/* Zero-spam guarantee */}
-              <p className="text-[11px] text-gray-400 text-center leading-tight">
-                🔒 We do not send OTP spam or unwanted SMS. Your phone is securely stored only for delivery contact and order tracking.
+              <p className="text-[11px] text-gray-500 text-center leading-tight">
+                We do not send OTP spam or promotional SMS. Your phone is securely stored only for delivery contact and order tracking.
               </p>
             </form>
           )}

@@ -154,7 +154,11 @@ export class OrdersService {
               },
             },
           },
-          items: true,
+          items: {
+            include: {
+              addons: true,
+            },
+          },
         },
       }),
       this.prisma.order.count({ where }),
@@ -179,7 +183,21 @@ export class OrdersService {
               phone: o.riderAssignments[0].rider.user.phone,
             }
           : null,
-        itemsCount: o.items.length,
+        itemsCount: o.items.reduce((sum, it) => sum + it.quantity, 0),
+        items: o.items.map((i) => ({
+          id: i.id,
+          productId: i.productId,
+          productName: i.productName,
+          variantName: i.variantName,
+          quantity: i.quantity,
+          unitPricePaise: i.unitPricePaise,
+          totalPricePaise: i.totalPricePaise,
+          addons: i.addons.map((a) => ({
+            id: a.id,
+            name: a.name,
+            pricePaise: a.pricePaise,
+          })),
+        })),
         createdAt: o.createdAt.toISOString(),
       })),
       pagination: {

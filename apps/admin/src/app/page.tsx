@@ -868,10 +868,16 @@ export default function OperationsConsolePage() {
                               {/* Items */}
                               <td className="py-2.5 px-3 whitespace-nowrap">
                                 <div className="font-bold text-gray-900 text-xs">
-                                  {order.itemsCount || 1} item{order.itemsCount > 1 ? 's' : ''}
+                                  {order.itemsCount || order.items?.reduce((acc, it) => acc + it.quantity, 0) || 1} item
+                                  {(order.itemsCount || order.items?.reduce((acc, it) => acc + it.quantity, 0) || 1) > 1 ? 's' : ''}
                                 </div>
-                                <div className="text-[10px] text-gray-500 truncate max-w-[110px]">
-                                  {order.items?.[0]?.productName || 'Executive Thali'}
+                                <div
+                                  className="text-[10px] text-gray-500 truncate max-w-[140px]"
+                                  title={order.items?.map((i) => `${i.productName} (x${i.quantity})`).join(', ')}
+                                >
+                                  {order.items && order.items.length > 0
+                                    ? order.items.map((i) => i.productName).join(', ')
+                                    : 'Wholesome Meal'}
                                 </div>
                               </td>
 
@@ -1071,41 +1077,73 @@ export default function OperationsConsolePage() {
                         </div>
 
                         {/* Section B: Order Items */}
-                        <div className="flex flex-col gap-1">
-                          <span className="font-bold text-gray-700 flex items-center gap-1.5 text-xs">
-                            <span className="material-symbols-outlined text-[15px] text-gray-500">inventory_2</span>
-                            <span>Order Items</span>
-                          </span>
-
-                          <div className="bg-[#fcfdfa] p-2.5 rounded-xl border border-gray-100 flex items-start gap-2.5">
-                            {/* Food Photo Thumbnail */}
-                            <div className="w-11 h-11 rounded-lg overflow-hidden bg-stone-100 border border-stone-200 shrink-0 relative shadow-2xs">
-                              <img
-                                src="https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=800&auto=format&fit=crop&q=80"
-                                alt="Executive Thali"
-                                className="w-full h-full object-cover"
-                              />
-                              <span className="absolute top-0.5 left-0.5 w-2 h-2 rounded-2xs border border-green-600 bg-white p-0.5 flex items-center justify-center shadow-xs">
-                                <span className="w-1 h-1 rounded-full bg-green-600"></span>
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-gray-700 flex items-center gap-1.5 text-xs">
+                              <span className="material-symbols-outlined text-[15px] text-gray-500">inventory_2</span>
+                              <span>
+                                Order Items (
+                                {selectedOrder.items && selectedOrder.items.length > 0
+                                  ? selectedOrder.items.reduce((acc, it) => acc + it.quantity, 0)
+                                  : selectedOrder.itemsCount || 1}
+                                )
                               </span>
-                            </div>
+                            </span>
+                          </div>
 
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between">
-                                <span className="font-bold text-gray-900 truncate text-xs">
-                                  {selectedOrder.items?.[0]?.productName || 'Executive Thali'}
-                                </span>
-                                <span className="font-bold text-gray-900 font-mono shrink-0 text-xs">
-                                  ₹{(selectedOrder.totalAmountPaise / 100).toFixed(2)}
-                                </span>
+                          <div className="flex flex-col gap-2">
+                            {selectedOrder.items && selectedOrder.items.length > 0 ? (
+                              selectedOrder.items.map((item, idx) => (
+                                <div
+                                  key={item.id || idx}
+                                  className="bg-[#fcfdfa] p-2.5 rounded-xl border border-gray-100 flex items-start gap-2.5"
+                                >
+                                  {/* Food Photo / Veg Icon */}
+                                  <div className="w-10 h-10 rounded-lg overflow-hidden bg-emerald-50 border border-emerald-100 shrink-0 relative flex items-center justify-center shadow-2xs">
+                                    <span className="material-symbols-outlined text-[20px] text-emerald-700">soup_kitchen</span>
+                                    <span className="absolute top-0.5 left-0.5 w-2 h-2 rounded-2xs border border-green-600 bg-white p-0.5 flex items-center justify-center shadow-xs">
+                                      <span className="w-1 h-1 rounded-full bg-green-600"></span>
+                                    </span>
+                                  </div>
+
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span className="font-bold text-gray-900 truncate text-xs">
+                                        {item.productName}
+                                      </span>
+                                      <span className="font-bold text-gray-900 font-mono shrink-0 text-xs">
+                                        ₹
+                                        {item.totalPricePaise
+                                          ? (item.totalPricePaise / 100).toFixed(2)
+                                          : (
+                                              selectedOrder.totalAmountPaise /
+                                              (selectedOrder.items?.length || 1) /
+                                              100
+                                            ).toFixed(2)}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between mt-0.5">
+                                      <span className="text-[11px] text-gray-500 truncate">
+                                        {item.variantName || 'Standard Meal Portion'}
+                                      </span>
+                                      <span className="text-[11px] text-emerald-800 font-bold shrink-0">
+                                        × {item.quantity}
+                                      </span>
+                                    </div>
+                                    {item.addons && item.addons.length > 0 && (
+                                      <p className="text-[10px] text-gray-400 mt-0.5 truncate">
+                                        + {item.addons.map((a) => a.name).join(', ')}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="bg-[#fcfdfa] p-2.5 rounded-xl border border-gray-100 flex items-center gap-2 text-xs text-gray-500">
+                                <span className="material-symbols-outlined text-[16px] text-gray-400">info</span>
+                                <span>Wholesome Meal Package (×{selectedOrder.itemsCount || 1})</span>
                               </div>
-                              <div className="text-[11px] text-emerald-800 font-bold mt-0.5">
-                                × {selectedOrder.itemsCount || 1}
-                              </div>
-                              <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-2 leading-tight">
-                                4 Phulkas, Paneer Butter Masala, Dal Tadka, Jeera Rice, Salad &amp; Gulab Jamun
-                              </p>
-                            </div>
+                            )}
                           </div>
                         </div>
 

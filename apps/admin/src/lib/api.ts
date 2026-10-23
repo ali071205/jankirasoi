@@ -1,10 +1,14 @@
 // Janki Rasoi — Authoritative Admin & Kitchen KDS API Client
 
 export interface AdminOrderItem {
+  id?: string;
   productId: string;
   productName: string;
   variantName?: string;
   quantity: number;
+  unitPricePaise?: number;
+  totalPricePaise?: number;
+  addons?: { id: string; name: string; pricePaise: number }[];
 }
 
 export interface AdminOrder {
