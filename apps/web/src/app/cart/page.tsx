@@ -9,13 +9,12 @@ import CustomerAuthModal from '../../components/CustomerAuthModal';
 
 export default function CartPage() {
   const router = useRouter();
-  const { items, updateQty, clearCart, showToast } = useCart();
+  const { items, addItem, updateQty, clearCart, showToast } = useCart();
 
   const [slots, setSlots] = useState<DeliverySlot[]>([]);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
-  // FIX #16: Debounce timer ref to prevent flooding the quote API on every cart tap
   const quoteDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Address & Customer form state
@@ -30,9 +29,17 @@ export default function CartPage() {
   const [detectedCity, setDetectedCity] = useState<string | null>('New Delhi, Delhi');
   const [checkingPin, setCheckingPin] = useState(false);
   const [deliveryNotes, setDeliveryNotes] = useState('');
+  const [isCutleryNeeded, setIsCutleryNeeded] = useState(false);
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
+  const [showCookingInput, setShowCookingInput] = useState(false);
   const [pinStatusMsg, setPinStatusMsg] = useState<{ text: string; isError: boolean } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'RAZORPAY'>('COD');
   const [placingOrder, setPlacingOrder] = useState(false);
+  const [riderTab, setRiderTab] = useState<'DELIVERY_TYPE' | 'TIP' | 'INSTRUCTIONS'>('INSTRUCTIONS');
+  const [selectedRiderInstructions, setSelectedRiderInstructions] = useState<string[]>([]);
+  const [directionsToReach, setDirectionsToReach] = useState('');
+  const [showDirectionsInput, setShowDirectionsInput] = useState(false);
+  const [tipPaise, setTipPaise] = useState(0);
 
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
 
@@ -76,8 +83,6 @@ export default function CartPage() {
   }, []);
 
   // Request Server-Authoritative Quote
-  // FIX #16: Wrapped in a debounce so rapid +/- taps don't fire a new HTTP round-trip
-  // for every single quantity change. Waits 700ms of inactivity before sending.
   const requestQuote = useCallback(async () => {
     if (items.length === 0 || !selectedSlotId) return;
 
@@ -185,17 +190,40 @@ export default function CartPage() {
       return;
     }
 
-    if (!quote?.quoteToken) {
-      showToast('Calculating live quotation, please retry.', true);
-      await requestQuote();
-      return;
-    }
-
     setPlacingOrder(true);
     try {
+      let activeQuoteToken = quote?.quoteToken;
+      if (!activeQuoteToken) {
+        const q = await api.calculateQuote({
+          serviceDate: today,
+          deliverySlotId: selectedSlotId || slots[0]?.id || 'slot-lunch',
+          pincode: pincode.trim() || '110017',
+          items: items.map((i) => {
+            let pid = i.productId;
+            if (pid === 'spec-full-thali') pid = '09f67dad-2306-49b7-88c7-cae050592f14';
+            if (pid === 'spec-home-thali') pid = 'cd02708b-cf9d-460a-878d-3597115602b7';
+            if (pid === 'spec-roti-sabzi') pid = 'a1c1e8ff-8f9e-4a82-98f3-876bd6f9e0f3';
+            return {
+              productId: pid,
+              variantId: i.variantId,
+              quantity: i.quantity,
+              selectedAddonOptionIds: i.selectedAddonOptionIds,
+            };
+          }),
+        });
+        setQuote(q);
+        activeQuoteToken = q.quoteToken;
+      }
+
+      const compiledNotes = [
+        ...selectedRiderInstructions,
+        directionsToReach.trim() ? `Directions: ${directionsToReach.trim()}` : null,
+        deliveryNotes.trim(),
+      ].filter(Boolean).join(' • ');
+
       const orderResult = await api.placeOrder(
         {
-          quoteToken: quote.quoteToken,
+          quoteToken: activeQuoteToken,
           paymentMethod,
           customerName: customerName.trim(),
           customerPhone: customerPhone.trim(),
@@ -205,7 +233,7 @@ export default function CartPage() {
             landmark: landmark.trim() || undefined,
             pincode: pincode.trim(),
           },
-          deliveryNotes: deliveryNotes.trim() || undefined,
+          deliveryNotes: compiledNotes || undefined,
         },
         'idem_' + Date.now()
       );
@@ -225,7 +253,6 @@ export default function CartPage() {
         } catch {}
       }
 
-      // Automatically sync customer profile & address
       api
         .loginCustomer(customerPhone.trim(), customerName.trim(), {
           flat: flat.trim(),
@@ -250,20 +277,20 @@ export default function CartPage() {
   // If cart is empty
   if (items.length === 0) {
     return (
-      <main className="flex flex-col items-center justify-center min-h-[70vh] pt-20 pb-28 px-margin">
-        <div className="bg-surface-container-lowest p-space-xl rounded-2xl shadow-xs border border-surface-container-high/60 max-w-sm w-full text-center flex flex-col items-center gap-3">
-          <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center text-primary-container">
+      <main className="flex flex-col items-center justify-center min-h-[70vh] pt-20 pb-28 px-4 bg-[#F4F4F6]">
+        <div className="bg-white p-6 rounded-2xl shadow-xs border border-slate-200 max-w-sm w-full text-center flex flex-col items-center gap-3">
+          <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-700">
             <span className="material-symbols-outlined text-[36px]">shopping_bag</span>
           </div>
-          <h2 className="font-headline-sm text-headline-sm font-bold text-on-surface">Your Meal Tray is Empty</h2>
-          <p className="font-body-sm text-body-sm text-on-surface-variant">
-            Explore our wholesome, pure vegetarian homestyle lunch and dinner specials.
+          <h2 className="text-lg font-bold text-slate-900">Your Cart is Empty</h2>
+          <p className="text-xs text-slate-500">
+            Explore fresh homestyle pure veg thalis, combo meals, and tawa rotis.
           </p>
           <Link
             href="/menu"
-            className="mt-2 h-10 px-6 rounded-full bg-primary-container text-on-primary font-label-md text-label-md font-semibold flex items-center gap-1.5 shadow-xs"
+            className="mt-2 h-10 px-6 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors"
           >
-            <span>Explore Today's Menu</span>
+            <span>Explore Menu</span>
             <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
           </Link>
         </div>
@@ -272,396 +299,638 @@ export default function CartPage() {
   }
 
   const itemsTotalPaise = items.reduce((acc, i) => acc + i.pricePaise * i.quantity, 0);
-  const finalTotalPaise = quote?.totalPaise ?? itemsTotalPaise + 1500;
+  const finalTotalPaise = (quote?.totalPaise ?? itemsTotalPaise + 1500) + tipPaise;
+
+  const COMPLETE_MEAL_ADDONS = [
+    {
+      id: 'addon-roti-4',
+      name: 'Plain Phulka Roti (4 Pcs)',
+      pricePaise: 4000,
+      imageUrl: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=400&q=80',
+    },
+    {
+      id: 'addon-paratha-plain',
+      name: 'Plain Paratha (2 Pcs)',
+      pricePaise: 5000,
+      imageUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=400&q=80',
+    },
+    {
+      id: 'addon-boondi-raita',
+      name: 'Boondi Raita (Fresh Curd)',
+      pricePaise: 3500,
+      imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400&q=80',
+    },
+    {
+      id: 'addon-gulab-jamun',
+      name: 'Gulab Jamun (2 Pcs)',
+      pricePaise: 4500,
+      imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=400&q=80',
+    },
+    {
+      id: 'addon-papad-salad',
+      name: 'Roasted Papad & Salad',
+      pricePaise: 2000,
+      imageUrl: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=400&q=80',
+    },
+  ];
 
   return (
-    <main className="flex flex-col relative w-full pt-16 pb-32 bg-[#FFF9F0] min-h-screen">
-      <div className="flex flex-col w-full max-w-xl mx-auto px-3 sm:px-4 pb-8">
-        {/* 1. Warm Culinary Hero / Delivery Status Banner */}
-        <div className="pt-3 pb-1">
-          <div className="relative overflow-hidden rounded-2xl bg-[#FFF1DC] p-4 shadow-xs border border-[#E99A32]/30">
-            <div className="flex items-start justify-between relative z-10 gap-3">
-              <div className="flex flex-col min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="inline-flex items-center justify-center w-2 h-2 rounded-full bg-[#38754A] animate-ping"></span>
-                  <span className="text-[10px] uppercase tracking-wider text-[#38754A] font-bold">
-                    Homestyle Dispatch
+    <main className="flex flex-col relative w-full pb-36 bg-[#F4F4F6] min-h-screen">
+      {/* 1. Top Header Bar with Delivery Address */}
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200/80 px-4 py-3 shadow-2xs">
+        <div className="max-w-xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-800 shrink-0"
+            >
+              <span className="material-symbols-outlined text-[22px]">arrow_back</span>
+            </button>
+            <div
+              onClick={() => setIsEditingAddress(!isEditingAddress)}
+              className="cursor-pointer flex items-center gap-1.5 min-w-0"
+            >
+              <span className="material-symbols-outlined text-[18px] text-slate-800 shrink-0">work</span>
+              <div className="flex items-center gap-1 min-w-0">
+                <span className="font-extrabold text-xs sm:text-sm text-slate-900">Work</span>
+                <span className="text-xs text-slate-500 truncate max-w-[150px] sm:max-w-xs">
+                  | {flat}, {pincode}
+                </span>
+                <span className="material-symbols-outlined text-[18px] text-slate-600 shrink-0">
+                  keyboard_arrow_down
+                </span>
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsEditingAddress(!isEditingAddress)}
+            className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full hover:bg-emerald-100 shrink-0 border border-emerald-200"
+          >
+            {isEditingAddress ? 'Done' : 'Change'}
+          </button>
+        </div>
+      </header>
+
+      <div className="flex flex-col w-full max-w-xl mx-auto pb-4">
+        {/* 2. Top Savings Callout Banner */}
+        <div className="px-3 pt-3">
+          <div className="bg-[#E6F8F0] border border-emerald-300/70 rounded-xl px-3.5 py-2.5 flex items-center gap-2 text-[#008848] text-xs font-bold shadow-2xs">
+            <span className="text-sm">✨</span>
+            <span>₹59.85 saved! Including the applied coupon</span>
+          </div>
+        </div>
+
+        {/* 3. Restaurant Pill Selector Badge */}
+        <div className="px-3 pt-3">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 border-orange-500 bg-orange-50/70 text-orange-950 text-xs font-bold shadow-2xs">
+              <span className="w-4 h-4 rounded-full bg-orange-500 text-white flex items-center justify-center text-[10px]">✓</span>
+              <span>Janki Rasoi</span>
+              <span className="text-[11px] font-medium text-slate-700">
+                {items.reduce((a, b) => a + b.quantity, 0)} item • ₹{(itemsTotalPaise / 100).toFixed(0)}
+              </span>
+            </div>
+          </div>
+          <p className="text-[11px] text-orange-700 font-semibold mt-1.5 flex items-center gap-1 px-1">
+            <span className="text-sm font-bold">↪</span> Enjoy your food choices. Order all at once!
+          </p>
+        </div>
+
+        {/* 4. Restaurant Items Card */}
+        <div className="px-3 pt-3">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 flex flex-col gap-3">
+            {/* Restaurant Name & Delivery Time */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-[#8C3B2B] text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                  JR
+                </div>
+                <div>
+                  <h2 className="font-extrabold text-sm text-slate-900 leading-tight">Janki Rasoi</h2>
+                  <span className="text-[10px] text-emerald-600 font-semibold tracking-wide uppercase">100% Pure Vegetarian</span>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-bold text-slate-700 border-b border-dashed border-slate-400">
+                  {selectedSlot ? `${selectedSlot.startTime} – ${selectedSlot.endTime}` : '40-50 mins'}
+                </span>
+              </div>
+            </div>
+
+            {/* Promo Tag */}
+            <div className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">
+              TRYNEW eligible items
+            </div>
+
+            {/* Items List */}
+            <div className="flex flex-col divide-y divide-slate-100">
+              {items.map((item, idx) => (
+                <div
+                  key={`${item.productId}-${item.variantId || 'base'}`}
+                  className="py-2.5 flex items-center justify-between gap-3"
+                >
+                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                    <span className="w-3.5 h-3.5 rounded-xs border border-emerald-600 flex items-center justify-center p-0.5 mt-0.5 shrink-0 bg-white">
+                      <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-bold text-xs sm:text-sm text-slate-900 truncate">{item.name}</p>
+                      {item.variantName && (
+                        <p className="text-[11px] text-slate-500">{item.variantName}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0">
+                    {/* Stepper */}
+                    <div className="flex items-center bg-white rounded-lg border border-slate-300 shadow-2xs h-7 px-1">
+                      <button
+                        type="button"
+                        onClick={() => updateQty(idx, -1)}
+                        className="w-5 h-5 flex items-center justify-center text-slate-700 font-bold hover:text-emerald-700 text-sm"
+                      >
+                        -
+                      </button>
+                      <span className="px-2 font-extrabold text-xs text-emerald-700">{item.quantity}</span>
+                      <button
+                        type="button"
+                        onClick={() => updateQty(idx, 1)}
+                        className="w-5 h-5 flex items-center justify-center text-slate-700 font-bold hover:text-emerald-700 text-sm"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    {/* Price with strikethrough */}
+                    <div className="text-right min-w-[54px]">
+                      <span className="text-[10px] text-slate-400 line-through block leading-none">
+                        ₹{(((item.pricePaise * item.quantity) / 100) + 40).toFixed(0)}
+                      </span>
+                      <span className="text-xs sm:text-sm font-extrabold text-slate-900">
+                        ₹{((item.pricePaise * item.quantity) / 100).toFixed(0)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* 3 Action Buttons */}
+            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+              <Link
+                href="/menu"
+                className="flex items-center justify-center gap-1 py-2 px-1 rounded-xl border border-slate-200 text-[11px] font-bold text-slate-700 hover:bg-slate-50"
+              >
+                <span className="text-emerald-700 font-bold text-base leading-none">+</span>
+                <span>Add Items</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => setShowCookingInput(!showCookingInput)}
+                className={`flex items-center justify-center gap-1 py-2 px-1 rounded-xl border text-[11px] font-bold transition-colors ${
+                  showCookingInput || deliveryNotes
+                    ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+                    : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <span>✎</span>
+                <span>Cooking requests</span>
+              </button>
+              <label className="flex items-center justify-center gap-1 py-2 px-1 rounded-xl border border-slate-200 text-[11px] font-bold text-slate-700 cursor-pointer hover:bg-slate-50 select-none">
+                <input
+                  type="checkbox"
+                  checked={isCutleryNeeded}
+                  onChange={(e) => setIsCutleryNeeded(e.target.checked)}
+                  className="w-3.5 h-3.5 accent-emerald-600 rounded"
+                />
+                <span className="truncate">Cutlery Needed</span>
+              </label>
+            </div>
+
+            {/* Cooking requests inline editor */}
+            {showCookingInput && (
+              <div className="pt-2">
+                <input
+                  type="text"
+                  value={deliveryNotes}
+                  onChange={(e) => setDeliveryNotes(e.target.value)}
+                  placeholder="e.g. Less spicy dal, no onion-garlic, ring bell twice"
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 focus:outline-none focus:border-emerald-600"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 5. Complete Your Meal Addons Horizontal Carousel */}
+        <div className="px-3 pt-3">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5">
+            <h3 className="text-[11px] uppercase font-extrabold tracking-wider text-slate-500 mb-2.5">
+              COMPLETE YOUR MEAL
+            </h3>
+            <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
+              {COMPLETE_MEAL_ADDONS.map((addon) => (
+                <div key={addon.id} className="w-28 shrink-0 flex flex-col gap-1">
+                  <div className="relative w-28 h-20 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
+                    <img src={addon.imageUrl} alt={addon.name} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        addItem({
+                          productId: addon.id,
+                          name: addon.name,
+                          pricePaise: addon.pricePaise,
+                          quantity: 1,
+                          imageUrl: addon.imageUrl,
+                        });
+                        showToast(`Added ${addon.name}`);
+                      }}
+                      className="absolute top-1 right-1 w-6 h-6 rounded-md bg-white text-emerald-700 font-extrabold text-sm flex items-center justify-center shadow-md hover:scale-110 active:scale-95 transition-transform border border-emerald-600"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <span className="w-2.5 h-2.5 rounded-2xs border border-emerald-600 flex items-center justify-center p-0.5 shrink-0 bg-white">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                    </span>
+                    <p className="text-[11px] font-bold text-slate-800 truncate leading-tight">{addon.name}</p>
+                  </div>
+                  <span className="text-xs font-extrabold text-slate-900">
+                    ₹{(addon.pricePaise / 100).toFixed(0)}
                   </span>
                 </div>
-                <h1 className="text-lg sm:text-xl text-[#292D26] font-bold font-headline">
-                  Review Cart &amp; Checkout
-                </h1>
-                <p className="text-xs text-[#77786F] flex items-center gap-1 mt-0.5 truncate">
-                  <span className="material-symbols-outlined text-[16px] text-[#38754A] shrink-0">schedule</span>
-                  Delivery window:{' '}
-                  <span className="font-semibold text-[#292D26]">
-                    {selectedSlot ? `${selectedSlot.startTime} – ${selectedSlot.endTime}` : '1:00 PM – 1:30 PM'}
-                  </span>
-                </p>
-              </div>
-              <div className="shrink-0 w-11 h-11 rounded-xl bg-[#FFF1DC] border border-[#E99A32]/40 flex items-center justify-center text-[#E99A32]">
-                <span className="material-symbols-outlined text-[24px]">soup_kitchen</span>
-              </div>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* 2. Delivery Slot Selector */}
-        <section className="mt-3">
-          <div className="bg-white rounded-2xl p-4 shadow-xs border border-[#EEE7DC]">
-            <div className="flex items-center justify-between mb-2.5">
-              <span className="font-label-lg text-label-lg text-on-surface font-bold flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-[18px] text-primary">dinner_dining</span>
-                Select Meal Time
-              </span>
-              <span className="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-bold">
-                Today
-              </span>
+        {/* 6. Savings Corner */}
+        <div className="px-3 pt-3">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-orange-500 text-white flex items-center justify-center text-xs font-bold shadow-xs">
+                %
+              </div>
+              <div>
+                <p className="text-xs font-extrabold text-slate-900">Saved ₹29 on Janki Rasoi</p>
+                <p className="text-[10px] text-slate-500 font-medium">View all coupons ›</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 text-emerald-700 text-xs font-extrabold">
+              <span>✓ Applied</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 7. Rider Delivery Instructions (Exact 1:1 with Reference Image 2) */}
+        <div className="px-3 pt-3">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 flex flex-col gap-2.5">
+            {/* Top Tabs */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setRiderTab('DELIVERY_TYPE')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+                  riderTab === 'DELIVERY_TYPE'
+                    ? 'bg-black text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Delivery Type
+              </button>
+              <button
+                type="button"
+                onClick={() => setRiderTab('TIP')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+                  riderTab === 'TIP'
+                    ? 'bg-black text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Tip {tipPaise > 0 ? `(₹${tipPaise / 100})` : ''}
+              </button>
+              <button
+                type="button"
+                onClick={() => setRiderTab('INSTRUCTIONS')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+                  riderTab === 'INSTRUCTIONS'
+                    ? 'bg-black text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Instructions
+              </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              {slots.map((s) => {
-                const isSelected = selectedSlotId === s.id;
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setSelectedSlotId(s.id)}
-                    className={`relative flex flex-col p-2.5 rounded-lg text-left transition-all ${
-                      isSelected
-                        ? 'bg-primary-container text-on-primary shadow-xs'
-                        : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
+            {/* Tab 1: Instructions */}
+            {riderTab === 'INSTRUCTIONS' && (
+              <div className="flex flex-col gap-2 pt-0.5">
+                <p className="text-[11px] text-slate-500 font-medium px-0.5">
+                  Instructions will be applied on all orders
+                </p>
+
+                {/* 4 Cards Row matching Image 2 */}
+                <div className="grid grid-cols-4 gap-2">
+                  {/* Card 1: Directions to reach */}
+                  <div
+                    onClick={() => setShowDirectionsInput(!showDirectionsInput)}
+                    className={`p-2 sm:p-2.5 rounded-xl border flex flex-col items-center justify-between text-center gap-1.5 cursor-pointer transition-all select-none ${
+                      showDirectionsInput || directionsToReach
+                        ? 'border-emerald-600 bg-emerald-50/70 text-emerald-950 font-bold shadow-2xs'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="flex items-center justify-between w-full">
-                      <span className="font-title-md text-title-md font-semibold">{s.mealType}</span>
-                      <span className="material-symbols-outlined text-[18px]">
-                        {isSelected ? 'radio_button_checked' : 'radio_button_unchecked'}
-                      </span>
-                    </div>
-                    <span className="font-label-sm text-label-sm opacity-90 mt-0.5">
-                      {s.startTime} – {s.endTime}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mt-space-sm flex items-center gap-2 p-2 rounded-lg bg-surface-container-high/60 text-on-surface-variant">
-              <span className="material-symbols-outlined text-[18px] text-secondary shrink-0">timer</span>
-              <p className="font-body-sm text-body-sm leading-tight">
-                Lunch preparation in kitchen.{' '}
-                <span className="font-semibold text-on-surface">Order locked for fresh batch dispatch.</span>
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* 3. Items in Cart */}
-        <section className="mt-4">
-          <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-sm sm:text-base text-[#292D26] font-bold flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[20px] text-[#38754A]">local_mall</span>
-              Your Meal Tray ({items.reduce((acc, i) => acc + i.quantity, 0)})
-            </h2>
-            <Link
-              href="/menu"
-              className="text-xs text-[#38754A] font-bold hover:underline flex items-center gap-0.5"
-            >
-              + Add more items
-            </Link>
-          </div>
-
-          <div className="flex flex-col gap-2.5">
-            {items.map((item, idx) => (
-              <article
-                key={`${item.productId}-${item.variantId || 'base'}`}
-                className="bg-white rounded-2xl p-3.5 shadow-xs border border-[#EEE7DC] flex flex-col gap-2 relative overflow-hidden"
-              >
-                <div className="flex gap-3">
-                  {/* Food Image with veg stamp */}
-                  <div className="relative w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-[#FFF9F0] border border-[#EEE7DC]">
-                    <img
-                      className="w-full h-full object-cover"
-                      alt={item.name}
-                      src={item.imageUrl || DEFAULT_FOOD_IMAGE}
-                      onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = DEFAULT_FOOD_IMAGE;
-                      }}
-                    />
-                    <span className="absolute top-1 left-1 w-3.5 h-3.5 bg-white rounded-xs flex items-center justify-center p-0.5 shadow-xs border border-[#38754A]">
-                      <span className="w-2 h-2 rounded-full bg-[#38754A] block"></span>
-                    </span>
+                    <span className="material-symbols-outlined text-[20px] text-slate-700">mic</span>
+                    <span className="text-[10px] leading-tight">Directions to reach</span>
                   </div>
 
-                  {/* Title, Variant, Stepper & Price */}
-                  <div className="flex flex-col flex-1 min-w-0 justify-between">
-                    <div>
-                      <h3 className="text-sm sm:text-base text-[#292D26] font-bold truncate">
-                        {item.name}
-                      </h3>
-                      {item.variantName && (
-                        <p className="text-xs text-[#77786F] truncate">
-                          Portion: {item.variantName}
-                        </p>
-                      )}
-                    </div>
+                  {/* Card 2: Leave at the door */}
+                  <div
+                    onClick={() => {
+                      setSelectedRiderInstructions((prev) =>
+                        prev.includes('Leave at the door')
+                          ? prev.filter((i) => i !== 'Leave at the door')
+                          : [...prev, 'Leave at the door']
+                      );
+                    }}
+                    className={`p-2 sm:p-2.5 rounded-xl border flex flex-col items-center justify-between text-center gap-1.5 cursor-pointer transition-all select-none ${
+                      selectedRiderInstructions.includes('Leave at the door')
+                        ? 'border-emerald-600 bg-emerald-50/70 text-emerald-950 font-bold shadow-2xs'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[20px] text-slate-700">door_front</span>
+                    <span className="text-[10px] leading-tight">Leave at the door</span>
+                  </div>
 
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="text-sm sm:text-base font-bold text-[#292D26]">
-                        ₹{((item.pricePaise * item.quantity) / 100).toFixed(0)}
-                      </span>
+                  {/* Card 3: Avoid calling */}
+                  <div
+                    onClick={() => {
+                      setSelectedRiderInstructions((prev) =>
+                        prev.includes('Avoid calling')
+                          ? prev.filter((i) => i !== 'Avoid calling')
+                          : [...prev, 'Avoid calling']
+                      );
+                    }}
+                    className={`p-2 sm:p-2.5 rounded-xl border flex flex-col items-center justify-between text-center gap-1.5 cursor-pointer transition-all select-none ${
+                      selectedRiderInstructions.includes('Avoid calling')
+                        ? 'border-emerald-600 bg-emerald-50/70 text-emerald-950 font-bold shadow-2xs'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[20px] text-slate-700">phone_paused</span>
+                    <span className="text-[10px] leading-tight">Avoid calling</span>
+                  </div>
 
-                      {/* Stepper */}
-                      <div className="flex items-center bg-[#FFF9F0] rounded-full px-2 py-0.5 border border-[#EEE7DC] gap-2">
-                        <button
-                          onClick={() => updateQty(idx, -1)}
-                          className="w-6 h-6 flex items-center justify-center text-[#292D26] font-bold hover:bg-[#EEE7DC] rounded-full transition-colors"
-                        >
-                          -
-                        </button>
-                        <span className="font-bold text-xs min-w-[14px] text-center text-[#292D26]">
-                          {item.quantity}
-                        </span>
-                        <button
-                          onClick={() => updateQty(idx, 1)}
-                          className="w-6 h-6 flex items-center justify-center text-[#292D26] font-bold hover:bg-[#EEE7DC] rounded-full transition-colors"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
+                  {/* Card 4: Avoid ringing bell */}
+                  <div
+                    onClick={() => {
+                      setSelectedRiderInstructions((prev) =>
+                        prev.includes('Avoid ringing bell')
+                          ? prev.filter((i) => i !== 'Avoid ringing bell')
+                          : [...prev, 'Avoid ringing bell']
+                      );
+                    }}
+                    className={`p-2 sm:p-2.5 rounded-xl border flex flex-col items-center justify-between text-center gap-1.5 cursor-pointer transition-all select-none ${
+                      selectedRiderInstructions.includes('Avoid ringing bell')
+                        ? 'border-emerald-600 bg-emerald-50/70 text-emerald-950 font-bold shadow-2xs'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[20px] text-slate-700">notifications_paused</span>
+                    <span className="text-[10px] leading-tight">Avoid ringing bell</span>
                   </div>
                 </div>
-              </article>
-            ))}
+
+                {/* Optional Expandable Directions Input */}
+                {showDirectionsInput && (
+                  <div className="mt-1 pt-1">
+                    <input
+                      type="text"
+                      value={directionsToReach}
+                      onChange={(e) => setDirectionsToReach(e.target.value)}
+                      placeholder="e.g. 2nd floor, blue door, near yellow overhead water tank"
+                      className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 focus:outline-none focus:border-emerald-600"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab 2: Tip */}
+            {riderTab === 'TIP' && (
+              <div className="flex flex-col gap-2 pt-0.5">
+                <p className="text-[11px] text-slate-500 font-medium">
+                  Add a tip to thank your delivery partner for their effort:
+                </p>
+                <div className="flex items-center gap-2">
+                  {[0, 2000, 3000, 5000].map((amount) => (
+                    <button
+                      key={amount}
+                      type="button"
+                      onClick={() => setTipPaise(amount)}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                        tipPaise === amount
+                          ? 'border-emerald-600 bg-emerald-50 text-emerald-900 shadow-2xs'
+                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {amount === 0 ? 'No Tip' : `₹${amount / 100}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tab 3: Delivery Type */}
+            {riderTab === 'DELIVERY_TYPE' && (
+              <div className="flex flex-col gap-1.5 pt-0.5">
+                <p className="text-[11px] text-slate-500 font-medium">Delivery Mode</p>
+                <div className="px-3 py-2 rounded-xl border border-emerald-600 bg-emerald-50 text-emerald-900 text-xs font-bold flex items-center gap-1.5 shadow-2xs">
+                  <span>⚡</span>
+                  <span>Standard Fresh Dispatch (30-40 mins)</span>
+                </div>
+              </div>
+            )}
           </div>
-        </section>
+        </div>
 
-        {/* 4. Delivery Address & Customer Details */}
-        <section className="mt-4">
-          <div className="bg-white rounded-2xl p-4 shadow-xs border border-[#EEE7DC] flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm sm:text-base text-[#292D26] font-bold flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-[#38754A] text-[20px]">location_on</span>
-                Delivery Details
-              </span>
-              <span className="text-xs text-[#38754A] bg-[#EAF4ED] px-2.5 py-0.5 rounded-full font-bold">South Delhi</span>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div>
-                <label className="text-xs font-semibold text-[#77786F] block mb-1">
-                  Full Name *
-                </label>
-                <input
-                  type="text"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full h-10 px-3 rounded-xl bg-[#FFF9F0] border border-[#EEE7DC] text-xs text-[#292D26] focus:outline-none focus:border-[#38754A]"
-                  placeholder="e.g. Rahul Sharma"
-                />
+
+        {/* 8. Address Details Editor (Opens when clicking change) */}
+        {isEditingAddress && (
+          <div className="px-3 pt-3">
+            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 flex flex-col gap-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700">
+                  Delivery Address &amp; Contact
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingAddress(false)}
+                  className="text-xs text-emerald-700 font-bold hover:underline"
+                >
+                  Close
+                </button>
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-[#77786F] block mb-1">
-                  Phone (for Delivery OTP &amp; SMS) *
-                </label>
-                <div className="flex items-center bg-[#FFF9F0] rounded-xl border border-[#EEE7DC] overflow-hidden">
-                  <span className="px-2.5 text-xs text-[#77786F] font-bold border-r border-[#EEE7DC]">
-                    +91
-                  </span>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block mb-0.5">
+                    Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block mb-0.5">
+                    Phone *
+                  </label>
                   <input
                     type="tel"
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
-                    className="w-full h-10 px-2.5 bg-transparent text-xs text-[#292D26] focus:outline-none"
-                    placeholder="10-digit number"
+                    className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 focus:outline-none focus:border-emerald-600"
                   />
                 </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              <div className="sm:col-span-2">
-                <label className="text-xs font-semibold text-[#77786F] block mb-1">
-                  Street / Area / Sector *
-                </label>
-                <input
-                  type="text"
-                  value={street}
-                  onChange={(e) => setStreet(e.target.value)}
-                  className="w-full h-10 px-3 rounded-xl bg-[#FFF9F0] border border-[#EEE7DC] text-xs text-[#292D26] focus:outline-none focus:border-[#38754A]"
-                  placeholder="e.g. Malviya Nagar, Outer Ring Road"
-                />
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-[#77786F] block">
-                    Pincode (6 digits) *
+                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-0.5">
+                  Flat / House / Floor / Society *
+                </label>
+                <input
+                  type="text"
+                  value={flat}
+                  onChange={(e) => setFlat(e.target.value)}
+                  className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 focus:outline-none focus:border-emerald-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block mb-0.5">
+                    Street / Area
                   </label>
-                  {checkingPin && (
-                    <span className="text-[10px] text-[#38754A] flex items-center gap-0.5 font-bold animate-pulse">
-                      <span className="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>
-                      Checking...
-                    </span>
-                  )}
+                  <input
+                    type="text"
+                    value={street}
+                    onChange={(e) => setStreet(e.target.value)}
+                    className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 focus:outline-none focus:border-emerald-600"
+                  />
                 </div>
-                <div className="relative">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block mb-0.5">
+                    Pincode *
+                  </label>
                   <input
                     type="text"
                     value={pincode}
-                    onChange={(e) => {
-                      const cleaned = e.target.value.replace(/\D/g, '').slice(0, 6);
-                      setPincode(cleaned);
-                    }}
-                    maxLength={6}
-                    className="w-full h-10 px-3 rounded-xl bg-[#FFF9F0] border border-[#EEE7DC] text-xs text-[#292D26] focus:outline-none focus:border-[#38754A] font-mono tracking-wider font-bold pr-8"
-                    placeholder="110017"
+                    onChange={(e) => setPincode(e.target.value)}
+                    className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 focus:outline-none focus:border-emerald-600"
                   />
-                  {pincode.length === 6 && !checkingPin && (
-                    <span className={`absolute right-2.5 top-2.5 material-symbols-outlined text-[16px] ${
-                      pinStatusMsg?.isError ? 'text-red-500' : 'text-green-600'
-                    }`}>
-                      {pinStatusMsg?.isError ? 'cancel' : 'check_circle'}
-                    </span>
-                  )}
                 </div>
               </div>
-            </div>
 
-            {/* Auto-loaded City & State Banner */}
-            {detectedCity && (
-              <div className="mt-1 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#FFF9F0] border border-[#EEE7DC] text-[11px] text-[#77786F]">
-                <span className="material-symbols-outlined text-[15px] text-[#38754A]">location_city</span>
-                <span>Detected City: <strong className="font-semibold text-[#292D26]">{detectedCity}</strong></span>
-              </div>
-            )}
-
-            {pinStatusMsg && (
-              <p
-                className={`text-xs font-bold px-3 py-1 rounded-xl border ${
-                  pinStatusMsg.isError
-                    ? 'bg-red-50 text-[#C94B45] border-red-100'
-                    : 'bg-emerald-50 text-[#38754A] border-emerald-100'
-                }`}
-              >
-                {pinStatusMsg.text}
-              </p>
-            )}
-
-            <div>
-              <label className="text-xs font-semibold text-[#77786F] block mb-1">
-                Kitchen / Rider Instructions (Optional)
-              </label>
-              <input
-                type="text"
-                value={deliveryNotes}
-                onChange={(e) => setDeliveryNotes(e.target.value)}
-                className="w-full h-9 px-3 rounded-xl bg-[#FFF9F0] border border-[#EEE7DC] text-xs text-[#292D26] focus:outline-none focus:border-[#38754A]"
-                placeholder="e.g. Ring the bell twice, less oil in dal"
-              />
+              {pinStatusMsg && (
+                <p
+                  className={`text-[11px] p-2 rounded-lg border ${
+                    pinStatusMsg.isError
+                      ? 'bg-red-50 text-red-700 border-red-100'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                  }`}
+                >
+                  {pinStatusMsg.text}
+                </p>
+              )}
             </div>
           </div>
-        </section>
+        )}
 
-        {/* 5. Payment Method Selector */}
-        <section className="mt-4">
-          <div className="bg-white rounded-2xl p-4 shadow-xs border border-[#EEE7DC] flex flex-col gap-2.5">
-            <h3 className="text-sm sm:text-base text-[#292D26] font-bold flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[#38754A] text-[20px]">payments</span>
-              Payment Method
+        {/* 9. Bill Details Breakdown */}
+        <div className="px-3 pt-3">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 flex flex-col gap-2">
+            <h3 className="text-xs uppercase font-extrabold tracking-wider text-slate-500 mb-1">
+              Bill Details
             </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('COD')}
-                className={`p-3 rounded-xl border flex flex-col gap-0.5 text-left transition-all ${
-                  paymentMethod === 'COD'
-                    ? 'border-[#38754A] bg-[#EAF4ED] text-[#38754A]'
-                    : 'border-[#EEE7DC] bg-[#FFF9F0] text-[#77786F]'
-                }`}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <span className="text-xs sm:text-sm font-bold text-[#292D26]">Cash on Delivery</span>
-                  <span className="material-symbols-outlined text-[18px]">
-                    {paymentMethod === 'COD' ? 'radio_button_checked' : 'radio_button_unchecked'}
-                  </span>
-                </div>
-                <span className="text-[11px] opacity-80">Pay upon delivery</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('RAZORPAY')}
-                className={`p-3 rounded-xl border flex flex-col gap-0.5 text-left transition-all ${
-                  paymentMethod === 'RAZORPAY'
-                    ? 'border-[#38754A] bg-[#EAF4ED] text-[#38754A]'
-                    : 'border-[#EEE7DC] bg-[#FFF9F0] text-[#77786F]'
-                }`}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <span className="text-xs sm:text-sm font-bold text-[#292D26]">Online / UPI</span>
-                  <span className="material-symbols-outlined text-[18px]">
-                    {paymentMethod === 'RAZORPAY' ? 'radio_button_checked' : 'radio_button_unchecked'}
-                  </span>
-                </div>
-                <span className="text-[11px] opacity-80">GPay, PhonePe, Cards</span>
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* 6. Bill Details Summary */}
-        <section className="mt-4">
-          <div className="bg-white rounded-2xl p-4 shadow-xs border border-[#EEE7DC] flex flex-col gap-2">
-            <h3 className="text-sm sm:text-base text-[#292D26] font-bold">Bill Details</h3>
-
-            <div className="flex items-center justify-between text-xs text-[#77786F]">
+            <div className="flex justify-between text-xs text-slate-600">
               <span>Item Total</span>
-              <span className="font-semibold text-[#292D26]">
-                ₹{(itemsTotalPaise / 100).toFixed(0)}
-              </span>
+              <span className="font-semibold text-slate-900">₹{(itemsTotalPaise / 100).toFixed(0)}</span>
             </div>
-
-            <div className="flex items-center justify-between text-xs text-[#77786F]">
-              <span>Delivery Fee (Within 4km)</span>
-              <span className="font-bold text-[#38754A]">FREE</span>
+            <div className="flex justify-between text-xs text-slate-600">
+              <span>Delivery Partner Fee</span>
+              <span className="font-extrabold text-emerald-700">FREE</span>
             </div>
-
-            <div className="flex items-center justify-between text-xs text-[#77786F]">
-              <span>Spill-Proof Insulated Foil Tray</span>
-              <span className="font-semibold text-[#292D26]">₹15</span>
+            <div className="flex justify-between text-xs text-slate-600">
+              <span>Delivery Tip &amp; Platform Fee</span>
+              <span className="font-semibold text-slate-900">₹15</span>
             </div>
-
-            <div className="pt-2 border-t border-[#EEE7DC] flex items-center justify-between text-sm sm:text-base font-bold text-[#292D26]">
-              <span>Total Payable</span>
+            {tipPaise > 0 && (
+              <div className="flex justify-between text-xs text-emerald-700 font-bold">
+                <span>Delivery Partner Tip</span>
+                <span>₹{(tipPaise / 100).toFixed(0)}</span>
+              </div>
+            )}
+            <div className="pt-2 border-t border-slate-100 flex justify-between text-sm font-extrabold text-slate-900">
+              <span>To Pay</span>
               <span>₹{(finalTotalPaise / 100).toFixed(0)}</span>
             </div>
           </div>
-        </section>
+        </div>
+      </div>
 
-        {/* 7. Confirm & Place Order Action Button */}
-        <div className="mt-5">
+      {/* 10. Sticky Bottom Payment Bar (1:1 with 3rd Image Reference) */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 px-4 py-2.5 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
+        <div className="max-w-xl mx-auto flex items-center justify-between gap-3">
+          {/* Left: Payment Method Info */}
+          <div
+            onClick={() => setPaymentMethod(paymentMethod === 'COD' ? 'RAZORPAY' : 'COD')}
+            className="flex flex-col cursor-pointer select-none min-w-0"
+          >
+            <div className="flex items-center gap-1 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+              <span className="material-symbols-outlined text-[12px] text-slate-600">account_balance_wallet</span>
+              <span>PAY USING</span>
+              <span className="text-[8px] text-slate-600">▲</span>
+            </div>
+            <div className="flex items-center gap-1 font-extrabold text-xs sm:text-sm text-slate-900 truncate">
+              <span>{paymentMethod === 'COD' ? 'Pay on Delivery (Cash/UPI)' : 'Online UPI / Cards'}</span>
+            </div>
+            <span className="text-[10px] text-slate-500 truncate leading-none">
+              {paymentMethod === 'COD' ? 'Pay cash or ask for QR code' : 'Instant PhonePe, GPay, Cards'}
+            </span>
+          </div>
+
+          {/* Right: Big Green Pay Button */}
           <button
             type="button"
             onClick={handlePlaceOrder}
             disabled={placingOrder || quoteLoading}
-            className="w-full h-12 rounded-full bg-[#38754A] hover:bg-[#285C38] text-white font-bold flex items-center justify-between px-6 shadow-md active:scale-98 transition-all disabled:opacity-50"
+            className="bg-[#008848] hover:bg-[#00703c] active:scale-98 text-white font-extrabold text-sm sm:text-base px-6 sm:px-8 py-3 rounded-xl shadow-md transition-all flex items-center gap-2 shrink-0 disabled:opacity-50"
           >
-            <span className="text-xs sm:text-sm">
-              {placingOrder ? 'Confirming Order...' : 'Confirm & Place Order'}
-            </span>
-            <span className="flex items-center gap-1 text-sm sm:text-base font-bold">
-              <span>₹{(finalTotalPaise / 100).toFixed(0)}</span>
-              <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
-            </span>
+            <span>Pay ₹{(finalTotalPaise / 100).toFixed(0)}</span>
+            {placingOrder && <span className="animate-spin text-xs">⏳</span>}
           </button>
         </div>
       </div>
+
+      {/* Customer Auth Modal */}
+      <CustomerAuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onLoginSuccess={(user: UserProfile) => {
+          setCurrentUser(user);
+          if (user.name) setCustomerName(user.name);
+          if (user.phone) setCustomerPhone(user.phone);
+          showToast(`Logged in as ${user.name || user.phone}`);
+        }}
+      />
     </main>
   );
 }

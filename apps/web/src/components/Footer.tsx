@@ -7,8 +7,8 @@ import { usePathname } from 'next/navigation';
 export default function Footer() {
   const pathname = usePathname();
 
-  // Don't show footer on rider portal
-  if (pathname.startsWith('/rider')) return null;
+  // Only show footer (and Privacy Policy) on the home page
+  if (pathname !== '/') return null;
 
   const currentYear = new Date().getFullYear();
 

@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
-import { api, CatalogResponse, DEFAULT_FOOD_IMAGE } from '../../lib/api';
+import { api, CatalogResponse, MenuItem, DEFAULT_FOOD_IMAGE } from '../../lib/api';
 import { useCart } from '../../context/CartContext';
+import DishDetailModal from '../../components/DishDetailModal';
 
 export default function MenuPage() {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
@@ -11,12 +12,21 @@ export default function MenuPage() {
   const [selectedVariants, setSelectedVariants] = useState<
     Record<string, { id: string; name: string; mod: number }>
   >({});
+  const [selectedDishModal, setSelectedDishModal] = useState<MenuItem | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<'lunch' | 'dinner'>('lunch');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const { items, addItem, updateQty, totalCount, totalPricePaise } = useCart();
 
   useEffect(() => {
+    // Read query slot param if passed (e.g. /menu?slot=dinner)
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const slot = params.get('slot');
+      if (slot === 'dinner') setSelectedSlot('dinner');
+    }
+
     // Safely load cached data after hydration
     const cached = api.getCachedCatalog();
     if (cached) {
@@ -58,10 +68,8 @@ export default function MenuPage() {
           });
         });
         setSelectedVariants(defaultVariants);
-      } catch (err: any) {
-        if (!catalog) {
-          setError(err.message || 'Could not connect to kitchen menu.');
-        }
+      } catch {
+        // Fallback already handled inside api.getCatalog()
       } finally {
         setLoading(false);
       }
@@ -136,85 +144,83 @@ export default function MenuPage() {
   return (
     <main className="flex flex-col relative w-full pt-16 pb-28 bg-[#FFF9F0] min-h-screen">
       <div className="flex flex-col w-full max-w-4xl mx-auto pb-10">
-        {/* 1. Culinary Service Announcement Bar */}
-        <div className="px-4 pt-3 pb-1">
-          <div className="relative overflow-hidden bg-[#FFF1DC] rounded-2xl p-4 shadow-xs border border-[#E99A32]/30">
-            <div className="flex items-start gap-3 relative z-10">
-              <div className="w-9 h-9 rounded-xl bg-[#E99A32] flex items-center justify-center shrink-0 shadow-xs text-white">
-                <span
-                  className="material-symbols-outlined text-[20px]"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  skillet
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs uppercase tracking-wider text-[#292D26] font-bold">
-                    Lunch Serving Window
-                  </span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#E99A32]"></span>
-                  <span className="text-xs text-[#E99A32] font-bold">
-                    Ends 12:30 PM
-                  </span>
-                </div>
-                <p className="text-xs text-[#77786F] mt-0.5">
-                  Fresh morning batch prepared in cold-pressed groundnut oil &amp; desi ghee. Homestyle purity guaranteed.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        {/* 2. Weekly Tiffin Schedule Mini-Bar */}
-        <div className="px-4 pt-1 pb-2">
-          <div className="flex items-center justify-between bg-white rounded-xl px-3.5 py-2 shadow-xs border border-[#EEE7DC]">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-[#38754A] text-[18px]">calendar_today</span>
-              <span className="text-xs text-[#292D26] font-semibold">
-                Today: Fresh Homestyle Tiffin Menu
+
+        {/* 1. Meal Slot Segmented Pill Filter matching reference UI */}
+        <div className="px-4 pt-4 pb-2">
+          <div className="w-full bg-[#EFECE4] p-1 rounded-full flex items-center border border-[#E2DBD0] shadow-2xs">
+            {/* Lunch Tab */}
+            <button
+              type="button"
+              onClick={() => setSelectedSlot('lunch')}
+              className={`flex-1 py-2 sm:py-2.5 px-2 sm:px-3 rounded-full text-center transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${
+                selectedSlot === 'lunch'
+                  ? 'bg-white text-[#E85D04] shadow-xs font-extrabold'
+                  : 'text-[#2D312E] hover:text-black font-bold'
+              }`}
+            >
+              <span className="text-[11px] sm:text-xs uppercase tracking-wide truncate">
+                LUNCH &bull; 12:00 PM &ndash; 2:30 PM
               </span>
-            </div>
-            <span className="px-2.5 py-0.5 rounded-full bg-[#EAF4ED] text-[#38754A] text-[11px] font-bold flex items-center gap-0.5">
-              100% Desi Ghee
-            </span>
+            </button>
+
+            {/* Dinner Tab */}
+            <button
+              type="button"
+              onClick={() => setSelectedSlot('dinner')}
+              className={`flex-1 py-2 sm:py-2.5 px-2 sm:px-3 rounded-full text-center transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${
+                selectedSlot === 'dinner'
+                  ? 'bg-white text-[#E85D04] shadow-xs font-extrabold'
+                  : 'text-[#2D312E] hover:text-black font-bold'
+              }`}
+            >
+              <span className="text-[11px] sm:text-xs uppercase tracking-wide truncate">
+                DINNER &bull; 7:30 PM &ndash; 10:00 PM
+              </span>
+            </button>
           </div>
         </div>
 
-        {/* 3. Category Filter Pills (Horizontal Ribbon) */}
+        {/* 2. Category Filter Pills (Horizontal Ribbon) */}
         <div className="sticky top-16 z-30 bg-[#FFF9F0]/95 backdrop-blur-md py-2 border-b border-[#EEE7DC]">
           <div className="flex items-center gap-2 overflow-x-auto px-4 no-scrollbar">
             <button
               onClick={() => setActiveCategory('all')}
-              className={`shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all shadow-xs flex items-center gap-1.5 ${
+              className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ${
                 activeCategory === 'all'
-                  ? 'bg-[#38754A] text-white font-bold shadow-xs'
-                  : 'bg-white text-[#292D26] border border-[#EEE7DC] hover:bg-[#FFF9F0]'
+                  ? 'bg-[#38754A] text-white shadow-xs'
+                  : 'bg-white text-[#292D26] border border-[#EEE7DC] hover:bg-[#F6FBF7]'
               }`}
               type="button"
             >
               <span
-                className="material-symbols-outlined text-[16px]"
+                className="material-symbols-outlined text-[15px]"
                 style={activeCategory === 'all' ? { fontVariationSettings: "'FILL' 1" } : undefined}
               >
                 restaurant
               </span>
-              All Items
+              <span>All Items</span>
             </button>
 
             {catalog?.categories.map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
-                className={`shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all shadow-xs flex items-center gap-1.5 ${
+                className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ${
                   activeCategory === cat.id
-                    ? 'bg-[#38754A] text-white font-bold shadow-xs'
-                    : 'bg-white text-[#292D26] border border-[#EEE7DC] hover:bg-[#FFF9F0]'
+                    ? 'bg-[#38754A] text-white shadow-xs'
+                    : 'bg-white text-[#292D26] border border-[#EEE7DC] hover:bg-[#F6FBF7]'
                 }`}
                 type="button"
               >
                 <span>{cat.name}</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/10">
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    activeCategory === cat.id
+                      ? 'bg-white/20 text-white'
+                      : 'bg-[#EEE7DC] text-[#77786F]'
+                  }`}
+                >
                   {cat.items.length}
                 </span>
               </button>
@@ -222,15 +228,17 @@ export default function MenuPage() {
           </div>
         </div>
 
-        {/* 4. Section Header */}
-        <div className="px-margin pt-space-md pb-space-xs flex items-baseline justify-between">
-          <div className="flex items-center gap-space-xs">
-            <h2 className="font-headline-sm text-headline-sm text-on-surface font-bold">Curated Ghar Ka Khana</h2>
-            <span className="font-label-sm text-label-sm text-primary font-bold px-2 py-0.5 rounded-full bg-primary-fixed/60">
-              {totalFilteredCount} Fresh Ready
+        {/* 3. Section Header */}
+        <div className="px-4 pt-4 pb-2 flex items-baseline justify-between">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base sm:text-lg text-[#292D26] font-bold font-headline">
+              {selectedSlot === 'lunch' ? "Today's Fresh Lunch Menu" : "Tonight's Homestyle Dinner Menu"}
+            </h2>
+            <span className="text-xs text-[#38754A] font-bold px-2 py-0.5 rounded-full bg-[#EAF4ED]">
+              {totalFilteredCount} Items
             </span>
           </div>
-          <span className="font-label-sm text-label-sm text-on-surface-variant font-medium">Pure Vegetarian</span>
+          <span className="text-xs text-[#77786F] font-semibold">100% Pure Veg</span>
         </div>
 
         {/* 5. Menu Items Stack */}
@@ -268,12 +276,13 @@ export default function MenuPage() {
                     return (
                       <div
                         key={dish.id}
-                        className="bg-surface-container-lowest rounded-xl overflow-hidden shadow-xs flex flex-col justify-between border border-surface-container-high/60 transition-all hover:shadow-sm"
+                        onClick={() => setSelectedDishModal(dish)}
+                        className="bg-surface-container-lowest rounded-xl overflow-hidden shadow-xs flex flex-col justify-between border border-surface-container-high/60 transition-all hover:shadow-md cursor-pointer group active:scale-[0.99]"
                       >
                         {/* Top Food Image */}
-                        <div className="relative w-full h-44 bg-surface-container">
+                        <div className="relative w-full h-44 bg-surface-container overflow-hidden">
                           <img
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-300"
                             alt={dish.name}
                             src={dish.imageUrl || DEFAULT_FOOD_IMAGE}
                             onError={(e) => {
@@ -306,7 +315,7 @@ export default function MenuPage() {
                                 <div className="w-4 h-4 rounded-xs bg-surface-container-lowest flex items-center justify-center p-0.5 shadow-xs border border-green-600">
                                   <span className="w-2.5 h-2.5 rounded-full bg-primary-container"></span>
                                 </div>
-                                <h4 className="font-title-md text-title-md font-bold text-on-surface">
+                                <h4 className="font-title-md text-title-md font-bold text-on-surface group-hover:text-primary transition-colors">
                                   {dish.name}
                                 </h4>
                               </div>
@@ -327,7 +336,10 @@ export default function MenuPage() {
                                   <button
                                     key={v.id}
                                     type="button"
-                                    onClick={() => handleVariantChange(dish.id, v.id, dish.variants)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleVariantChange(dish.id, v.id, dish.variants);
+                                    }}
                                     className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                                       selectedVariants[dish.id]?.id === v.id
                                         ? 'bg-primary-container text-on-primary shadow-xs'
@@ -352,16 +364,25 @@ export default function MenuPage() {
                             </span>
 
                             {qty > 0 ? (
-                              <div className="flex items-center bg-primary-container text-on-primary rounded-full px-2.5 py-1 shadow-xs gap-3">
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex items-center bg-primary-container text-on-primary rounded-full px-2.5 py-1 shadow-xs gap-3"
+                              >
                                 <button
-                                  onClick={() => handleDecrease(dish)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDecrease(dish);
+                                  }}
                                   className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-black/10 active:scale-90 font-bold"
                                 >
                                   -
                                 </button>
                                 <span className="font-bold text-xs min-w-[14px] text-center">{qty}</span>
                                 <button
-                                  onClick={() => handleIncrease(dish)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleIncrease(dish);
+                                  }}
                                   className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-black/10 active:scale-90 font-bold"
                                 >
                                   +
@@ -369,7 +390,10 @@ export default function MenuPage() {
                               </div>
                             ) : (
                               <button
-                                onClick={() => handleAdd(dish)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAdd(dish);
+                                }}
                                 className="h-9 px-5 rounded-full bg-primary-container text-on-primary font-label-md text-label-md flex items-center gap-1 active:scale-95 transition-transform shadow-xs font-semibold"
                                 type="button"
                               >
@@ -388,6 +412,12 @@ export default function MenuPage() {
           )}
         </div>
       </div>
+
+      {/* Food Item Detail Bottom Sheet / Modal matching reference screenshot */}
+      <DishDetailModal
+        dish={selectedDishModal}
+        onClose={() => setSelectedDishModal(null)}
+      />
     </main>
   );
 }

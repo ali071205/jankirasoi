@@ -80,8 +80,8 @@ export default function BottomNav() {
     };
   }, [pathname]);
 
-  // Don't show floating bar on rider interface
-  if (pathname.startsWith('/rider')) return null;
+  // Don't show floating bar on rider interface or cart checkout page
+  if (pathname === '/cart' || pathname.startsWith('/rider')) return null;
 
   const showCartPill = totalCount > 0 && pathname !== '/cart';
   const showActiveOrderPill =
