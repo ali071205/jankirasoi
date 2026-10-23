@@ -232,8 +232,9 @@ export default function CartPage() {
 
       const compiledNotes = [
         ...selectedRiderInstructions,
+        isCutleryNeeded ? 'Please provide disposable cutlery' : null,
         directionsToReach.trim() ? `Directions: ${directionsToReach.trim()}` : null,
-        deliveryNotes.trim(),
+        deliveryNotes.trim() ? `Cooking: ${deliveryNotes.trim()}` : null,
       ].filter(Boolean).join(' • ');
 
       const orderResult = await api.placeOrder(
@@ -442,46 +443,66 @@ export default function CartPage() {
           </div>
         </div>
 
-        {/* 3. Restaurant Pill Selector Badge */}
-        <div className="px-3 pt-3">
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 border-orange-500 bg-orange-50/70 text-orange-950 text-xs font-bold shadow-2xs">
-              <span className="w-4 h-4 rounded-full bg-orange-500 text-white flex items-center justify-center text-[10px]">✓</span>
-              <span>Janki Rasoi</span>
-              <span className="text-[11px] font-medium text-slate-700">
-                {items.reduce((a, b) => a + b.quantity, 0)} item • ₹{(itemsTotalPaise / 100).toFixed(0)}
-              </span>
-            </div>
+        {/* 3. Simplified Items Pill & Lunch/Dinner Slot Switching Pills */}
+        <div className="px-3 pt-3 flex flex-wrap items-center justify-between gap-2">
+          {/* Simplified Orange Items Badge */}
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-50 border border-orange-200 text-orange-950 text-xs font-bold shadow-2xs">
+            <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+            <span>{items.reduce((a, b) => a + b.quantity, 0)} items</span>
+            <span className="text-orange-400">•</span>
+            <span className="font-extrabold">₹{(itemsTotalPaise / 100).toFixed(0)}</span>
           </div>
-          <p className="text-[11px] text-orange-700 font-semibold mt-1.5 flex items-center gap-1 px-1">
-            <span className="text-sm font-bold">↪</span> Enjoy your food choices. Order all at once!
-          </p>
+
+          {/* Lunch vs Dinner Switching Pills */}
+          <div className="inline-flex items-center gap-1 bg-white p-1 rounded-full border border-slate-200/90 shadow-2xs">
+            {(slots.length > 0
+              ? slots
+              : [
+                  { id: 'slot-lunch', mealType: 'LUNCH', label: 'Lunch', startTime: '12:30', endTime: '13:30' },
+                  { id: 'slot-dinner', mealType: 'DINNER', label: 'Dinner', startTime: '19:30', endTime: '20:30' },
+                ]
+            ).map((slot: any) => {
+              const isSelected = selectedSlotId === slot.id || (slots.length > 0 && !selectedSlotId && slot.mealType === 'LUNCH');
+              const isLunch = slot.mealType === 'LUNCH';
+              return (
+                <button
+                  key={slot.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedSlotId(slot.id);
+                    showToast(`Switched to ${isLunch ? 'Lunch' : 'Dinner'} delivery (${slot.startTime} – ${slot.endTime})`);
+                  }}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                    isSelected
+                      ? 'bg-[#008848] text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>{isLunch ? '☀️ Lunch' : '🌙 Dinner'}</span>
+                  <span className={`text-[10px] font-medium hidden xs:inline ${isSelected ? 'text-emerald-100' : 'text-slate-400'}`}>
+                    ({slot.startTime}–{slot.endTime})
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* 4. Restaurant Items Card */}
         <div className="px-3 pt-3">
           <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 flex flex-col gap-3">
-            {/* Restaurant Name & Delivery Time */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-[#8C3B2B] text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                  JR
-                </div>
-                <div>
-                  <h2 className="font-extrabold text-sm text-slate-900 leading-tight">Janki Rasoi</h2>
-                  <span className="text-[10px] text-emerald-600 font-semibold tracking-wide uppercase">100% Pure Vegetarian</span>
-                </div>
-              </div>
-              <div className="text-right">
-                <span className="text-xs font-bold text-slate-700 border-b border-dashed border-slate-400">
-                  {selectedSlot ? `${selectedSlot.startTime} – ${selectedSlot.endTime}` : '40-50 mins'}
-                </span>
-              </div>
-            </div>
-
-            {/* Promo Tag */}
-            <div className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">
-              TRYNEW eligible items
+            {/* Items Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">
+                TRYNEW eligible items
+              </span>
+              <Link
+                href="/menu"
+                className="text-xs font-bold text-[#008848] hover:underline flex items-center gap-1"
+              >
+                <span className="text-sm font-extrabold">+</span>
+                <span>Add more</span>
+              </Link>
             </div>
 
             {/* Items List */}
@@ -536,51 +557,6 @@ export default function CartPage() {
                 </div>
               ))}
             </div>
-
-            {/* 3 Action Buttons */}
-            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
-              <Link
-                href="/menu"
-                className="flex items-center justify-center gap-1 py-2 px-1 rounded-xl border border-slate-200 text-[11px] font-bold text-slate-700 hover:bg-slate-50"
-              >
-                <span className="text-emerald-700 font-bold text-base leading-none">+</span>
-                <span>Add Items</span>
-              </Link>
-              <button
-                type="button"
-                onClick={() => setShowCookingInput(!showCookingInput)}
-                className={`flex items-center justify-center gap-1 py-2 px-1 rounded-xl border text-[11px] font-bold transition-colors ${
-                  showCookingInput || deliveryNotes
-                    ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
-                    : 'border-slate-200 text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <span>✎</span>
-                <span>Cooking requests</span>
-              </button>
-              <label className="flex items-center justify-center gap-1 py-2 px-1 rounded-xl border border-slate-200 text-[11px] font-bold text-slate-700 cursor-pointer hover:bg-slate-50 select-none">
-                <input
-                  type="checkbox"
-                  checked={isCutleryNeeded}
-                  onChange={(e) => setIsCutleryNeeded(e.target.checked)}
-                  className="w-3.5 h-3.5 accent-emerald-600 rounded"
-                />
-                <span className="truncate">Cutlery Needed</span>
-              </label>
-            </div>
-
-            {/* Cooking requests inline editor */}
-            {showCookingInput && (
-              <div className="pt-2">
-                <input
-                  type="text"
-                  value={deliveryNotes}
-                  onChange={(e) => setDeliveryNotes(e.target.value)}
-                  placeholder="e.g. Less spicy dal, no onion-garlic, ring bell twice"
-                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 focus:outline-none focus:border-emerald-600"
-                />
-              </div>
-            )}
           </div>
         </div>
 
@@ -689,25 +665,60 @@ export default function CartPage() {
             {riderTab === 'INSTRUCTIONS' && (
               <div className="flex flex-col gap-2 pt-0.5">
                 <p className="text-[11px] text-slate-500 font-medium px-0.5">
-                  Instructions will be applied on all orders
+                  Instructions will be applied on your order &amp; delivery
                 </p>
 
-                {/* 4 Cards Row matching Image 2 */}
-                <div className="grid grid-cols-4 gap-2">
-                  {/* Card 1: Directions to reach */}
+                {/* 6 Instruction Cards Grid */}
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                  {/* Card 1: Cutlery Needed */}
+                  <div
+                    onClick={() => {
+                      setIsCutleryNeeded(!isCutleryNeeded);
+                      showToast(isCutleryNeeded ? 'Cutlery removed' : 'Cutlery requested');
+                    }}
+                    className={`p-2 sm:p-2.5 rounded-xl border flex flex-col items-center justify-between text-center gap-1.5 cursor-pointer transition-all select-none ${
+                      isCutleryNeeded
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-bold shadow-2xs'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className={`material-symbols-outlined text-[20px] ${isCutleryNeeded ? 'text-emerald-700' : 'text-slate-700'}`}>
+                      restaurant
+                    </span>
+                    <span className="text-[10px] leading-tight">Cutlery needed</span>
+                  </div>
+
+                  {/* Card 2: Cooking Note */}
+                  <div
+                    onClick={() => setShowCookingInput(!showCookingInput)}
+                    className={`p-2 sm:p-2.5 rounded-xl border flex flex-col items-center justify-between text-center gap-1.5 cursor-pointer transition-all select-none ${
+                      showCookingInput || deliveryNotes
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-bold shadow-2xs'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className={`material-symbols-outlined text-[20px] ${showCookingInput || deliveryNotes ? 'text-emerald-700' : 'text-slate-700'}`}>
+                      edit_note
+                    </span>
+                    <span className="text-[10px] leading-tight">Cooking note</span>
+                  </div>
+
+                  {/* Card 3: Directions to reach */}
                   <div
                     onClick={() => setShowDirectionsInput(!showDirectionsInput)}
                     className={`p-2 sm:p-2.5 rounded-xl border flex flex-col items-center justify-between text-center gap-1.5 cursor-pointer transition-all select-none ${
                       showDirectionsInput || directionsToReach
-                        ? 'border-emerald-600 bg-emerald-50/70 text-emerald-950 font-bold shadow-2xs'
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-bold shadow-2xs'
                         : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="material-symbols-outlined text-[20px] text-slate-700">mic</span>
-                    <span className="text-[10px] leading-tight">Directions to reach</span>
+                    <span className={`material-symbols-outlined text-[20px] ${showDirectionsInput || directionsToReach ? 'text-emerald-700' : 'text-slate-700'}`}>
+                      mic
+                    </span>
+                    <span className="text-[10px] leading-tight">Directions</span>
                   </div>
 
-                  {/* Card 2: Leave at the door */}
+                  {/* Card 4: Leave at the door */}
                   <div
                     onClick={() => {
                       setSelectedRiderInstructions((prev) =>
@@ -718,15 +729,17 @@ export default function CartPage() {
                     }}
                     className={`p-2 sm:p-2.5 rounded-xl border flex flex-col items-center justify-between text-center gap-1.5 cursor-pointer transition-all select-none ${
                       selectedRiderInstructions.includes('Leave at the door')
-                        ? 'border-emerald-600 bg-emerald-50/70 text-emerald-950 font-bold shadow-2xs'
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-bold shadow-2xs'
                         : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="material-symbols-outlined text-[20px] text-slate-700">door_front</span>
-                    <span className="text-[10px] leading-tight">Leave at the door</span>
+                    <span className={`material-symbols-outlined text-[20px] ${selectedRiderInstructions.includes('Leave at the door') ? 'text-emerald-700' : 'text-slate-700'}`}>
+                      door_front
+                    </span>
+                    <span className="text-[10px] leading-tight">Leave at door</span>
                   </div>
 
-                  {/* Card 3: Avoid calling */}
+                  {/* Card 5: Avoid calling */}
                   <div
                     onClick={() => {
                       setSelectedRiderInstructions((prev) =>
@@ -737,15 +750,17 @@ export default function CartPage() {
                     }}
                     className={`p-2 sm:p-2.5 rounded-xl border flex flex-col items-center justify-between text-center gap-1.5 cursor-pointer transition-all select-none ${
                       selectedRiderInstructions.includes('Avoid calling')
-                        ? 'border-emerald-600 bg-emerald-50/70 text-emerald-950 font-bold shadow-2xs'
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-bold shadow-2xs'
                         : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="material-symbols-outlined text-[20px] text-slate-700">phone_paused</span>
+                    <span className={`material-symbols-outlined text-[20px] ${selectedRiderInstructions.includes('Avoid calling') ? 'text-emerald-700' : 'text-slate-700'}`}>
+                      phone_paused
+                    </span>
                     <span className="text-[10px] leading-tight">Avoid calling</span>
                   </div>
 
-                  {/* Card 4: Avoid ringing bell */}
+                  {/* Card 6: Avoid ringing bell */}
                   <div
                     onClick={() => {
                       setSelectedRiderInstructions((prev) =>
@@ -756,18 +771,39 @@ export default function CartPage() {
                     }}
                     className={`p-2 sm:p-2.5 rounded-xl border flex flex-col items-center justify-between text-center gap-1.5 cursor-pointer transition-all select-none ${
                       selectedRiderInstructions.includes('Avoid ringing bell')
-                        ? 'border-emerald-600 bg-emerald-50/70 text-emerald-950 font-bold shadow-2xs'
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-bold shadow-2xs'
                         : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="material-symbols-outlined text-[20px] text-slate-700">notifications_paused</span>
-                    <span className="text-[10px] leading-tight">Avoid ringing bell</span>
+                    <span className={`material-symbols-outlined text-[20px] ${selectedRiderInstructions.includes('Avoid ringing bell') ? 'text-emerald-700' : 'text-slate-700'}`}>
+                      notifications_paused
+                    </span>
+                    <span className="text-[10px] leading-tight">Avoid bell</span>
                   </div>
                 </div>
 
-                {/* Optional Expandable Directions Input */}
-                {showDirectionsInput && (
-                  <div className="mt-1 pt-1">
+                {/* Cooking Note Input */}
+                {(showCookingInput || deliveryNotes) && (
+                  <div className="mt-1.5 pt-1.5 border-t border-slate-100">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">
+                      Cooking &amp; Kitchen Instructions:
+                    </label>
+                    <input
+                      type="text"
+                      value={deliveryNotes}
+                      onChange={(e) => setDeliveryNotes(e.target.value)}
+                      placeholder="e.g. Less spicy dal, no onion-garlic, extra dry phulkas"
+                      className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 focus:outline-none focus:border-emerald-600"
+                    />
+                  </div>
+                )}
+
+                {/* Expandable Directions Input */}
+                {(showDirectionsInput || directionsToReach) && (
+                  <div className="mt-1.5 pt-1.5 border-t border-slate-100">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase block mb-1">
+                      Directions for Rider:
+                    </label>
                     <input
                       type="text"
                       value={directionsToReach}
