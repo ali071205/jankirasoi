@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, DeliverySlot, QuoteResponse, DEFAULT_FOOD_IMAGE, UserProfile } from '../../lib/api';
@@ -11,8 +11,8 @@ export default function CartPage() {
   const router = useRouter();
   const { items, updateQty, clearCart, showToast } = useCart();
 
-  const [slots, setSlots] = useState<DeliverySlot[]>(() => api.getCachedSlots()?.slots || []);
-  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(() => api.getCachedSlots()?.slots?.[0]?.id || null);
+  const [slots, setSlots] = useState<DeliverySlot[]>([]);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
 
@@ -30,16 +30,22 @@ export default function CartPage() {
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'RAZORPAY'>('COD');
   const [placingOrder, setPlacingOrder] = useState(false);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   // Fetch Delivery Slots
   useEffect(() => {
+    const cached = api.getCachedSlots();
+    if (cached?.slots?.length) {
+      setSlots(cached.slots);
+      setSelectedSlotId(cached.slots[0].id);
+    }
+
     async function fetchSlots() {
       try {
         const data = await api.getSlots(today);
         if (data && data.slots && data.slots.length > 0) {
           setSlots(data.slots);
-          setSelectedSlotId(data.slots[0].id);
+          setSelectedSlotId((prev) => prev || data.slots[0].id);
         }
       } catch (err) {
         console.error('Failed to load slots', err);
@@ -65,18 +71,6 @@ export default function CartPage() {
     });
   }, []);
 
-  const handleAuthSuccess = (user: UserProfile) => {
-    setCurrentUser(user);
-    if (user.name) setCustomerName(user.name);
-    if (user.phone) setCustomerPhone(user.phone);
-    if (user.savedAddress) {
-      if (user.savedAddress.flat) setFlat(user.savedAddress.flat);
-      if (user.savedAddress.street) setStreet(user.savedAddress.street);
-      if (user.savedAddress.landmark) setLandmark(user.savedAddress.landmark);
-      if (user.savedAddress.pincode) setPincode(user.savedAddress.pincode);
-    }
-  };
-
   // Request Server-Authoritative Quote
   const requestQuote = useCallback(async () => {
     if (items.length === 0 || !selectedSlotId) return;
@@ -87,20 +81,27 @@ export default function CartPage() {
         serviceDate: today,
         deliverySlotId: selectedSlotId,
         pincode: pincode.trim() || '110017',
-        items: items.map((i) => ({
-          productId: i.productId,
-          variantId: i.variantId,
-          quantity: i.quantity,
-          selectedAddonOptionIds: i.selectedAddonOptionIds,
-        })),
+        items: items.map((i) => {
+          let pid = i.productId;
+          if (pid === 'spec-full-thali') pid = '09f67dad-2306-49b7-88c7-cae050592f14';
+          if (pid === 'spec-home-thali') pid = 'cd02708b-cf9d-460a-878d-3597115602b7';
+          if (pid === 'spec-roti-sabzi') pid = 'a1c1e8ff-8f9e-4a82-98f3-876bd6f9e0f3';
+          return {
+            productId: pid,
+            variantId: i.variantId,
+            quantity: i.quantity,
+            selectedAddonOptionIds: i.selectedAddonOptionIds,
+          };
+        }),
       });
       setQuote(q);
     } catch (err: any) {
       console.warn('Quotation notice:', err.message);
+      showToast(err.message || 'Could not fetch quote for selected items', true);
     } finally {
       setQuoteLoading(false);
     }
-  }, [items, selectedSlotId, pincode, today]);
+  }, [items, selectedSlotId, pincode, today, showToast]);
 
   useEffect(() => {
     if (items.length > 0 && selectedSlotId) {
@@ -116,7 +117,7 @@ export default function CartPage() {
       const res = await api.checkPincode(pin);
       if (res.serviceable) {
         setPinStatusMsg({
-          text: `✓ Serviceable zone: ${res.zoneName} (Fee: ₹${((res.deliveryFeePaise || 0) / 100).toFixed(2)})`,
+          text: `✓ Serviceable: ${res.zoneName}`,
           isError: false,
         });
         await requestQuote();
@@ -136,7 +137,13 @@ export default function CartPage() {
 
   // Place Order Handler
   const handlePlaceOrder = async () => {
-    if (!customerName.trim() || !customerPhone.trim() || !flat.trim() || !street.trim() || !pincode.trim()) {
+    if (
+      !customerName.trim() ||
+      !customerPhone.trim() ||
+      !flat.trim() ||
+      !street.trim() ||
+      !pincode.trim()
+    ) {
       showToast('Please fill all required delivery details.', true);
       return;
     }
@@ -180,13 +187,16 @@ export default function CartPage() {
           window.localStorage.setItem('jr_recent_orders', JSON.stringify(recents.slice(0, 10)));
         } catch {}
       }
-      // Automatically save and sync customer profile & address
-      api.loginCustomer(customerPhone.trim(), customerName.trim(), {
-        flat: flat.trim(),
-        street: street.trim(),
-        landmark: landmark.trim() || undefined,
-        pincode: pincode.trim(),
-      }).catch(() => {});
+
+      // Automatically sync customer profile & address
+      api
+        .loginCustomer(customerPhone.trim(), customerName.trim(), {
+          flat: flat.trim(),
+          street: street.trim(),
+          landmark: landmark.trim() || undefined,
+          pincode: pincode.trim(),
+        })
+        .catch(() => {});
 
       showToast('Order placed successfully!');
       setTimeout(() => {
@@ -198,457 +208,416 @@ export default function CartPage() {
     }
   };
 
+  const selectedSlot = slots.find((s) => s.id === selectedSlotId);
+
+  // If cart is empty
   if (items.length === 0) {
     return (
-      <main className="flex-1 pt-20 pb-28 max-w-3xl mx-auto w-full px-4 flex flex-col gap-4">
-        <div className="p-10 rounded-2xl bg-white text-center flex flex-col items-center gap-3 shadow-xs border border-black/5 mt-4">
-          <span className="material-symbols-outlined text-[48px] text-gray-300">shopping_bag</span>
-          <h2 className="font-headline font-bold text-lg text-on-surface">Your Meal Tray is Empty</h2>
-          <p className="text-xs text-on-surface-variant max-w-xs">
-            Explore our freshly prepared homestyle North Indian thalis and add your favorite dishes.
+      <main className="flex flex-col items-center justify-center min-h-[70vh] pt-20 pb-28 px-margin">
+        <div className="bg-surface-container-lowest p-space-xl rounded-2xl shadow-xs border border-surface-container-high/60 max-w-sm w-full text-center flex flex-col items-center gap-3">
+          <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center text-primary-container">
+            <span className="material-symbols-outlined text-[36px]">shopping_bag</span>
+          </div>
+          <h2 className="font-headline-sm text-headline-sm font-bold text-on-surface">Your Meal Tray is Empty</h2>
+          <p className="font-body-sm text-body-sm text-on-surface-variant">
+            Explore our wholesome, pure vegetarian homestyle lunch and dinner specials.
           </p>
           <Link
             href="/menu"
-            className="mt-2 px-6 py-2 rounded-full bg-primary text-white text-xs font-bold hover:bg-primary-container"
+            className="mt-2 h-10 px-6 rounded-full bg-primary-container text-on-primary font-label-md text-label-md font-semibold flex items-center gap-1.5 shadow-xs"
           >
-            Explore Today&apos;s Menu
+            <span>Explore Today's Menu</span>
+            <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
           </Link>
         </div>
       </main>
     );
   }
 
-  return (
-    <main className="flex-1 pt-20 pb-28 max-w-3xl mx-auto w-full px-4 flex flex-col gap-4">
-      {/* 1. Delivery Slot Picker */}
-      <section className="bg-white rounded-2xl p-4 shadow-xs border border-black/5 flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <span className="font-headline font-bold text-sm text-on-surface flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-primary text-[20px]">schedule</span> Select Meal Window
-          </span>
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-800">Today</span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {slots.length === 0 ? (
-            <>
-              <div className="p-3 bg-gray-50 rounded-xl animate-pulse h-14"></div>
-              <div className="p-3 bg-gray-50 rounded-xl animate-pulse h-14"></div>
-            </>
-          ) : (
-            slots.map((s) => {
-              const isSelected = selectedSlotId === s.id;
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setSelectedSlotId(s.id)}
-                  className={`p-3 rounded-xl border text-left transition-all ${
-                    isSelected
-                      ? 'border-primary bg-primary/5 text-primary'
-                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-xs">{s.label}</span>
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                      🟢 Open
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-gray-500 block mt-0.5">Cutoff: {s.cutoffTime}</span>
-                </button>
-              );
-            })
-          )}
-        </div>
-      </section>
+  const itemsTotalPaise = items.reduce((acc, i) => acc + i.pricePaise * i.quantity, 0);
+  const finalTotalPaise = quote?.totalPaise ?? itemsTotalPaise + 1500;
 
-      {/* 2. Cart Items Stack */}
-      <section className="bg-white rounded-2xl p-4 shadow-xs border border-black/5 flex flex-col gap-3">
-        <h2 className="font-headline font-bold text-sm text-on-surface flex items-center gap-1.5">
-          <span className="material-symbols-outlined text-primary text-[20px]">lunch_dining</span>
-          Items in Your Tray
-        </h2>
-        <div className="flex flex-col divide-y divide-gray-100">
-          {items.map((item, index) => (
-            <div key={`${item.productId}-${item.variantId || 'base'}`} className="py-3 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <img
-                  className="w-12 h-12 rounded-lg object-cover bg-gray-100 shrink-0"
-                  src={item.imageUrl || DEFAULT_FOOD_IMAGE}
-                  onError={(e) => {
-                    e.currentTarget.onerror = null;
-                    e.currentTarget.src = DEFAULT_FOOD_IMAGE;
-                  }}
-                  alt={item.name}
-                />
-                <div className="flex flex-col min-w-0">
-                  <span className="font-bold text-xs text-on-surface truncate">{item.name}</span>
-                  {item.variantName && (
-                    <span className="text-[10px] text-gray-500">{item.variantName}</span>
-                  )}
-                  <span className="text-xs font-semibold text-primary mt-0.5">
-                    ₹{(item.pricePaise / 100).toFixed(2)}
+  return (
+    <main className="flex flex-col relative w-full pt-16 pb-32 bg-[#FFF9F0] min-h-screen">
+      <div className="flex flex-col w-full max-w-xl mx-auto px-3 sm:px-4 pb-8">
+        {/* 1. Warm Culinary Hero / Delivery Status Banner */}
+        <div className="pt-3 pb-1">
+          <div className="relative overflow-hidden rounded-2xl bg-[#FFF1DC] p-4 shadow-xs border border-[#E99A32]/30">
+            <div className="flex items-start justify-between relative z-10 gap-3">
+              <div className="flex flex-col min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="inline-flex items-center justify-center w-2 h-2 rounded-full bg-[#38754A] animate-ping"></span>
+                  <span className="text-[10px] uppercase tracking-wider text-[#38754A] font-bold">
+                    Homestyle Dispatch
                   </span>
                 </div>
+                <h1 className="text-lg sm:text-xl text-[#292D26] font-bold font-headline">
+                  Review Cart &amp; Checkout
+                </h1>
+                <p className="text-xs text-[#77786F] flex items-center gap-1 mt-0.5 truncate">
+                  <span className="material-symbols-outlined text-[16px] text-[#38754A] shrink-0">schedule</span>
+                  Delivery window:{' '}
+                  <span className="font-semibold text-[#292D26]">
+                    {selectedSlot ? `${selectedSlot.startTime} – ${selectedSlot.endTime}` : '1:00 PM – 1:30 PM'}
+                  </span>
+                </p>
               </div>
-              <div className="flex items-center gap-2 shrink-0 bg-surface-container px-2 py-1 rounded-full">
-                <button
-                  onClick={() => updateQty(index, -1)}
-                  className="w-6 h-6 flex items-center justify-center text-xs font-bold text-on-surface-variant hover:text-red-600"
-                >
-                  &minus;
-                </button>
-                <span className="text-xs font-bold px-1">{item.quantity}</span>
-                <button
-                  onClick={() => updateQty(index, 1)}
-                  className="w-6 h-6 flex items-center justify-center text-xs font-bold text-on-surface-variant hover:text-green-700"
-                >
-                  &plus;
-                </button>
+              <div className="shrink-0 w-11 h-11 rounded-xl bg-[#FFF1DC] border border-[#E99A32]/40 flex items-center justify-center text-[#E99A32]">
+                <span className="material-symbols-outlined text-[24px]">soup_kitchen</span>
               </div>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* 3. Delivery Details Form */}
-      <section className="bg-white rounded-2xl p-4 shadow-xs border border-black/5 flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-headline font-bold text-sm text-on-surface flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-primary text-[20px]">location_on</span>
-            Delivery Address &amp; Contact
-          </h2>
-          {currentUser && (
-            <button
-              type="button"
-              onClick={() => setIsAuthOpen(true)}
-              className="text-xs font-bold text-emerald-700 hover:underline flex items-center gap-1"
-            >
-              <span>Manage Profile</span>
-              <span>→</span>
-            </button>
-          )}
+          </div>
         </div>
 
-        {/* User Account / Address Status Pill */}
-        {currentUser ? (
-          <div className="flex items-center justify-between p-3 bg-emerald-50 border border-emerald-200/80 rounded-xl text-xs">
-            <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-full bg-emerald-700 text-white font-bold flex items-center justify-center text-xs shrink-0">
-                {currentUser.name.charAt(0).toUpperCase()}
+        {/* 2. Delivery Slot Selector */}
+        <section className="mt-3">
+          <div className="bg-white rounded-2xl p-4 shadow-xs border border-[#EEE7DC]">
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="font-label-lg text-label-lg text-on-surface font-bold flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[18px] text-primary">dinner_dining</span>
+                Select Meal Time
               </span>
+              <span className="font-label-sm text-label-sm px-2 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-bold">
+                Today
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {slots.map((s) => {
+                const isSelected = selectedSlotId === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSelectedSlotId(s.id)}
+                    className={`relative flex flex-col p-2.5 rounded-lg text-left transition-all ${
+                      isSelected
+                        ? 'bg-primary-container text-on-primary shadow-xs'
+                        : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="font-title-md text-title-md font-semibold">{s.mealType}</span>
+                      <span className="material-symbols-outlined text-[18px]">
+                        {isSelected ? 'radio_button_checked' : 'radio_button_unchecked'}
+                      </span>
+                    </div>
+                    <span className="font-label-sm text-label-sm opacity-90 mt-0.5">
+                      {s.startTime} – {s.endTime}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-space-sm flex items-center gap-2 p-2 rounded-lg bg-surface-container-high/60 text-on-surface-variant">
+              <span className="material-symbols-outlined text-[18px] text-secondary shrink-0">timer</span>
+              <p className="font-body-sm text-body-sm leading-tight">
+                Lunch preparation in kitchen.{' '}
+                <span className="font-semibold text-on-surface">Order locked for fresh batch dispatch.</span>
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* 3. Items in Cart */}
+        <section className="mt-4">
+          <div className="flex items-center justify-between mb-2.5">
+            <h2 className="text-sm sm:text-base text-[#292D26] font-bold flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[20px] text-[#38754A]">local_mall</span>
+              Your Meal Tray ({items.reduce((acc, i) => acc + i.quantity, 0)})
+            </h2>
+            <Link
+              href="/menu"
+              className="text-xs text-[#38754A] font-bold hover:underline flex items-center gap-0.5"
+            >
+              + Add more items
+            </Link>
+          </div>
+
+          <div className="flex flex-col gap-2.5">
+            {items.map((item, idx) => (
+              <article
+                key={`${item.productId}-${item.variantId || 'base'}`}
+                className="bg-white rounded-2xl p-3.5 shadow-xs border border-[#EEE7DC] flex flex-col gap-2 relative overflow-hidden"
+              >
+                <div className="flex gap-3">
+                  {/* Food Image with veg stamp */}
+                  <div className="relative w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-[#FFF9F0] border border-[#EEE7DC]">
+                    <img
+                      className="w-full h-full object-cover"
+                      alt={item.name}
+                      src={item.imageUrl || DEFAULT_FOOD_IMAGE}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = DEFAULT_FOOD_IMAGE;
+                      }}
+                    />
+                    <span className="absolute top-1 left-1 w-3.5 h-3.5 bg-white rounded-xs flex items-center justify-center p-0.5 shadow-xs border border-[#38754A]">
+                      <span className="w-2 h-2 rounded-full bg-[#38754A] block"></span>
+                    </span>
+                  </div>
+
+                  {/* Title, Variant, Stepper & Price */}
+                  <div className="flex flex-col flex-1 min-w-0 justify-between">
+                    <div>
+                      <h3 className="text-sm sm:text-base text-[#292D26] font-bold truncate">
+                        {item.name}
+                      </h3>
+                      {item.variantName && (
+                        <p className="text-xs text-[#77786F] truncate">
+                          Portion: {item.variantName}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-sm sm:text-base font-bold text-[#292D26]">
+                        ₹{((item.pricePaise * item.quantity) / 100).toFixed(0)}
+                      </span>
+
+                      {/* Stepper */}
+                      <div className="flex items-center bg-[#FFF9F0] rounded-full px-2 py-0.5 border border-[#EEE7DC] gap-2">
+                        <button
+                          onClick={() => updateQty(idx, -1)}
+                          className="w-6 h-6 flex items-center justify-center text-[#292D26] font-bold hover:bg-[#EEE7DC] rounded-full transition-colors"
+                        >
+                          -
+                        </button>
+                        <span className="font-bold text-xs min-w-[14px] text-center text-[#292D26]">
+                          {item.quantity}
+                        </span>
+                        <button
+                          onClick={() => updateQty(idx, 1)}
+                          className="w-6 h-6 flex items-center justify-center text-[#292D26] font-bold hover:bg-[#EEE7DC] rounded-full transition-colors"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        {/* 4. Delivery Address & Customer Details */}
+        <section className="mt-4">
+          <div className="bg-white rounded-2xl p-4 shadow-xs border border-[#EEE7DC] flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm sm:text-base text-[#292D26] font-bold flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[#38754A] text-[20px]">location_on</span>
+                Delivery Details
+              </span>
+              <span className="text-xs text-[#38754A] bg-[#EAF4ED] px-2.5 py-0.5 rounded-full font-bold">South Delhi</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
-                <span className="font-bold text-emerald-950 block">{currentUser.name} (+91 {currentUser.phone})</span>
-                <span className="text-emerald-700 text-[11px]">✓ Saved Address Auto-filled</span>
+                <label className="text-xs font-semibold text-[#77786F] block mb-1">
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl bg-[#FFF9F0] border border-[#EEE7DC] text-xs text-[#292D26] focus:outline-none focus:border-[#38754A]"
+                  placeholder="e.g. Rahul Sharma"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-[#77786F] block mb-1">
+                  Phone (for Delivery OTP &amp; SMS) *
+                </label>
+                <div className="flex items-center bg-[#FFF9F0] rounded-xl border border-[#EEE7DC] overflow-hidden">
+                  <span className="px-2.5 text-xs text-[#77786F] font-bold border-r border-[#EEE7DC]">
+                    +91
+                  </span>
+                  <input
+                    type="tel"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    className="w-full h-10 px-2.5 bg-transparent text-xs text-[#292D26] focus:outline-none"
+                    placeholder="10-digit number"
+                  />
+                </div>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsAuthOpen(true)}
-              className="text-xs font-semibold text-emerald-800 hover:underline px-1 py-0.5"
-            >
-              Change
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200/70 rounded-xl text-xs">
-            <div className="flex items-center gap-2 text-amber-900">
-              <span className="material-symbols-outlined text-amber-700 text-lg">bolt</span>
-              <span>Have an account or saved address?</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsAuthOpen(true)}
-              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs shadow-2xs transition-colors shrink-0"
-            >
-              Express Login
-            </button>
-          </div>
-        )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-          <div>
-            <label className="font-semibold text-gray-700 block mb-1">Your Full Name *</label>
-            <input
-              type="text"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              placeholder="Rohan Sharma"
-              className="w-full border border-gray-200 rounded-lg p-2.5 text-xs bg-gray-50 focus:bg-white focus:outline-primary"
-            />
-          </div>
-          <div>
-            <label className="font-semibold text-gray-700 block mb-1">10-Digit Mobile Number *</label>
-            <input
-              type="tel"
-              value={customerPhone}
-              onChange={(e) => setCustomerPhone(e.target.value)}
-              placeholder="9876543210"
-              className="w-full border border-gray-200 rounded-lg p-2.5 text-xs bg-gray-50 focus:bg-white focus:outline-primary"
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="font-semibold text-gray-700 block mb-1">Flat / House Number / Tower *</label>
-            <input
-              type="text"
-              value={flat}
-              onChange={(e) => setFlat(e.target.value)}
-              placeholder="Flat 402, Sunshine Residency"
-              className="w-full border border-gray-200 rounded-lg p-2.5 text-xs bg-gray-50 focus:bg-white focus:outline-primary"
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="font-semibold text-gray-700 block mb-1">Street / Locality / Sector *</label>
-            <input
-              type="text"
-              value={street}
-              onChange={(e) => setStreet(e.target.value)}
-              placeholder="Outer Ring Road, Malviya Nagar"
-              className="w-full border border-gray-200 rounded-lg p-2.5 text-xs bg-gray-50 focus:bg-white focus:outline-primary"
-            />
-          </div>
-          <div>
-            <label className="font-semibold text-gray-700 block mb-1">Landmark (Optional)</label>
-            <input
-              type="text"
-              value={landmark}
-              onChange={(e) => setLandmark(e.target.value)}
-              placeholder="Near Main Market Metro"
-              className="w-full border border-gray-200 rounded-lg p-2.5 text-xs bg-gray-50 focus:bg-white focus:outline-primary"
-            />
-          </div>
-          <div>
-            <label className="font-semibold text-gray-700 block mb-1">PIN Code (Delhi) *</label>
-            <div className="flex gap-2">
+            <div>
+              <label className="text-xs font-semibold text-[#77786F] block mb-1">
+                House / Flat / Company *
+              </label>
               <input
                 type="text"
-                value={pincode}
-                onChange={(e) => setPincode(e.target.value)}
-                placeholder="110017"
-                maxLength={6}
-                className="w-full border border-gray-200 rounded-lg p-2.5 text-xs bg-gray-50 font-bold focus:bg-white focus:outline-primary"
+                value={flat}
+                onChange={(e) => setFlat(e.target.value)}
+                className="w-full h-10 px-3 rounded-xl bg-[#FFF9F0] border border-[#EEE7DC] text-xs text-[#292D26] focus:outline-none focus:border-[#38754A]"
+                placeholder="e.g. Flat 304, Tower B, Green Apartments"
               />
-              <button
-                type="button"
-                onClick={handleCheckPincode}
-                className="px-3 py-2 bg-surface-container hover:bg-surface-container-high rounded-lg text-xs font-semibold whitespace-nowrap"
-              >
-                Verify
-              </button>
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div className="sm:col-span-2">
+                <label className="text-xs font-semibold text-[#77786F] block mb-1">
+                  Street / Area / Sector *
+                </label>
+                <input
+                  type="text"
+                  value={street}
+                  onChange={(e) => setStreet(e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl bg-[#FFF9F0] border border-[#EEE7DC] text-xs text-[#292D26] focus:outline-none focus:border-[#38754A]"
+                  placeholder="e.g. Malviya Nagar, Outer Ring Road"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-[#77786F] block mb-1">
+                  Pincode *
+                </label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={pincode}
+                    onChange={(e) => setPincode(e.target.value)}
+                    onBlur={handleCheckPincode}
+                    maxLength={6}
+                    className="w-full h-10 px-3 rounded-xl bg-[#FFF9F0] border border-[#EEE7DC] text-xs text-[#292D26] focus:outline-none focus:border-[#38754A] font-mono"
+                    placeholder="110017"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCheckPincode}
+                    className="h-10 px-3 rounded-xl bg-[#FFF1DC] text-[#E99A32] text-xs font-bold hover:bg-[#ffe6c4] shrink-0 transition-colors"
+                  >
+                    Check
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {pinStatusMsg && (
-              <span
-                className={`text-[11px] mt-1 block ${
-                  pinStatusMsg.isError ? 'text-red-600' : 'text-green-700 font-semibold'
+              <p
+                className={`text-xs font-bold ${
+                  pinStatusMsg.isError ? 'text-[#C94B45]' : 'text-[#38754A]'
                 }`}
               >
                 {pinStatusMsg.text}
-              </span>
+              </p>
             )}
-          </div>
-        </div>
-      </section>
 
-      {/* 3.5 Delivery Instructions (Swiggy / Zomato Chips) */}
-      <section className="bg-white rounded-2xl p-4 shadow-xs border border-black/5 flex flex-col gap-3">
-        <h2 className="font-headline font-bold text-sm text-on-surface flex items-center gap-1.5">
-          <span className="material-symbols-outlined text-primary text-[20px]">directions_bike</span>
-          Delivery Instructions for Rider
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          {[
-            { id: 'nobell', label: "🔔 Don't ring bell" },
-            { id: 'door', label: '🚪 Leave at doorstep' },
-            { id: 'call', label: '📞 Call before arriving' },
-            { id: 'guard', label: '🛡️ Leave with security' },
-          ].map((chip) => {
-            const isSelected = deliveryNotes.includes(chip.label);
-            return (
+            <div>
+              <label className="text-xs font-semibold text-[#77786F] block mb-1">
+                Kitchen / Rider Instructions (Optional)
+              </label>
+              <input
+                type="text"
+                value={deliveryNotes}
+                onChange={(e) => setDeliveryNotes(e.target.value)}
+                className="w-full h-9 px-3 rounded-xl bg-[#FFF9F0] border border-[#EEE7DC] text-xs text-[#292D26] focus:outline-none focus:border-[#38754A]"
+                placeholder="e.g. Ring the bell twice, less oil in dal"
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* 5. Payment Method Selector */}
+        <section className="mt-4">
+          <div className="bg-white rounded-2xl p-4 shadow-xs border border-[#EEE7DC] flex flex-col gap-2.5">
+            <h3 className="text-sm sm:text-base text-[#292D26] font-bold flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[#38754A] text-[20px]">payments</span>
+              Payment Method
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
-                key={chip.id}
                 type="button"
-                onClick={() => {
-                  if (isSelected) {
-                    setDeliveryNotes((prev) => prev.replace(chip.label, '').replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '').trim());
-                  } else {
-                    setDeliveryNotes((prev) => (prev ? `${prev}, ${chip.label}` : chip.label));
-                  }
-                }}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
-                  isSelected
-                    ? 'bg-primary text-white border-primary shadow-xs'
-                    : 'bg-surface-container text-on-surface border-gray-200 hover:bg-gray-100'
+                onClick={() => setPaymentMethod('COD')}
+                className={`p-3 rounded-xl border flex flex-col gap-0.5 text-left transition-all ${
+                  paymentMethod === 'COD'
+                    ? 'border-[#38754A] bg-[#EAF4ED] text-[#38754A]'
+                    : 'border-[#EEE7DC] bg-[#FFF9F0] text-[#77786F]'
                 }`}
               >
-                {chip.label}
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-xs sm:text-sm font-bold text-[#292D26]">Cash on Delivery</span>
+                  <span className="material-symbols-outlined text-[18px]">
+                    {paymentMethod === 'COD' ? 'radio_button_checked' : 'radio_button_unchecked'}
+                  </span>
+                </div>
+                <span className="text-[11px] opacity-80">Pay upon delivery</span>
               </button>
-            );
-          })}
-        </div>
-        <input
-          type="text"
-          value={deliveryNotes}
-          onChange={(e) => setDeliveryNotes(e.target.value)}
-          placeholder="E.g., Call upon reaching gate, ring twice..."
-          className="w-full border border-gray-200 rounded-lg p-2 text-xs bg-gray-50 focus:bg-white focus:outline-primary"
-        />
-      </section>
 
-      {/* Packaging Assurance Banner */}
-      <div className="bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 rounded-2xl p-3.5 flex items-center gap-3 text-xs text-emerald-900 shadow-xs">
-        <span className="material-symbols-outlined text-emerald-600 text-[24px] shrink-0">verified_user</span>
-        <div>
-          <span className="font-bold block">100% Tamper-Evident Packaging</span>
-          <span className="text-[11px] text-emerald-700">Sealed food-grade containers. Do not accept if seal is broken.</span>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('RAZORPAY')}
+                className={`p-3 rounded-xl border flex flex-col gap-0.5 text-left transition-all ${
+                  paymentMethod === 'RAZORPAY'
+                    ? 'border-[#38754A] bg-[#EAF4ED] text-[#38754A]'
+                    : 'border-[#EEE7DC] bg-[#FFF9F0] text-[#77786F]'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-xs sm:text-sm font-bold text-[#292D26]">Online / UPI</span>
+                  <span className="material-symbols-outlined text-[18px]">
+                    {paymentMethod === 'RAZORPAY' ? 'radio_button_checked' : 'radio_button_unchecked'}
+                  </span>
+                </div>
+                <span className="text-[11px] opacity-80">GPay, PhonePe, Cards</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* 6. Bill Details Summary */}
+        <section className="mt-4">
+          <div className="bg-white rounded-2xl p-4 shadow-xs border border-[#EEE7DC] flex flex-col gap-2">
+            <h3 className="text-sm sm:text-base text-[#292D26] font-bold">Bill Details</h3>
+
+            <div className="flex items-center justify-between text-xs text-[#77786F]">
+              <span>Item Total</span>
+              <span className="font-semibold text-[#292D26]">
+                ₹{(itemsTotalPaise / 100).toFixed(0)}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-[#77786F]">
+              <span>Delivery Fee (Within 4km)</span>
+              <span className="font-bold text-[#38754A]">FREE</span>
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-[#77786F]">
+              <span>Spill-Proof Insulated Foil Tray</span>
+              <span className="font-semibold text-[#292D26]">₹15</span>
+            </div>
+
+            <div className="pt-2 border-t border-[#EEE7DC] flex items-center justify-between text-sm sm:text-base font-bold text-[#292D26]">
+              <span>Total Payable</span>
+              <span>₹{(finalTotalPaise / 100).toFixed(0)}</span>
+            </div>
+          </div>
+        </section>
+
+        {/* 7. Confirm & Place Order Action Button */}
+        <div className="mt-5">
+          <button
+            type="button"
+            onClick={handlePlaceOrder}
+            disabled={placingOrder || quoteLoading}
+            className="w-full h-12 rounded-full bg-[#38754A] hover:bg-[#285C38] text-white font-bold flex items-center justify-between px-6 shadow-md active:scale-98 transition-all disabled:opacity-50"
+          >
+            <span className="text-xs sm:text-sm">
+              {placingOrder ? 'Confirming Order...' : 'Confirm & Place Order'}
+            </span>
+            <span className="flex items-center gap-1 text-sm sm:text-base font-bold">
+              <span>₹{(finalTotalPaise / 100).toFixed(0)}</span>
+              <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+            </span>
+          </button>
         </div>
       </div>
-
-      {/* 4. Payment Method */}
-      <section className="bg-white rounded-2xl p-4 shadow-xs border border-black/5 flex flex-col gap-3">
-        <h2 className="font-headline font-bold text-sm text-on-surface flex items-center gap-1.5">
-          <span className="material-symbols-outlined text-primary text-[20px]">payments</span>
-          Payment Method
-        </h2>
-        <div className="grid grid-cols-2 gap-3">
-          <label
-            onClick={() => setPaymentMethod('COD')}
-            className={`p-3 border-2 rounded-xl cursor-pointer flex items-center justify-between transition-all ${
-              paymentMethod === 'COD'
-                ? 'border-primary bg-primary/5 text-primary'
-                : 'border-gray-200 bg-white text-gray-700'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="payment-method"
-                value="COD"
-                checked={paymentMethod === 'COD'}
-                onChange={() => setPaymentMethod('COD')}
-                className="accent-primary"
-              />
-              <div className="flex flex-col">
-                <span className="font-bold text-xs">Cash on Delivery</span>
-                <span className="text-[10px] text-on-surface-variant">Pay cash at doorstep</span>
-              </div>
-            </div>
-          </label>
-          <label
-            onClick={() => setPaymentMethod('RAZORPAY')}
-            className={`p-3 border-2 rounded-xl cursor-pointer flex items-center justify-between transition-all ${
-              paymentMethod === 'RAZORPAY'
-                ? 'border-primary bg-primary/5 text-primary'
-                : 'border-gray-200 bg-white text-gray-700'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="payment-method"
-                value="RAZORPAY"
-                checked={paymentMethod === 'RAZORPAY'}
-                onChange={() => setPaymentMethod('RAZORPAY')}
-                className="accent-primary"
-              />
-              <div className="flex flex-col">
-                <span className="font-bold text-xs">Online Payment</span>
-                <span className="text-[10px] text-on-surface-variant">UPI / Cards (Razorpay)</span>
-              </div>
-            </div>
-          </label>
-        </div>
-      </section>
-
-      {/* 5. Bill Summary (Authoritative from Server) */}
-      <section className="bg-white rounded-2xl p-4 shadow-xs border border-black/5 flex flex-col gap-2.5 text-xs">
-        <div className="flex items-center justify-between">
-          <h2 className="font-headline font-bold text-sm text-on-surface mb-1">Bill Summary</h2>
-          {quoteLoading && (
-            <span className="text-[10px] text-primary animate-pulse flex items-center gap-1">
-              <span className="material-symbols-outlined text-[12px] animate-spin">refresh</span> Updating...
-            </span>
-          )}
-        </div>
-        <div className="flex justify-between text-on-surface-variant">
-          <span>Items Subtotal</span>
-          <span className="font-semibold text-on-surface">
-            ₹{quote ? (quote.subtotalPaise / 100).toFixed(2) : '0.00'}
-          </span>
-        </div>
-        <div className="flex justify-between text-on-surface-variant">
-          <span>Packaging &amp; Eco-Box</span>
-          <span className="font-semibold text-on-surface">
-            ₹{quote ? (quote.packagingFeePaise / 100).toFixed(2) : '15.00'}
-          </span>
-        </div>
-        <div className="flex justify-between text-on-surface-variant">
-          <span>Delivery Partner Fee</span>
-          <span className="font-semibold text-on-surface">
-            {quote ? (
-              quote.deliveryFeePaise === 0 ? (
-                <>
-                  <span className="line-through text-gray-400 mr-1.5 font-normal">₹30.00</span>
-                  <span className="text-emerald-600 font-bold">FREE 🎉</span>
-                </>
-              ) : (
-                `₹${(quote.deliveryFeePaise / 100).toFixed(2)}`
-              )
-            ) : (
-              '₹30.00'
-            )}
-          </span>
-        </div>
-        <div className="flex justify-between text-on-surface-variant">
-          <span>Govt Taxes (5% GST)</span>
-          <span className="font-semibold text-on-surface">
-            ₹{quote ? (quote.taxPaise / 100).toFixed(2) : '0.00'}
-          </span>
-        </div>
-        <div className="flex justify-between text-sm font-bold text-primary pt-2 border-t border-gray-100">
-          <span>To Pay</span>
-          <span className="text-base text-primary">
-            {quote ? quote.formattedTotal : '₹0.00'}
-          </span>
-        </div>
-
-        {/* Free Delivery Threshold Helper */}
-        {quote && quote.subtotalPaise < 29900 && (
-          <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-2.5 flex items-center justify-between text-xs text-amber-900 mt-1">
-            <span>
-              Add <strong>₹{((29900 - quote.subtotalPaise) / 100).toFixed(0)}</strong> more for <strong>FREE Delivery</strong> in Delhi!
-            </span>
-            <Link href="/menu" className="font-bold text-primary hover:underline text-xs shrink-0">
-              + Add Dishes
-            </Link>
-          </div>
-        )}
-      </section>
-
-      {/* Action Button */}
-      <button
-        onClick={handlePlaceOrder}
-        disabled={placingOrder || !quote}
-        className="w-full h-12 rounded-full bg-primary text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md hover:bg-primary-container active:scale-95 transition-all disabled:opacity-50"
-      >
-        {placingOrder ? (
-          <>
-            <span className="animate-spin material-symbols-outlined text-[18px]">progress_activity</span>
-            <span>Placing Order...</span>
-          </>
-        ) : (
-          <>
-            <span>Place Order ({paymentMethod})</span>
-            <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
-          </>
-        )}
-      </button>
-
-      {/* Customer Auth Modal */}
-      <CustomerAuthModal
-        isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
-        onLoginSuccess={handleAuthSuccess}
-      />
     </main>
   );
 }

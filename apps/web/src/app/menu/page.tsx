@@ -1,43 +1,49 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { api, CatalogResponse, DEFAULT_FOOD_IMAGE } from '../../lib/api';
 import { useCart } from '../../context/CartContext';
 
 export default function MenuPage() {
-  const [catalog, setCatalog] = useState<CatalogResponse | null>(() => api.getCachedCatalog());
+  const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('all');
-  const [selectedVariants, setSelectedVariants] = useState<Record<string, { id: string; name: string; mod: number }>>(() => {
-    const cached = api.getCachedCatalog();
-    if (!cached) return {};
-    const defaultVariants: Record<string, { id: string; name: string; mod: number }> = {};
-    cached.categories.forEach((cat) => {
-      cat.items.forEach((item) => {
-        if (item.variants && item.variants.length > 0) {
-          const def = item.variants.find((v) => v.isDefault) || item.variants[0];
-          defaultVariants[item.id] = {
-            id: def.id,
-            name: def.name,
-            mod: def.priceModifierPaise,
-          };
-        }
-      });
-    });
-    return defaultVariants;
-  });
-  const [loading, setLoading] = useState(() => !api.getCachedCatalog());
+  const [selectedVariants, setSelectedVariants] = useState<
+    Record<string, { id: string; name: string; mod: number }>
+  >({});
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const { items, addItem, updateQty, totalCount, totalPricePaise } = useCart();
 
   useEffect(() => {
+    // Safely load cached data after hydration
+    const cached = api.getCachedCatalog();
+    if (cached) {
+      setCatalog(cached);
+      setLoading(false);
+      const cachedVariants: Record<string, { id: string; name: string; mod: number }> = {};
+      cached.categories.forEach((cat) => {
+        cat.items.forEach((item) => {
+          if (item.variants && item.variants.length > 0) {
+            const def = item.variants.find((v) => v.isDefault) || item.variants[0];
+            cachedVariants[item.id] = {
+              id: def.id,
+              name: def.name,
+              mod: def.priceModifierPaise,
+            };
+          }
+        });
+      });
+      setSelectedVariants(cachedVariants);
+    }
+
     async function loadCatalog() {
       try {
         const data = await api.getCatalog();
         setCatalog(data);
 
-        // Pre-select default portion variants
+        // Pre-select default variants
         const defaultVariants: Record<string, { id: string; name: string; mod: number }> = {};
         data.categories.forEach((cat) => {
           cat.items.forEach((item) => {
@@ -78,7 +84,9 @@ export default function MenuPage() {
   };
 
   const getItemQuantity = (productId: string, variantId?: string) => {
-    const cartItem = items.find((i) => i.productId === productId && (!variantId || i.variantId === variantId));
+    const cartItem = items.find(
+      (i) => i.productId === productId && (!variantId || i.variantId === variantId)
+    );
     return cartItem ? cartItem.quantity : 0;
   };
 
@@ -99,194 +107,286 @@ export default function MenuPage() {
 
   const handleIncrease = (item: any) => {
     const variantInfo = selectedVariants[item.id];
-    const idx = items.findIndex((i) => i.productId === item.id && (!variantInfo || i.variantId === variantInfo.id));
-    if (idx > -1) {
-      updateQty(idx, 1);
-    } else {
-      handleAdd(item);
-    }
+    const idx = items.findIndex(
+      (i) => i.productId === item.id && (!variantInfo || i.variantId === variantInfo.id)
+    );
+    if (idx > -1) updateQty(idx, 1);
+    else handleAdd(item);
   };
 
   const handleDecrease = (item: any) => {
     const variantInfo = selectedVariants[item.id];
-    const idx = items.findIndex((i) => i.productId === item.id && (!variantInfo || i.variantId === variantInfo.id));
-    if (idx > -1) {
-      updateQty(idx, -1);
-    }
+    const idx = items.findIndex(
+      (i) => i.productId === item.id && (!variantInfo || i.variantId === variantInfo.id)
+    );
+    if (idx > -1) updateQty(idx, -1);
   };
 
-  const filteredCategories = !catalog
-    ? []
-    : activeCategory === 'all'
-    ? catalog.categories
-    : catalog.categories.filter((c) => c.id === activeCategory);
+  // Filtered dishes
+  const displayedCategories = useMemo(() => {
+    if (!catalog?.categories) return [];
+    if (activeCategory === 'all') return catalog.categories;
+    return catalog.categories.filter((cat) => cat.id === activeCategory);
+  }, [catalog, activeCategory]);
+
+  const totalFilteredCount = useMemo(() => {
+    return displayedCategories.reduce((acc, cat) => acc + cat.items.length, 0);
+  }, [displayedCategories]);
 
   return (
-    <main className="flex-1 pt-20 pb-44 max-w-3xl mx-auto w-full px-4 flex flex-col gap-4">
-      {/* Sticky Category Scroller (Swiggy / Zomato Pattern) */}
-      <div className="sticky top-16 z-30 bg-surface/95 backdrop-blur-md py-2 overflow-x-auto no-scrollbar flex items-center gap-2 border-b border-gray-100">
-        <button
-          onClick={() => setActiveCategory('all')}
-          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 ${
-            activeCategory === 'all'
-              ? 'bg-primary text-white shadow-xs'
-              : 'bg-white text-on-surface-variant border border-gray-200 hover:bg-gray-50'
-          }`}
-        >
-          All Dishes
-        </button>
-        {catalog?.categories.map((cat) => (
-          <button
-            key={cat.id}
-            onClick={() => setActiveCategory(cat.id)}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all shrink-0 ${
-              activeCategory === cat.id
-                ? 'bg-primary text-white shadow-xs'
-                : 'bg-white text-on-surface-variant border border-gray-200 hover:bg-gray-50'
-            }`}
-          >
-            {cat.name}
-          </button>
-        ))}
-      </div>
-
-      {/* Live Menu Items Container */}
-      <div className="flex flex-col gap-6">
-        {loading ? (
-          <>
-            <div className="p-6 rounded-2xl bg-white shadow-xs animate-pulse h-40"></div>
-            <div className="p-6 rounded-2xl bg-white shadow-xs animate-pulse h-40"></div>
-          </>
-        ) : error ? (
-          <div className="p-8 text-center text-red-600 bg-red-50 rounded-xl">
-            <p className="font-bold">Could not connect to kitchen menu.</p>
-            <p className="text-xs mt-1">{error}</p>
-          </div>
-        ) : (
-          filteredCategories.map((cat) => (
-            <div key={cat.id} className="flex flex-col gap-3">
-              <div className="flex items-center justify-between border-b border-gray-200 pb-2">
-                <h2 className="font-headline font-bold text-lg text-on-surface">
-                  {cat.name} ({cat.items.length})
-                </h2>
-                <span className="text-xs text-primary font-semibold">Ghar Ka Khana</span>
+    <main className="flex flex-col relative w-full pt-16 pb-28 bg-[#FFF9F0] min-h-screen">
+      <div className="flex flex-col w-full max-w-4xl mx-auto pb-10">
+        {/* 1. Culinary Service Announcement Bar */}
+        <div className="px-4 pt-3 pb-1">
+          <div className="relative overflow-hidden bg-[#FFF1DC] rounded-2xl p-4 shadow-xs border border-[#E99A32]/30">
+            <div className="flex items-start gap-3 relative z-10">
+              <div className="w-9 h-9 rounded-xl bg-[#E99A32] flex items-center justify-center shrink-0 shadow-xs text-white">
+                <span
+                  className="material-symbols-outlined text-[20px]"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  skillet
+                </span>
               </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs uppercase tracking-wider text-[#292D26] font-bold">
+                    Lunch Serving Window
+                  </span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#E99A32]"></span>
+                  <span className="text-xs text-[#E99A32] font-bold">
+                    Ends 12:30 PM
+                  </span>
+                </div>
+                <p className="text-xs text-[#77786F] mt-0.5">
+                  Fresh morning batch prepared in cold-pressed groundnut oil &amp; desi ghee. Homestyle purity guaranteed.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
 
-              {/* Swiggy/Zomato Signature Split Dish Cards */}
-              <div className="flex flex-col divide-y divide-gray-100 bg-white rounded-2xl border border-black/5 p-2 shadow-xs">
-                {cat.items.map((item) => {
-                  const currentVar = selectedVariants[item.id];
-                  const currentPrice = item.basePricePaise + (currentVar ? currentVar.mod : 0);
-                  const qty = getItemQuantity(item.id, currentVar?.id);
+        {/* 2. Weekly Tiffin Schedule Mini-Bar */}
+        <div className="px-4 pt-1 pb-2">
+          <div className="flex items-center justify-between bg-white rounded-xl px-3.5 py-2 shadow-xs border border-[#EEE7DC]">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#38754A] text-[18px]">calendar_today</span>
+              <span className="text-xs text-[#292D26] font-semibold">
+                Today: Fresh Homestyle Tiffin Menu
+              </span>
+            </div>
+            <span className="px-2.5 py-0.5 rounded-full bg-[#EAF4ED] text-[#38754A] text-[11px] font-bold flex items-center gap-0.5">
+              100% Desi Ghee
+            </span>
+          </div>
+        </div>
 
-                  return (
-                    <div key={item.id} className="p-4 flex items-center justify-between gap-4">
-                      {/* Left: Dish Information */}
-                      <div className="flex flex-col gap-1.5 flex-1 min-w-0 pr-2">
-                        {/* Veg Badge & Bestseller */}
-                        <div className="flex items-center gap-2">
-                          <span className="w-4 h-4 border border-green-600 rounded-xs flex items-center justify-center p-0.5 bg-white shrink-0">
-                            <span className="w-2 h-2 rounded-full bg-green-600 block"></span>
-                          </span>
-                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                            ★ Bestseller
-                          </span>
-                          <span className="text-[10px] text-gray-500 font-medium">Pure Desi Ghee</span>
-                        </div>
+        {/* 3. Category Filter Pills (Horizontal Ribbon) */}
+        <div className="sticky top-16 z-30 bg-[#FFF9F0]/95 backdrop-blur-md py-2 border-b border-[#EEE7DC]">
+          <div className="flex items-center gap-2 overflow-x-auto px-4 no-scrollbar">
+            <button
+              onClick={() => setActiveCategory('all')}
+              className={`shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all shadow-xs flex items-center gap-1.5 ${
+                activeCategory === 'all'
+                  ? 'bg-[#38754A] text-white font-bold shadow-xs'
+                  : 'bg-white text-[#292D26] border border-[#EEE7DC] hover:bg-[#FFF9F0]'
+              }`}
+              type="button"
+            >
+              <span
+                className="material-symbols-outlined text-[16px]"
+                style={activeCategory === 'all' ? { fontVariationSettings: "'FILL' 1" } : undefined}
+              >
+                restaurant
+              </span>
+              All Items
+            </button>
 
-                        {/* Dish Name */}
-                        <h3 className="font-headline font-bold text-base text-on-surface leading-snug">
-                          {item.name}
-                        </h3>
+            {catalog?.categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                className={`shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all shadow-xs flex items-center gap-1.5 ${
+                  activeCategory === cat.id
+                    ? 'bg-[#38754A] text-white font-bold shadow-xs'
+                    : 'bg-white text-[#292D26] border border-[#EEE7DC] hover:bg-[#FFF9F0]'
+                }`}
+                type="button"
+              >
+                <span>{cat.name}</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/10">
+                  {cat.items.length}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
 
-                        {/* Price */}
-                        <div className="flex items-baseline gap-2">
-                          <span className="font-headline font-bold text-sm sm:text-base text-on-surface">
-                            ₹{(currentPrice / 100).toFixed(2)}
-                          </span>
-                        </div>
+        {/* 4. Section Header */}
+        <div className="px-margin pt-space-md pb-space-xs flex items-baseline justify-between">
+          <div className="flex items-center gap-space-xs">
+            <h2 className="font-headline-sm text-headline-sm text-on-surface font-bold">Curated Ghar Ka Khana</h2>
+            <span className="font-label-sm text-label-sm text-primary font-bold px-2 py-0.5 rounded-full bg-primary-fixed/60">
+              {totalFilteredCount} Fresh Ready
+            </span>
+          </div>
+          <span className="font-label-sm text-label-sm text-on-surface-variant font-medium">Pure Vegetarian</span>
+        </div>
 
-                        {/* Description */}
-                        {item.description && (
-                          <p className="text-xs text-on-surface-variant line-clamp-2 leading-relaxed">
-                            {item.description}
-                          </p>
-                        )}
+        {/* 5. Menu Items Stack */}
+        <div className="flex flex-col gap-space-md px-margin pt-space-xs">
+          {loading ? (
+            <div className="flex flex-col gap-4">
+              <div className="h-44 rounded-xl bg-surface-container animate-pulse"></div>
+              <div className="h-44 rounded-xl bg-surface-container animate-pulse"></div>
+            </div>
+          ) : error ? (
+            <div className="p-6 rounded-2xl bg-surface-container-lowest text-center border border-error/20">
+              <p className="text-error font-bold text-sm">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-3 px-4 py-1.5 rounded-full bg-primary text-white text-xs font-bold"
+              >
+                Retry
+              </button>
+            </div>
+          ) : (
+            displayedCategories.map((cat) => (
+              <div key={cat.id} className="flex flex-col gap-space-sm mb-4">
+                <div className="flex items-center gap-2 pt-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-primary"></span>
+                  <h3 className="font-title-md text-title-md font-bold text-on-surface">{cat.name}</h3>
+                </div>
 
-                        {/* Portion Variant Selector */}
-                        {item.variants && item.variants.length > 1 && (
-                          <div className="flex items-center gap-1.5 mt-2 max-w-full">
-                            <span className="text-[10px] uppercase font-bold text-stone-500 tracking-wider shrink-0">Portion:</span>
-                            <div className="relative max-w-[150px] sm:max-w-[190px]">
-                              <select
-                                value={currentVar?.id || ''}
-                                onChange={(e) => handleVariantChange(item.id, e.target.value, item.variants)}
-                                className="w-full truncate border border-stone-200 rounded-xl pl-2.5 pr-7 py-1 text-[11px] bg-stone-50 font-semibold text-stone-800 focus:outline-hidden focus:border-primary shadow-2xs appearance-none"
-                              >
-                                {item.variants.map((v) => (
-                                  <option key={v.id} value={v.id}>
-                                    {v.name} {v.priceModifierPaise > 0 ? `(+₹${(v.priceModifierPaise / 100).toFixed(0)})` : ''}
-                                  </option>
-                                ))}
-                              </select>
-                              <span className="material-symbols-outlined text-[14px] text-stone-500 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                                expand_more
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
+                  {cat.items.map((dish) => {
+                    const variantInfo = selectedVariants[dish.id];
+                    const currentPrice =
+                      dish.basePricePaise + (variantInfo ? variantInfo.mod : 0);
+                    const qty = getItemQuantity(dish.id, variantInfo?.id);
 
-                      {/* Right: Dish Photo & Overlapping Swiggy-Style ADD Button */}
-                      <div className="relative flex flex-col items-center shrink-0">
-                        <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden bg-gray-100 shadow-xs border border-gray-100">
+                    return (
+                      <div
+                        key={dish.id}
+                        className="bg-surface-container-lowest rounded-xl overflow-hidden shadow-xs flex flex-col justify-between border border-surface-container-high/60 transition-all hover:shadow-sm"
+                      >
+                        {/* Top Food Image */}
+                        <div className="relative w-full h-44 bg-surface-container">
                           <img
                             className="w-full h-full object-cover"
-                            src={item.imageUrl || DEFAULT_FOOD_IMAGE}
+                            alt={dish.name}
+                            src={dish.imageUrl || DEFAULT_FOOD_IMAGE}
                             onError={(e) => {
                               e.currentTarget.onerror = null;
                               e.currentTarget.src = DEFAULT_FOOD_IMAGE;
                             }}
-                            alt={item.name}
                           />
+                          <div className="absolute inset-0 bg-gradient-to-t from-inverse-surface/60 via-transparent to-transparent"></div>
+                          <div className="absolute top-3 left-3 flex items-center gap-1.5">
+                            <span className="px-2.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm font-bold shadow-xs uppercase tracking-wide">
+                              Fresh Batch
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-surface-container-lowest/90 backdrop-blur-sm text-on-surface font-label-sm text-label-sm flex items-center gap-1 font-semibold">
+                              <span
+                                className="material-symbols-outlined text-secondary text-[14px]"
+                                style={{ fontVariationSettings: "'FILL' 1" }}
+                              >
+                                star
+                              </span>
+                              4.9
+                            </span>
+                          </div>
                         </div>
 
-                        {/* Overlapping ADD + / - QTY + Controller */}
-                        <div className="absolute -bottom-2.5 inset-x-0 flex justify-center">
-                          {qty === 0 ? (
-                            <button
-                              onClick={() => handleAdd(item)}
-                              className="px-6 h-8 rounded-xl bg-white border-2 border-primary text-primary font-headline font-bold text-xs uppercase tracking-wider shadow-md hover:bg-orange-50 active:scale-95 transition-all flex items-center justify-center gap-1"
-                            >
-                              <span>ADD</span>
-                              <span className="text-sm font-bold">+</span>
-                            </button>
-                          ) : (
-                            <div className="h-8 px-2 rounded-xl bg-primary text-white font-headline font-bold text-xs shadow-md flex items-center justify-between gap-3 min-w-[90px]">
-                              <button
-                                onClick={() => handleDecrease(item)}
-                                className="w-5 h-5 flex items-center justify-center text-sm font-bold hover:bg-white/20 rounded active:scale-90"
-                              >
-                                −
-                              </button>
-                              <span className="font-mono text-sm">{qty}</span>
-                              <button
-                                onClick={() => handleIncrease(item)}
-                                className="w-5 h-5 flex items-center justify-center text-sm font-bold hover:bg-white/20 rounded active:scale-90"
-                              >
-                                +
-                              </button>
+                        {/* Content Area */}
+                        <div className="p-space-md flex flex-col gap-space-xs flex-1 justify-between">
+                          <div>
+                            <div className="flex items-start justify-between gap-space-sm">
+                              <div className="flex items-center gap-2">
+                                <div className="w-4 h-4 rounded-xs bg-surface-container-lowest flex items-center justify-center p-0.5 shadow-xs border border-green-600">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-primary-container"></span>
+                                </div>
+                                <h4 className="font-title-md text-title-md font-bold text-on-surface">
+                                  {dish.name}
+                                </h4>
+                              </div>
+                              <span className="font-title-md text-title-md font-bold text-on-surface shrink-0">
+                                ₹{(currentPrice / 100).toFixed(0)}
+                              </span>
                             </div>
-                          )}
+
+                            <p className="font-body-sm text-body-sm text-on-surface-variant line-clamp-2 mt-1">
+                              {dish.description ||
+                                'Made with whole wheat, cold-pressed oil and pure desi ghee. Light on the stomach.'}
+                            </p>
+
+                            {/* Portion / Variant Selector */}
+                            {dish.variants && dish.variants.length > 1 && (
+                              <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+                                {dish.variants.map((v) => (
+                                  <button
+                                    key={v.id}
+                                    type="button"
+                                    onClick={() => handleVariantChange(dish.id, v.id, dish.variants)}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                      selectedVariants[dish.id]?.id === v.id
+                                        ? 'bg-primary-container text-on-primary shadow-xs'
+                                        : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
+                                    }`}
+                                  >
+                                    {v.name}
+                                    {v.priceModifierPaise > 0
+                                      ? ` (+₹${v.priceModifierPaise / 100})`
+                                      : ''}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Price & Action Button */}
+                          <div className="flex items-center justify-between pt-3 border-t border-surface-container-high/40 mt-3">
+                            <span className="font-label-sm text-label-sm text-primary font-semibold flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[16px]">eco</span>
+                              Homestyle Pure
+                            </span>
+
+                            {qty > 0 ? (
+                              <div className="flex items-center bg-primary-container text-on-primary rounded-full px-2.5 py-1 shadow-xs gap-3">
+                                <button
+                                  onClick={() => handleDecrease(dish)}
+                                  className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-black/10 active:scale-90 font-bold"
+                                >
+                                  -
+                                </button>
+                                <span className="font-bold text-xs min-w-[14px] text-center">{qty}</span>
+                                <button
+                                  onClick={() => handleIncrease(dish)}
+                                  className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-black/10 active:scale-90 font-bold"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleAdd(dish)}
+                                className="h-9 px-5 rounded-full bg-primary-container text-on-primary font-label-md text-label-md flex items-center gap-1 active:scale-95 transition-transform shadow-xs font-semibold"
+                                type="button"
+                              >
+                                <span>Add</span>
+                                <span className="material-symbols-outlined text-[16px]">add</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))
-        )}
+            ))
+          )}
+        </div>
       </div>
     </main>
   );

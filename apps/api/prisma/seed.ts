@@ -1,3 +1,35 @@
+import * as fs from 'fs';
+import * as path from 'path';
+
+function loadLocalEnv() {
+  const envCandidates = [
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(process.cwd(), 'apps/api/.env'),
+    path.resolve(__dirname, '../.env'),
+    path.resolve(__dirname, '../../.env'),
+    path.resolve(__dirname, '../../../.env'),
+  ];
+  for (const envPath of envCandidates) {
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf8');
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx > 0) {
+          const key = trimmed.substring(0, eqIdx).trim();
+          let val = trimmed.substring(eqIdx + 1).trim();
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.substring(1, val.length - 1);
+          }
+          process.env[key] = val;
+        }
+      }
+    }
+  }
+}
+loadLocalEnv();
+
 import { PrismaClient, UserRole, DietaryType, MealType } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
@@ -198,6 +230,71 @@ async function main() {
         create: [
           { name: 'Regular Bowl (400g)', priceModifierPaise: 0, isDefault: true },
           { name: 'Large Bowl (600g)', priceModifierPaise: 3000, isDefault: false },
+        ],
+      },
+    },
+  });
+
+  // Seed Product: Janaki Special Full Thali
+  await prisma.product.upsert({
+    where: { slug: 'janaki-special-full-thali' },
+    update: {},
+    create: {
+      categoryId: categoryThalis.id,
+      name: 'Janaki Special Full Thali',
+      slug: 'janaki-special-full-thali',
+      description: '4 Soft Rotis, 1 Paneer Sabzi, 1 Seasonal Sabzi, Dal Tadka, Jeera Rice, Curd & Sweet.',
+      dietaryType: DietaryType.VEG,
+      imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDS9UZxeQL2XEwyu0K3PCfLt6xcAGFdQTQk0Ms6V2E_dNfemHxFYbIONpeD6RzRRoWWDyO18R_xwGBdtSE7xBHjmyObtY6kkODeMHHLUBjBohji3E4P1D7CsA6o0vz6TtyD5iFo0-ftcqqVkGA5aPZ6gqonSl0tiLeWavjPSF7RoRAjy-R35op1kvBkcA6DHoxU8eSbBL0OcSYbkU4Gi0pIkUstEckNKwAK8RsxyMFSxFnUKcwd2Fok',
+      basePricePaise: 18000, // ₹180.00
+      taxRatePercent: 5,
+      variants: {
+        create: [
+          { name: 'Full Thali (Standard)', priceModifierPaise: 0, isDefault: true },
+          { name: 'Royal Portion (+Extra Sweet)', priceModifierPaise: 3500, isDefault: false },
+        ],
+      },
+    },
+  });
+
+  // Seed Product: Regular Home Thali
+  await prisma.product.upsert({
+    where: { slug: 'regular-home-thali' },
+    update: {},
+    create: {
+      categoryId: categoryThalis.id,
+      name: 'Regular Home Thali',
+      slug: 'regular-home-thali',
+      description: '4 Rotis, Seasonal Veg Sabzi, Dal Fry, Steamed Rice, Pickle & Salad.',
+      dietaryType: DietaryType.VEG,
+      imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBTHONkUFMlDOhbV8ZAksbZ3MFW81rMV0imOKG7b6sJsRN2StBpZW54kblxWOMQylv1X4vOJzgSkTy4gM3Z1ypQAk3U9TjdYZiZpd2e4RLirD0HL58J8DokQiAG_gm6CX5lrfbRwel5UXuvUoP3AD4f9T_s8Buuq22rghfLWtl-gHYATlEEnfvUW1xXaDUHTd2ri-3nRNvGFfssW_Zka0tU0w_egIYYxQTa--nhGHmHOM0tD0QbDU9C',
+      basePricePaise: 13000, // ₹130.00
+      taxRatePercent: 5,
+      variants: {
+        create: [
+          { name: 'Standard Thali', priceModifierPaise: 0, isDefault: true },
+        ],
+      },
+    },
+  });
+
+  // Seed Product: Roti & Sabzi Duo
+  await prisma.product.upsert({
+    where: { slug: 'roti-sabzi-duo' },
+    update: {},
+    create: {
+      categoryId: categoryCombos.id,
+      name: 'Roti & Sabzi Duo',
+      slug: 'roti-sabzi-duo',
+      description: '4 Phulkas with spiced, fresh cottage cheese Paneer Bhurji.',
+      dietaryType: DietaryType.VEG,
+      imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD7FyfUzzLfU1zFeV9Kj0MuGwv3uOnBcOQnd59q3rdLwp86vcmEMSGNPqMzXfDxESKSt57aby9gMNqThGtOkZzquiH8qAUb7Q4LWqTabE2_IWIAegP4TTTbmASnzNA2PcgQXre_ZQX-PJSiJaIgicviQpj0iPuITd_o1l0YYcymiDaTeFNel4PUpcf2khbY4suRtZ6_PBLoP87PJ02DZFeDKOYWiT7pAPJI2hs4AakxWt8Ry9pUsjMS',
+      basePricePaise: 9500, // ₹95.00
+      taxRatePercent: 5,
+      variants: {
+        create: [
+          { name: '4 Phulkas + Bhurji', priceModifierPaise: 0, isDefault: true },
+          { name: '6 Phulkas + Bhurji', priceModifierPaise: 3000, isDefault: false },
         ],
       },
     },

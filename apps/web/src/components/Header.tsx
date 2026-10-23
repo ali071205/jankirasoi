@@ -5,12 +5,15 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { api, UserProfile } from '../lib/api';
 import CustomerAuthModal from './CustomerAuthModal';
+import { useCart } from '../context/CartContext';
 
 export default function Header() {
   const pathname = usePathname();
+  const { totalCount } = useCart();
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Sync session on mount and listen to storage events
@@ -33,9 +36,10 @@ export default function Header() {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  // Close dropdown on outside click or route change
+  // Close dropdown and mobile menu on route change
   useEffect(() => {
     setIsDropdownOpen(false);
+    setIsMobileMenuOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -76,40 +80,108 @@ export default function Header() {
 
   return (
     <>
-      <header className="fixed top-0 inset-x-0 z-50 bg-white/95 backdrop-blur-xl shadow-xs border-b border-stone-200/80">
-        <div className="max-w-4xl mx-auto h-16 px-4 flex items-center justify-between gap-3">
-          <Link href="/" className="flex items-center gap-2.5">
-            <span className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm shadow-xs">
+      <header className="fixed top-0 inset-x-0 z-50 bg-surface/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-surface-container-high/60">
+        <div className="max-w-4xl mx-auto h-16 px-margin flex items-center justify-between gap-space-sm">
+          {/* Brand Logo & Live Status */}
+          <Link href="/" className="flex items-center gap-space-sm min-w-0 flex-1">
+            <div className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
               JR
-            </span>
-            <div className="flex flex-col">
-              <span className="font-headline font-bold text-lg leading-tight text-on-surface">Janki Rasoi</span>
+            </div>
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-space-xs">
+                <span className="font-title-md text-title-md text-on-surface truncate font-bold font-headline">
+                  Janki Rasoi
+                </span>
+                <span className="hidden xs:inline-block font-label-sm text-label-sm px-1.5 py-0.5 rounded-full bg-[#EAF4ED] text-[#38754A] uppercase shrink-0 font-bold border border-[#38754A]/20">
+                  Ghar Ka Swad
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#38754A] animate-pulse shrink-0"></span>
+                <span className="font-label-sm text-label-sm text-[#38754A] font-semibold truncate">
+                  Lunch Serving Now
+                </span>
+              </div>
             </div>
           </Link>
 
-          {/* Profile & Dropdown Container */}
-          <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={handleProfileClick}
-              aria-expanded={isDropdownOpen}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                currentUser
-                  ? 'bg-emerald-50 text-emerald-900 border-emerald-200 hover:bg-emerald-100/70 shadow-xs'
-                  : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50 shadow-xs'
+          {/* Desktop Nav Links (Visible on tablets and desktop >= 768px) */}
+          <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-on-surface">
+            <Link
+              href="/"
+              className={`hover:text-primary transition-colors ${
+                pathname === '/' ? 'text-primary font-bold' : 'text-on-surface'
               }`}
             >
-              <span className="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-[10px] font-bold">
-                {currentUser ? currentUser.name.charAt(0).toUpperCase() : '👤'}
-              </span>
-              <span className="max-w-[110px] truncate font-bold">
-                {currentUser ? currentUser.name.split(' ')[0] : 'Login'}
-              </span>
-              <span
-                className={`material-symbols-outlined text-sm transition-transform duration-200 ${
-                  isDropdownOpen ? 'rotate-180' : ''
-                }`}
+              Home
+            </Link>
+            <Link
+              href="/menu"
+              className={`hover:text-primary transition-colors ${
+                pathname === '/menu' ? 'text-primary font-bold' : 'text-on-surface'
+              }`}
+            >
+              Today's Menu
+            </Link>
+            <Link
+              href="/track"
+              className={`hover:text-primary transition-colors ${
+                pathname === '/track' ? 'text-primary font-bold' : 'text-on-surface'
+              }`}
+            >
+              Track Order
+            </Link>
+            <a
+              href="tel:+919876543210"
+              className="text-xs font-semibold px-3 py-1 rounded-full bg-[#FFF9F0] border border-[#EEE7DC] text-[#292D26] hover:text-[#38754A] transition-colors flex items-center gap-1"
+            >
+              <span className="material-symbols-outlined text-[15px] text-[#38754A]">call</span>
+              <span>+91 98765 43210</span>
+            </a>
+          </nav>
+
+          {/* Cart Icon & Profile Container */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Link
+              href="/cart"
+              aria-label="View Cart"
+              className="relative w-10 h-10 flex items-center justify-center rounded-full text-on-surface hover:bg-surface-container-high transition-colors"
+            >
+              <span className="material-symbols-outlined text-[24px]">shopping_bag</span>
+              {totalCount > 0 && (
+                <span className="absolute top-0.5 right-0.5 min-w-[18px] h-[18px] px-1 bg-secondary text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-xs">
+                  {totalCount}
+                </span>
+              )}
+            </Link>
+
+            {/* Profile Button & Dropdown Container */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={handleProfileClick}
+                aria-expanded={isDropdownOpen}
+                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors border border-surface-container-high/80"
+                title={currentUser ? currentUser.name : 'Login / Register'}
               >
-                keyboard_arrow_down
+                {currentUser ? (
+                  <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                    {currentUser.name.charAt(0).toUpperCase()}
+                  </div>
+                ) : (
+                  <span className="material-symbols-outlined text-[22px] text-on-surface-variant">
+                    account_circle
+                  </span>
+                )}
+              </button>
+
+            {/* Mobile Hamburger Toggle Button */}
+            <button
+              onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+              aria-label="Toggle Navigation Menu"
+              className="md:hidden w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors text-on-surface ml-0.5"
+            >
+              <span className="material-symbols-outlined text-[24px]">
+                {isMobileMenuOpen ? 'close' : 'menu'}
               </span>
             </button>
 
@@ -221,9 +293,90 @@ export default function Header() {
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
       </header>
+
+      {/* Mobile Navigation Drawer */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden fixed inset-x-0 top-16 bg-white border-b border-[#EEE7DC] shadow-xl z-50 p-4 animate-in slide-in-from-top-2 duration-150 flex flex-col gap-3">
+          <nav className="flex flex-col gap-1">
+            <Link
+              href="/"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className={`px-3 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2.5 ${
+                pathname === '/' ? 'bg-[#EAF4ED] text-[#38754A]' : 'text-[#292D26] hover:bg-[#FFF9F0]'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[20px]">home</span>
+              <span>Home</span>
+            </Link>
+            <Link
+              href="/menu"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className={`px-3 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2.5 ${
+                pathname === '/menu' ? 'bg-[#EAF4ED] text-[#38754A]' : 'text-[#292D26] hover:bg-[#FFF9F0]'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[20px]">restaurant_menu</span>
+              <span>Today's Menu</span>
+            </Link>
+            <Link
+              href="/cart"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className={`px-3 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2.5 ${
+                pathname === '/cart' ? 'bg-[#EAF4ED] text-[#38754A]' : 'text-[#292D26] hover:bg-[#FFF9F0]'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[20px]">shopping_bag</span>
+              <span>Your Tray ({totalCount})</span>
+            </Link>
+            <Link
+              href="/track"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className={`px-3 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2.5 ${
+                pathname === '/track' ? 'bg-[#EAF4ED] text-[#38754A]' : 'text-[#292D26] hover:bg-[#FFF9F0]'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[20px]">moped</span>
+              <span>Live Order Tracking</span>
+            </Link>
+          </nav>
+
+          {/* Kitchen Contact & Working Links */}
+          <div className="pt-2 border-t border-[#EEE7DC] flex flex-col gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#77786F]">
+              Kitchen Support
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              <a
+                href="tel:+919876543210"
+                className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-[#FFF9F0] border border-[#EEE7DC] text-xs font-bold text-[#292D26] hover:text-[#38754A]"
+              >
+                <span className="material-symbols-outlined text-[16px] text-[#38754A]">call</span>
+                <span>Call Kitchen</span>
+              </a>
+              <a
+                href="mailto:care@jankirasoi.com"
+                className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-[#FFF9F0] border border-[#EEE7DC] text-xs font-bold text-[#292D26] hover:text-[#38754A]"
+              >
+                <span className="material-symbols-outlined text-[16px] text-[#38754A]">mail</span>
+                <span>Email Desk</span>
+              </a>
+            </div>
+            <div className="flex items-center justify-between text-xs text-[#77786F] pt-1">
+              <Link href="/privacy" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-[#38754A]">
+                Privacy Policy
+              </Link>
+              <span>&bull;</span>
+              <Link href="/terms" onClick={() => setIsMobileMenuOpen(false)} className="hover:text-[#38754A]">
+                Terms &amp; Conditions
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Login Modal (Only opens if user is NOT logged in and clicks Login) */}
       <CustomerAuthModal
