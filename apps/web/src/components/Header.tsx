@@ -12,6 +12,7 @@ export default function Header() {
   const { totalCount } = useCart();
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authModalTab, setAuthModalTab] = useState<'PROFILE' | 'ORDERS' | 'EDIT'>('PROFILE');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -58,8 +59,15 @@ export default function Header() {
     if (currentUser) {
       setIsDropdownOpen((prev) => !prev);
     } else {
+      setAuthModalTab('PROFILE');
       setIsAuthOpen(true);
     }
+  };
+
+  const openProfileModal = (tab: 'PROFILE' | 'ORDERS' | 'EDIT') => {
+    setIsDropdownOpen(false);
+    setAuthModalTab(tab);
+    setIsAuthOpen(true);
   };
 
   const handleLogout = async () => {
@@ -142,13 +150,20 @@ export default function Header() {
             {/* THEME-BASED PROFILE DROPDOWN */}
             {isDropdownOpen && currentUser && (
               <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-white rounded-3xl shadow-2xl border border-stone-200/90 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                {/* 1. Header User Card */}
-                <div className="p-4 bg-gradient-to-r from-emerald-900 via-primary to-emerald-950 text-white flex items-center gap-3">
+                {/* 1. Header User Card (Tap to view profile details) */}
+                <button
+                  type="button"
+                  onClick={() => openProfileModal('PROFILE')}
+                  className="w-full text-left p-4 bg-gradient-to-r from-emerald-900 via-primary to-emerald-950 text-white flex items-center gap-3 hover:opacity-95 transition-opacity"
+                >
                   <div className="w-11 h-11 rounded-full bg-white/20 flex items-center justify-center font-bold text-lg border border-white/20 shrink-0">
                     {currentUser.name.charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="font-bold text-sm truncate leading-tight">{currentUser.name}</div>
+                    <div className="font-bold text-sm truncate leading-tight flex items-center justify-between">
+                      <span>{currentUser.name}</span>
+                      <span className="material-symbols-outlined text-sm text-emerald-300">edit</span>
+                    </div>
                     <div className="text-xs text-emerald-200 font-mono mt-0.5">+91 {currentUser.phone}</div>
                     <div className="mt-1 flex items-center gap-1.5">
                       <span className="px-2 py-0.2 rounded-full bg-white/20 text-[10px] font-bold text-emerald-100">
@@ -156,7 +171,7 @@ export default function Header() {
                       </span>
                     </div>
                   </div>
-                </div>
+                </button>
 
                 {/* 2. Ongoing / Recent Order Quick Card (if exists) */}
                 {latestOrder && (
@@ -186,10 +201,10 @@ export default function Header() {
 
                 {/* 3. Action Menu Items */}
                 <div className="p-2 flex flex-col gap-1 text-xs">
-                  <Link
-                    href="/track"
-                    onClick={() => setIsDropdownOpen(false)}
-                    className="flex items-center gap-3 p-2.5 rounded-2xl hover:bg-stone-100/80 transition-colors text-stone-800 font-semibold"
+                  <button
+                    type="button"
+                    onClick={() => openProfileModal('ORDERS')}
+                    className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-stone-100/80 transition-colors text-stone-800 font-semibold text-left"
                   >
                     <span className="w-8 h-8 rounded-xl bg-emerald-50 text-primary flex items-center justify-center shrink-0">
                       <span className="material-symbols-outlined text-[18px]">receipt_long</span>
@@ -199,22 +214,29 @@ export default function Header() {
                       <div className="text-[11px] text-stone-500 font-normal">Check status of today's tiffins</div>
                     </div>
                     <span className="material-symbols-outlined text-sm text-stone-400">chevron_right</span>
-                  </Link>
+                  </button>
 
-                  {/* Saved Address Preview */}
-                  <div className="flex items-start gap-3 p-2.5 rounded-2xl hover:bg-stone-100/80 transition-colors text-stone-800">
+                  {/* Saved Address & Profile Edit */}
+                  <button
+                    type="button"
+                    onClick={() => openProfileModal('EDIT')}
+                    className="w-full flex items-start gap-3 p-2.5 rounded-2xl hover:bg-stone-100/80 transition-colors text-stone-800 text-left"
+                  >
                     <span className="w-8 h-8 rounded-xl bg-amber-50 text-amber-800 flex items-center justify-center shrink-0">
                       <span className="material-symbols-outlined text-[18px]">home_pin</span>
                     </span>
                     <div className="flex-1 min-w-0">
-                      <div className="leading-tight font-bold">Saved Delivery Address</div>
+                      <div className="leading-tight font-bold flex items-center justify-between">
+                        <span>Edit Delivery Address</span>
+                        <span className="text-[11px] font-bold text-[#38754A]">Edit</span>
+                      </div>
                       <div className="text-[11px] text-stone-500 line-clamp-1 mt-0.5">
                         {currentUser.savedAddress
                           ? `${currentUser.savedAddress.flat || ''} ${currentUser.savedAddress.street || ''} (${currentUser.savedAddress.pincode || ''})`
-                          : 'Saved automatically upon next order'}
+                          : 'Add your home or office address'}
                       </div>
                     </div>
-                  </div>
+                  </button>
 
                   {/* WhatsApp Kitchen Support */}
                   <a
@@ -252,11 +274,10 @@ export default function Header() {
         </div>
       </header>
 
-
-
-      {/* Login Modal (Only opens if user is NOT logged in and clicks Login) */}
+      {/* Login & Profile Management Modal */}
       <CustomerAuthModal
         isOpen={isAuthOpen}
+        initialTab={authModalTab}
         onClose={() => {
           setIsAuthOpen(false);
           api.getCurrentUser().then((user) => {

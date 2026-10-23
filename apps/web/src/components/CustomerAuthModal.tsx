@@ -8,43 +8,106 @@ interface CustomerAuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLoginSuccess?: (user: UserProfile) => void;
+  initialTab?: 'PROFILE' | 'ORDERS' | 'EDIT';
 }
 
 export default function CustomerAuthModal({
   isOpen,
   onClose,
   onLoginSuccess,
+  initialTab = 'PROFILE',
 }: CustomerAuthModalProps) {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
+  
+  // Delivery address fields for login & profile edit
+  const [flat, setFlat] = useState('');
+  const [street, setStreet] = useState('');
+  const [landmark, setLandmark] = useState('');
+  const [pincode, setPincode] = useState('110017');
+  const [detectedCity, setDetectedCity] = useState<string | null>('New Delhi');
+  const [checkingPin, setCheckingPin] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [step, setStep] = useState<'LOGIN' | 'OTP' | 'PROFILE'>('LOGIN');
-  const [otpCode, setOtpCode] = useState('');
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  
+  // Tabs for logged-in view: 'PROFILE' (view/edit) or 'ORDERS'
+  const [activeTab, setActiveTab] = useState<'PROFILE' | 'ORDERS'>('PROFILE');
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
 
-  // Check login status on modal open
+  // Sync user status on modal open
   useEffect(() => {
     if (isOpen) {
       api.getCurrentUser().then((user) => {
         if (user && user.role === 'CUSTOMER') {
           setCurrentUser(user);
-          setStep('PROFILE');
+          setName(user.name || '');
+          setPhone(user.phone || '');
+          if (user.savedAddress) {
+            setFlat(user.savedAddress.flat || '');
+            setStreet(user.savedAddress.street || '');
+            setLandmark(user.savedAddress.landmark || '');
+            setPincode(user.savedAddress.pincode || '110017');
+          }
+          if (initialTab === 'ORDERS') {
+            setActiveTab('ORDERS');
+            setIsEditingProfile(false);
+          } else if (initialTab === 'EDIT') {
+            setActiveTab('PROFILE');
+            setIsEditingProfile(true);
+          } else {
+            setActiveTab('PROFILE');
+            setIsEditingProfile(false);
+          }
         } else {
           setCurrentUser(null);
-          setStep('LOGIN');
+          setIsEditingProfile(false);
         }
       });
       setError(null);
+      setSuccessMsg(null);
     }
-  }, [isOpen]);
+  }, [isOpen, initialTab]);
+
+  // Automated Pincode Check
+  useEffect(() => {
+    const cleanPin = pincode.trim().replace(/\D/g, '');
+    if (cleanPin.length !== 6) {
+      setDetectedCity(null);
+      return;
+    }
+    let isMounted = true;
+    setCheckingPin(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.checkPincode(cleanPin);
+        if (!isMounted) return;
+        if (res.city) {
+          setDetectedCity(res.city);
+        }
+      } catch {
+        // Fallback
+      } finally {
+        if (isMounted) setCheckingPin(false);
+      }
+    }, 300);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [pincode]);
 
   if (!isOpen) return null;
 
-  const handleSendOtp = async (e: React.FormEvent) => {
+  // Handle Login / Registration
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = phone.replace(/[^0-9]/g, '');
-    if (clean.length !== 10) {
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    if (cleanPhone.length !== 10) {
       setError('Please enter a valid 10-digit Indian mobile number');
       return;
     }
@@ -52,36 +115,115 @@ export default function CustomerAuthModal({
       setError('Please enter your full name');
       return;
     }
+    if (!flat.trim() || !street.trim()) {
+      setError('Please provide your complete delivery address (Flat & Street)');
+      return;
+    }
+    if (pincode.trim().length !== 6) {
+      setError('Please enter a valid 6-digit delivery pincode');
+      return;
+    }
+
     setError(null);
     setLoading(true);
 
     try {
-      // Direct instant passwordless login/register
-      const res = await api.loginCustomer(clean, name.trim());
+      const addressObj = {
+        flat: flat.trim(),
+        street: street.trim(),
+        landmark: landmark.trim() || undefined,
+        pincode: pincode.trim(),
+      };
+
+      const res = await api.loginCustomer(cleanPhone, name.trim(), addressObj);
       setCurrentUser(res.user);
-      setStep('PROFILE');
+      setActiveTab('PROFILE');
+      setIsEditingProfile(false);
+      setSuccessMsg('Logged in successfully!');
       if (onLoginSuccess) {
         onLoginSuccess(res.user);
       }
+      setTimeout(() => {
+        onClose();
+      }, 700);
     } catch (err: any) {
-      setError(err.message || 'Failed to authenticate. Please try again.');
+      setError(err.message || 'Failed to authenticate. Please check your details.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleQuickDemo = async () => {
-    setPhone('9812345678');
-    setName('Rohan Verma');
+  // Handle Profile Update (Save changes to name and address)
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      setError('Name cannot be empty');
+      return;
+    }
+    if (!flat.trim() || !street.trim()) {
+      setError('Please provide complete address (House/Flat & Street)');
+      return;
+    }
+    if (pincode.trim().length !== 6) {
+      setError('Please enter a valid 6-digit pincode');
+      return;
+    }
+
     setError(null);
     setLoading(true);
+
     try {
-      const res = await api.loginCustomer('9812345678', 'Rohan Verma');
+      const addressObj = {
+        flat: flat.trim(),
+        street: street.trim(),
+        landmark: landmark.trim() || undefined,
+        pincode: pincode.trim(),
+      };
+
+      const res = await api.loginCustomer(currentUser!.phone, name.trim(), addressObj);
       setCurrentUser(res.user);
-      setStep('PROFILE');
+      setIsEditingProfile(false);
+      setSuccessMsg('Profile and delivery address updated successfully!');
       if (onLoginSuccess) {
         onLoginSuccess(res.user);
       }
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to update profile.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 1-Tap Quick Demo Customer
+  const handleQuickDemo = async () => {
+    setPhone('9876543210');
+    setName('Rahul Sharma');
+    setFlat('Flat 402, Block C, Malviya Nagar');
+    setStreet('Outer Ring Road');
+    setLandmark('Near Metro Station');
+    setPincode('110017');
+    setError(null);
+    setLoading(true);
+
+    try {
+      const addressObj = {
+        flat: 'Flat 402, Block C, Malviya Nagar',
+        street: 'Outer Ring Road',
+        landmark: 'Near Metro Station',
+        pincode: '110017',
+      };
+      const res = await api.loginCustomer('9876543210', 'Rahul Sharma', addressObj);
+      setCurrentUser(res.user);
+      setActiveTab('PROFILE');
+      setIsEditingProfile(false);
+      setSuccessMsg('Logged in as Rahul Sharma!');
+      if (onLoginSuccess) {
+        onLoginSuccess(res.user);
+      }
+      setTimeout(() => {
+        onClose();
+      }, 700);
     } catch (err: any) {
       setError(err.message || 'Demo login failed');
     } finally {
@@ -94,13 +236,41 @@ export default function CustomerAuthModal({
     try {
       await api.logout();
       setCurrentUser(null);
-      setStep('LOGIN');
       setPhone('');
       setName('');
+      setFlat('');
+      setStreet('');
+      setLandmark('');
+      setPincode('110017');
+      setIsEditingProfile(false);
+      window.dispatchEvent(new Event('storage'));
     } finally {
       setLoading(false);
     }
   };
+
+  // Extract recent orders from currentUser or localStorage
+  const getOrdersList = () => {
+    const list: any[] = [];
+    if (currentUser?.recentOrders && currentUser.recentOrders.length > 0) {
+      list.push(...currentUser.recentOrders);
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = JSON.parse(window.localStorage.getItem('jr_recent_orders') || '[]');
+        if (Array.isArray(stored)) {
+          stored.forEach((item: any) => {
+            if (!list.some((o) => o.orderNumber === item.orderNumber)) {
+              list.push(item);
+            }
+          });
+        }
+      } catch {}
+    }
+    return list;
+  };
+
+  const ordersList = getOrdersList();
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
@@ -108,36 +278,73 @@ export default function CustomerAuthModal({
       <div className="absolute inset-0" onClick={onClose} />
 
       {/* Modal Card */}
-      <div className="relative w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden z-10 max-h-[90vh] flex flex-col">
+      <div className="relative w-full max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden z-10 max-h-[92vh] flex flex-col">
         {/* Header Strip */}
-        <div className="bg-[#38754A] text-white p-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-bold">
+        <div className="bg-[#38754A] text-white p-4 sm:p-5 flex items-center justify-between shadow-sm shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
               {currentUser ? (
                 currentUser.name.charAt(0).toUpperCase()
               ) : (
                 <span className="material-symbols-outlined text-[20px]">person</span>
               )}
             </span>
-            <div>
-              <h3 className="font-bold text-base leading-tight">
+            <div className="min-w-0">
+              <h3 className="font-bold text-base leading-tight truncate">
                 {currentUser ? currentUser.name : 'Welcome to Janki Rasoi'}
               </h3>
-              <p className="text-xs text-white/80">
-                {currentUser ? `+91 ${currentUser.phone}` : 'Fresh Ghar Jaisa Khana, Daily'}
+              <p className="text-xs text-[#EAF4ED] truncate">
+                {currentUser ? `+91 ${currentUser.phone}` : 'Ghar Jaisa Shuddh Khana, Delivered Daily'}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors shrink-0"
+            title="Close"
           >
             <span className="material-symbols-outlined text-[18px]">close</span>
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="p-5 overflow-y-auto space-y-4">
+        {/* Tab Selector (When logged in) */}
+        {currentUser && (
+          <div className="flex border-b border-[#EEE7DC] bg-[#FFF9F0] px-3 pt-2 shrink-0">
+            <button
+              onClick={() => {
+                setActiveTab('PROFILE');
+                setIsEditingProfile(false);
+              }}
+              className={`flex-1 py-2.5 text-xs font-bold text-center border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+                activeTab === 'PROFILE'
+                  ? 'border-[#38754A] text-[#38754A]'
+                  : 'border-transparent text-[#77786F] hover:text-[#292D26]'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px]">account_circle</span>
+              <span>Profile &amp; Address</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('ORDERS')}
+              className={`flex-1 py-2.5 text-xs font-bold text-center border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+                activeTab === 'ORDERS'
+                  ? 'border-[#38754A] text-[#38754A]'
+                  : 'border-transparent text-[#77786F] hover:text-[#292D26]'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px]">receipt_long</span>
+              <span>My Orders</span>
+              {ordersList.length > 0 && (
+                <span className="px-1.5 py-0.2 bg-[#38754A] text-white text-[10px] rounded-full">
+                  {ordersList.length}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Modal Scrollable Body */}
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-4">
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium flex items-center gap-2">
               <span className="material-symbols-outlined text-base">error</span>
@@ -145,112 +352,304 @@ export default function CustomerAuthModal({
             </div>
           )}
 
-          {step === 'PROFILE' && currentUser ? (
+          {successMsg && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium flex items-center gap-2">
+              <span className="material-symbols-outlined text-base">check_circle</span>
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          {/* ============================================================== */}
+          {/* LOGGED IN: TAB 1 - PROFILE & ADDRESS                           */}
+          {/* ============================================================== */}
+          {currentUser && activeTab === 'PROFILE' && (
             <div className="space-y-4">
-              {/* Account Overview */}
-              <div className="bg-emerald-50 border border-emerald-200/70 rounded-2xl p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                    Customer Account
-                  </span>
-                  <span className="text-xs px-2 py-0.5 bg-emerald-600 text-white font-semibold rounded-full">
-                    {currentUser.orderCount || 0} Orders
-                  </span>
-                </div>
-                <div className="mt-2 text-sm text-gray-800 font-semibold">{currentUser.name}</div>
-                <div className="text-xs text-gray-500">+91 {currentUser.phone}</div>
-              </div>
-
-              {/* Saved Delivery Address */}
-              <div className="border border-gray-200 rounded-2xl p-4">
-                <div className="flex items-center gap-2 text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
-                  <span className="material-symbols-outlined text-base text-primary">location_on</span>
-                  Default Delivery Address
-                </div>
-                {currentUser.savedAddress ? (
-                  <div className="text-xs text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-xl border border-gray-100">
-                    <p className="font-semibold text-gray-900">{currentUser.savedAddress.flat}</p>
-                    <p>{currentUser.savedAddress.street}</p>
-                    {currentUser.savedAddress.landmark && <p>Landmark: {currentUser.savedAddress.landmark}</p>}
-                    <p className="text-emerald-700 font-semibold mt-1">Pincode: {currentUser.savedAddress.pincode}</p>
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-400 italic">
-                    No address saved yet. It will automatically save upon your next checkout.
-                  </p>
-                )}
-              </div>
-
-              {/* Recent Orders */}
-              {currentUser.recentOrders && currentUser.recentOrders.length > 0 && (
-                <div className="space-y-2">
-                  <div className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center justify-between">
-                    <span>Recent Orders</span>
-                    <Link
-                      href="/track"
-                      onClick={onClose}
-                      className="text-primary hover:underline text-xs capitalize"
+              {!isEditingProfile ? (
+                /* View Mode */
+                <div className="space-y-3.5">
+                  {/* Customer Card */}
+                  <div className="bg-[#FFF9F0] border border-[#EEE7DC] rounded-2xl p-4 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold text-[#38754A] uppercase tracking-wider block">
+                        Verified Customer
+                      </span>
+                      <div className="text-sm font-bold text-[#292D26] mt-0.5">{currentUser.name}</div>
+                      <div className="text-xs text-[#77786F] mt-0.5 font-mono">+91 {currentUser.phone}</div>
+                    </div>
+                    <button
+                      onClick={() => setIsEditingProfile(true)}
+                      className="px-3 py-1.5 rounded-xl bg-white border border-[#EEE7DC] text-[#38754A] text-xs font-bold hover:bg-[#EAF4ED] transition-colors flex items-center gap-1 shadow-xs"
                     >
-                      Track Active →
-                    </Link>
+                      <span className="material-symbols-outlined text-[14px]">edit</span>
+                      <span>Edit</span>
+                    </button>
                   </div>
-                  <div className="space-y-2">
-                    {currentUser.recentOrders.slice(0, 3).map((ord) => (
-                      <Link
-                        key={ord.id}
-                        href={`/track?token=${ord.trackingToken}`}
-                        onClick={onClose}
-                        className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:border-emerald-300 hover:bg-emerald-50/50 transition-all text-xs"
+
+                  {/* Saved Delivery Address Card */}
+                  <div className="border border-[#EEE7DC] rounded-2xl p-4 bg-white shadow-xs">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-[#292D26] uppercase tracking-wider">
+                        <span className="material-symbols-outlined text-[#38754A] text-[18px]">location_on</span>
+                        <span>Saved Delivery Address</span>
+                      </div>
+                      <button
+                        onClick={() => setIsEditingProfile(true)}
+                        className="text-xs font-bold text-[#38754A] hover:underline"
                       >
-                        <div>
-                          <div className="font-bold text-gray-900">{ord.orderNumber}</div>
-                          <div className="text-[11px] text-gray-500">
-                            ₹{(ord.totalAmountPaise / 100).toFixed(2)} • {new Date(ord.createdAt).toLocaleDateString()}
+                        Change
+                      </button>
+                    </div>
+
+                    {currentUser.savedAddress && (currentUser.savedAddress.flat || currentUser.savedAddress.street) ? (
+                      <div className="text-xs text-[#292D26] leading-relaxed bg-[#FFF9F0] p-3 rounded-xl border border-[#EEE7DC]">
+                        <p className="font-bold text-[#292D26]">{currentUser.savedAddress.flat}</p>
+                        <p className="text-[#77786F]">{currentUser.savedAddress.street}</p>
+                        {currentUser.savedAddress.landmark && (
+                          <p className="text-[#77786F]">Landmark: {currentUser.savedAddress.landmark}</p>
+                        )}
+                        <p className="text-[#38754A] font-bold mt-1">
+                          Pincode: {currentUser.savedAddress.pincode || '110017'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-[#77786F] italic bg-[#FFF9F0] p-3 rounded-xl border border-[#EEE7DC] flex items-center justify-between">
+                        <span>No address saved yet. Tap Edit to add your flat &amp; locality.</span>
+                        <button
+                          onClick={() => setIsEditingProfile(true)}
+                          className="px-2.5 py-1 bg-[#38754A] text-white rounded-lg font-bold text-xs shrink-0 ml-2"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Primary Actions */}
+                  <div className="pt-2 flex flex-col gap-2">
+                    <button
+                      onClick={onClose}
+                      className="w-full py-3 bg-[#38754A] hover:bg-[#285C38] text-white rounded-xl font-bold text-xs sm:text-sm shadow-xs transition-colors"
+                    >
+                      Continue to Menu / Checkout
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      disabled={loading}
+                      className="w-full py-2.5 text-xs text-rose-600 font-semibold hover:bg-rose-50 rounded-xl transition-colors border border-transparent hover:border-rose-100"
+                    >
+                      {loading ? 'Logging out...' : 'Sign Out / Switch Account'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Edit Mode */
+                <form onSubmit={handleSaveProfile} className="space-y-3">
+                  <div className="flex items-center justify-between pb-1">
+                    <span className="text-xs font-bold text-[#38754A] uppercase tracking-wider">
+                      Edit Profile &amp; Address
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingProfile(false)}
+                      className="text-xs text-[#77786F] hover:text-[#292D26]"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#292D26] uppercase mb-1">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. Rahul Sharma"
+                      className="w-full px-3 py-2 text-xs border border-[#EEE7DC] rounded-xl focus:border-[#38754A] outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#292D26] uppercase mb-1">
+                      Flat / House No. / Building *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={flat}
+                      onChange={(e) => setFlat(e.target.value)}
+                      placeholder="Flat 402, Block C, Malviya Nagar"
+                      className="w-full px-3 py-2 text-xs border border-[#EEE7DC] rounded-xl focus:border-[#38754A] outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#292D26] uppercase mb-1">
+                      Street / Colony / Area *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={street}
+                      onChange={(e) => setStreet(e.target.value)}
+                      placeholder="Outer Ring Road, Malviya Nagar"
+                      className="w-full px-3 py-2 text-xs border border-[#EEE7DC] rounded-xl focus:border-[#38754A] outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#292D26] uppercase mb-1">
+                        Landmark (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={landmark}
+                        onChange={(e) => setLandmark(e.target.value)}
+                        placeholder="Near Metro Station"
+                        className="w-full px-3 py-2 text-xs border border-[#EEE7DC] rounded-xl focus:border-[#38754A] outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#292D26] uppercase mb-1">
+                        Pincode *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={6}
+                        value={pincode}
+                        onChange={(e) => setPincode(e.target.value.replace(/\D/g, ''))}
+                        placeholder="110017"
+                        className="w-full px-3 py-2 text-xs border border-[#EEE7DC] rounded-xl focus:border-[#38754A] outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex items-center gap-2">
+                    <button
+                      type="submit"
+                      disabled={loading || !name.trim() || !flat.trim() || !street.trim()}
+                      className="flex-1 py-2.5 bg-[#38754A] hover:bg-[#285C38] text-white rounded-xl font-bold text-xs shadow-xs transition-colors disabled:opacity-50"
+                    >
+                      {loading ? 'Saving...' : 'Save Profile & Address'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingProfile(false)}
+                      className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-[#292D26] rounded-xl font-semibold text-xs transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
+
+          {/* ============================================================== */}
+          {/* LOGGED IN: TAB 2 - MY ORDERS                                   */}
+          {/* ============================================================== */}
+          {currentUser && activeTab === 'ORDERS' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between pb-1">
+                <span className="text-xs font-bold text-[#38754A] uppercase tracking-wider">
+                  Order History &amp; Live Tracking
+                </span>
+                <span className="text-xs text-[#77786F]">
+                  {ordersList.length} {ordersList.length === 1 ? 'Order' : 'Orders'}
+                </span>
+              </div>
+
+              {ordersList.length > 0 ? (
+                <div className="space-y-2.5">
+                  {ordersList.map((ord, idx) => {
+                    const token = ord.trackingToken || ord.orderNumber;
+                    const dateStr = ord.createdAt
+                      ? new Date(ord.createdAt).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : 'Recently placed';
+
+                    return (
+                      <div
+                        key={ord.orderNumber || idx}
+                        className="p-3.5 rounded-2xl border border-[#EEE7DC] bg-[#FFF9F0] flex items-center justify-between gap-2.5 hover:border-[#38754A]/40 transition-colors shadow-2xs"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-xs text-[#292D26] truncate">
+                              #{ord.orderNumber}
+                            </span>
+                            <span className="px-2 py-0.2 rounded-full text-[10px] font-bold bg-[#EAF4ED] text-[#38754A] border border-[#38754A]/20">
+                              {ord.status ? ord.status.replace(/_/g, ' ') : 'PLACED'}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-[#77786F] mt-1">
+                            {ord.totalAmountPaise
+                              ? `₹${(ord.totalAmountPaise / 100).toFixed(0)} • `
+                              : ''}
+                            {dateStr}
                           </div>
                         </div>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                          {ord.status.replace(/_/g, ' ')}
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
+
+                        <Link
+                          href={`/track?token=${token}`}
+                          onClick={onClose}
+                          className="px-3 py-1.5 rounded-xl bg-[#38754A] hover:bg-[#285C38] text-white text-xs font-bold transition-colors shrink-0 flex items-center gap-1 shadow-xs"
+                        >
+                          <span>Live Track</span>
+                          <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                        </Link>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-6 text-center bg-[#FFF9F0] rounded-2xl border border-[#EEE7DC]">
+                  <span className="material-symbols-outlined text-[36px] text-[#38754A]">receipt_long</span>
+                  <p className="text-xs font-bold text-[#292D26] mt-2">No Past Orders Found</p>
+                  <p className="text-[11px] text-[#77786F] mt-0.5">
+                    Order today&apos;s freshly cooked thali or bowl to start tracking.
+                  </p>
+                  <Link
+                    href="/menu"
+                    onClick={onClose}
+                    className="mt-3 inline-block px-4 py-2 bg-[#38754A] text-white rounded-xl text-xs font-bold"
+                  >
+                    Explore Menu
+                  </Link>
                 </div>
               )}
-
-              {/* Action Buttons */}
-              <div className="pt-2 flex flex-col gap-2">
-                <button
-                  onClick={onClose}
-                  className="w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-sm shadow-sm transition-colors"
-                >
-                  Continue Ordering
-                </button>
-                <button
-                  onClick={handleLogout}
-                  disabled={loading}
-                  className="w-full py-2.5 text-xs text-red-600 font-semibold hover:bg-red-50 rounded-xl transition-colors border border-transparent hover:border-red-100"
-                >
-                  {loading ? 'Logging out...' : 'Sign Out / Switch Account'}
-                </button>
-              </div>
             </div>
-          ) : (
-            /* Login / Phone Input Step */
-            <form onSubmit={handleSendOtp} className="space-y-4">
-              <div className="text-center pb-2">
-                <h4 className="font-bold text-gray-900 text-lg">Login with Mobile Number</h4>
-                <p className="text-xs text-gray-500 mt-1">
-                  Save your addresses, re-order your favorite thalis in 1 tap, and track live deliveries.
+          )}
+
+          {/* ============================================================== */}
+          {/* NOT LOGGED IN: COMPLETE DELIVERY & PHONE LOGIN FORM            */}
+          {/* ============================================================== */}
+          {!currentUser && (
+            <form onSubmit={handleLoginSubmit} className="space-y-3.5">
+              <div className="text-center pb-1">
+                <h4 className="font-bold text-[#292D26] text-base font-headline">
+                  Enter Your Delivery &amp; Contact Details
+                </h4>
+                <p className="text-xs text-[#77786F] mt-0.5">
+                  Save your address &amp; mobile number for real-time delivery and verbal handover PIN.
                 </p>
               </div>
 
-              {/* Phone Input with +91 */}
+              {/* Mobile Number with +91 */}
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                  Mobile Number *
+                <label className="block text-[11px] font-bold text-[#292D26] uppercase tracking-wider mb-1">
+                  Mobile Number <span className="text-rose-500">*</span>
                 </label>
-                <div className="flex items-center border border-gray-300 rounded-xl overflow-hidden focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-100">
-                  <div className="px-3 py-3 bg-gray-100 text-gray-700 font-bold text-sm border-r border-gray-200">
+                <div className="flex items-center border border-[#EEE7DC] rounded-xl overflow-hidden focus-within:border-[#38754A] focus-within:ring-1 focus-within:ring-[#38754A] bg-white">
+                  <div className="px-3 py-2.5 bg-[#FFF9F0] text-[#292D26] font-bold text-xs border-r border-[#EEE7DC]">
                     +91
                   </div>
                   <input
@@ -259,17 +658,17 @@ export default function CustomerAuthModal({
                     placeholder="9876543210"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ''))}
-                    className="w-full px-3 py-3 text-sm font-semibold tracking-wider text-gray-900 outline-none"
+                    className="w-full px-3 py-2 text-xs font-semibold tracking-wider text-[#292D26] outline-none"
                     autoFocus
                     required
                   />
                 </div>
               </div>
 
-              {/* Name Input */}
+              {/* Name */}
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                  Your Full Name <span className="text-rose-500">*</span>
+                <label className="block text-[11px] font-bold text-[#292D26] uppercase tracking-wider mb-1">
+                  Full Name <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -277,42 +676,106 @@ export default function CustomerAuthModal({
                   placeholder="e.g. Rahul Sharma"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3.5 py-3 text-sm border border-gray-300 rounded-xl focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 outline-none"
+                  className="w-full px-3.5 py-2 text-xs border border-[#EEE7DC] rounded-xl focus:border-[#38754A] outline-none"
                 />
               </div>
+
+              {/* Delivery Address Details */}
+              <div>
+                <label className="block text-[11px] font-bold text-[#292D26] uppercase tracking-wider mb-1">
+                  Flat / House No. / Building <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Flat 402, Block C, Malviya Nagar"
+                  value={flat}
+                  onChange={(e) => setFlat(e.target.value)}
+                  className="w-full px-3.5 py-2 text-xs border border-[#EEE7DC] rounded-xl focus:border-[#38754A] outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-[#292D26] uppercase tracking-wider mb-1">
+                  Street / Area / Locality <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Outer Ring Road, Malviya Nagar"
+                  value={street}
+                  onChange={(e) => setStreet(e.target.value)}
+                  className="w-full px-3.5 py-2 text-xs border border-[#EEE7DC] rounded-xl focus:border-[#38754A] outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#292D26] uppercase tracking-wider mb-1">
+                    Landmark (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Near Metro Station"
+                    value={landmark}
+                    onChange={(e) => setLandmark(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-[#EEE7DC] rounded-xl focus:border-[#38754A] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#292D26] uppercase tracking-wider mb-1">
+                    Pincode <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    placeholder="110017"
+                    value={pincode}
+                    onChange={(e) => setPincode(e.target.value.replace(/\D/g, ''))}
+                    className="w-full px-3 py-2 text-xs border border-[#EEE7DC] rounded-xl focus:border-[#38754A] outline-none"
+                  />
+                </div>
+              </div>
+
+              {detectedCity && (
+                <div className="text-[11px] text-[#38754A] font-semibold flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                  <span>Delivering to {detectedCity}</span>
+                </div>
+              )}
 
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={loading || phone.length < 10 || !name.trim()}
-                className="w-full py-3.5 bg-[#38754A] hover:bg-[#285C38] disabled:opacity-50 text-white rounded-xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
+                disabled={loading || phone.length < 10 || !name.trim() || !flat.trim() || !street.trim()}
+                className="w-full py-3 bg-[#38754A] hover:bg-[#285C38] disabled:opacity-50 text-white rounded-xl font-bold text-xs sm:text-sm shadow-xs transition-all flex items-center justify-center gap-2 mt-2"
               >
                 {loading ? (
                   <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <>
-                    <span>Instant Login / Continue</span>
-                    <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                    <span>Instant Login &amp; Continue</span>
+                    <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
                   </>
                 )}
               </button>
 
-              {/* Quick Demo Button for effortless testing */}
-              <div className="pt-2">
+              {/* Quick 1-Tap Demo Customer */}
+              <div className="pt-1">
                 <button
                   type="button"
                   onClick={handleQuickDemo}
                   disabled={loading}
-                  className="w-full py-2.5 px-3 bg-[#EAF4ED] hover:bg-[#d8eed7] border border-[#38754A]/30 text-[#38754A] rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                  className="w-full py-2 px-3 bg-[#EAF4ED] hover:bg-[#d8eed7] border border-[#38754A]/30 text-[#38754A] rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
                 >
                   <span className="material-symbols-outlined text-[16px]">touch_app</span>
-                  <span>1-Tap Test Customer (Rohan Verma)</span>
+                  <span>1-Tap Test Customer (Rahul Sharma • Malviya Nagar)</span>
                 </button>
               </div>
 
-              {/* Zero-spam guarantee */}
-              <p className="text-[11px] text-gray-500 text-center leading-tight">
-                We do not send OTP spam or promotional SMS. Your phone is securely stored only for delivery contact and order tracking.
+              <p className="text-[11px] text-[#77786F] text-center leading-tight">
+                No OTP passwords required. We only use your phone number for rider delivery contact.
               </p>
             </form>
           )}

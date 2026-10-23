@@ -161,7 +161,7 @@ export class AuthService {
       });
       this.logger.log(`Created new customer account: ${user.name} (${user.phone})`);
     } else {
-      if (dto.name && dto.name.trim() && (user.name.startsWith('Customer ') || user.name === 'Customer')) {
+      if (dto.name && dto.name.trim() && user.name !== dto.name.trim()) {
         user = await this.prisma.user.update({
           where: { id: user.id },
           data: { name: dto.name.trim() },
@@ -173,7 +173,7 @@ export class AuthService {
     const recentOrders = await this.prisma.order.findMany({
       where: { customerPhone: cleanPhone },
       orderBy: { createdAt: 'desc' },
-      take: 5,
+      take: 10,
       select: {
         id: true,
         orderNumber: true,
@@ -185,7 +185,7 @@ export class AuthService {
       },
     });
 
-    const savedAddress = recentOrders[0]?.deliveryAddress || dto.address || null;
+    const savedAddress = dto.address || recentOrders[0]?.deliveryAddress || null;
     const session = await this.createSession(user.id);
 
     return {

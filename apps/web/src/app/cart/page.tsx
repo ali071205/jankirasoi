@@ -20,13 +20,14 @@ export default function CartPage() {
   // Address & Customer form state
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [customerName, setCustomerName] = useState('Rahul Sharma');
-  const [customerPhone, setCustomerPhone] = useState('9876543210');
-  const [flat, setFlat] = useState('Flat 402, Block C, Malviya Nagar');
-  const [street, setStreet] = useState('Outer Ring Road');
-  const [landmark, setLandmark] = useState('Near Metro Station');
+  const [authModalTab, setAuthModalTab] = useState<'PROFILE' | 'ORDERS' | 'EDIT'>('PROFILE');
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [flat, setFlat] = useState('');
+  const [street, setStreet] = useState('');
+  const [landmark, setLandmark] = useState('');
   const [pincode, setPincode] = useState('110017');
-  const [detectedCity, setDetectedCity] = useState<string | null>('New Delhi, Delhi');
+  const [detectedCity, setDetectedCity] = useState<string | null>('New Delhi');
   const [checkingPin, setCheckingPin] = useState(false);
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [isCutleryNeeded, setIsCutleryNeeded] = useState(false);
@@ -65,7 +66,7 @@ export default function CartPage() {
     fetchSlots();
   }, [today]);
 
-  // Fetch logged in customer and prefill address
+  // Fetch logged in customer and prefill address, or prompt auth modal
   useEffect(() => {
     api.getCurrentUser().then((user) => {
       if (user && user.role === 'CUSTOMER') {
@@ -78,6 +79,11 @@ export default function CartPage() {
           if (user.savedAddress.landmark) setLandmark(user.savedAddress.landmark);
           if (user.savedAddress.pincode) setPincode(user.savedAddress.pincode);
         }
+      } else {
+        setCurrentUser(null);
+        // Prompt login & delivery address when user navigates to cart without active session
+        setAuthModalTab('PROFILE');
+        setIsAuthOpen(true);
       }
     });
   }, []);
@@ -179,6 +185,13 @@ export default function CartPage() {
 
   // Place Order Handler
   const handlePlaceOrder = async () => {
+    if (!currentUser) {
+      setAuthModalTab('PROFILE');
+      setIsAuthOpen(true);
+      showToast('Please enter your mobile number and address to proceed.', true);
+      return;
+    }
+
     if (
       !customerName.trim() ||
       !customerPhone.trim() ||
@@ -186,6 +199,8 @@ export default function CartPage() {
       !street.trim() ||
       !pincode.trim()
     ) {
+      setAuthModalTab('PROFILE');
+      setIsAuthOpen(true);
       showToast('Please fill all required delivery details.', true);
       return;
     }
@@ -336,40 +351,85 @@ export default function CartPage() {
 
   return (
     <main className="flex flex-col relative w-full pb-36 bg-[#F4F4F6] min-h-screen">
-      {/* 1. Top Header Bar with Delivery Address */}
-      <header className="sticky top-0 z-40 bg-white border-b border-slate-200/80 px-4 py-3 shadow-2xs">
-        <div className="max-w-xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
+      {/* 1. Top Header Bar with Back Button, Delivery Address, and Profile Action */}
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200/80 px-3 sm:px-4 py-2.5 shadow-2xs">
+        <div className="max-w-xl mx-auto flex items-center justify-between gap-2">
+          {/* Back button & Address */}
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             <button
               type="button"
               onClick={() => router.back()}
-              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-800 shrink-0"
+              aria-label="Go Back"
+              className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-800 shrink-0 transition-colors"
             >
-              <span className="material-symbols-outlined text-[22px]">arrow_back</span>
+              <span className="material-symbols-outlined text-[20px] sm:text-[22px]">arrow_back</span>
             </button>
             <div
               onClick={() => setIsEditingAddress(!isEditingAddress)}
-              className="cursor-pointer flex items-center gap-1.5 min-w-0"
+              className="cursor-pointer flex items-center gap-1.5 min-w-0 hover:opacity-85 transition-opacity"
+              title="Click to view or edit delivery address"
             >
-              <span className="material-symbols-outlined text-[18px] text-slate-800 shrink-0">work</span>
-              <div className="flex items-center gap-1 min-w-0">
-                <span className="font-extrabold text-xs sm:text-sm text-slate-900">Work</span>
-                <span className="text-xs text-slate-500 truncate max-w-[150px] sm:max-w-xs">
-                  | {flat}, {pincode}
-                </span>
-                <span className="material-symbols-outlined text-[18px] text-slate-600 shrink-0">
-                  keyboard_arrow_down
+              <div className="w-7 h-7 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[17px]">location_on</span>
+              </div>
+              <div className="flex flex-col min-w-0">
+                <div className="flex items-center gap-1">
+                  <span className="font-extrabold text-xs sm:text-sm text-slate-900 leading-tight">
+                    {currentUser ? 'Delivering to' : 'Delivery Address'}
+                  </span>
+                  <span className="material-symbols-outlined text-[16px] text-slate-500 shrink-0">
+                    {isEditingAddress ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
+                  </span>
+                </div>
+                <span className="text-[11px] text-slate-500 truncate max-w-[150px] sm:max-w-xs font-medium">
+                  {flat ? `${flat}${street ? `, ${street}` : ''} • ${pincode}` : 'Tap to enter address'}
                 </span>
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsEditingAddress(!isEditingAddress)}
-            className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full hover:bg-emerald-100 shrink-0 border border-emerald-200"
-          >
-            {isEditingAddress ? 'Done' : 'Change'}
-          </button>
+
+          {/* Right: Address toggle & Profile / Login button */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsEditingAddress(!isEditingAddress)}
+              className="text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-full border border-emerald-200 transition-colors shrink-0"
+            >
+              {isEditingAddress ? 'Done' : 'Change'}
+            </button>
+
+            {/* Profile / Account Button */}
+            {currentUser ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthModalTab('PROFILE');
+                  setIsAuthOpen(true);
+                }}
+                className="flex items-center gap-1.5 py-1 px-2 rounded-full hover:bg-slate-100 border border-slate-200 transition-colors shrink-0"
+                title={`${currentUser.name} - View Profile & Orders`}
+              >
+                <div className="w-7 h-7 rounded-full bg-emerald-700 text-white font-bold text-xs flex items-center justify-center shadow-2xs shrink-0">
+                  {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+                </div>
+                <span className="text-xs font-bold text-slate-800 max-w-[70px] truncate hidden sm:inline">
+                  {currentUser.name ? currentUser.name.split(' ')[0] : 'Profile'}
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthModalTab('PROFILE');
+                  setIsAuthOpen(true);
+                }}
+                className="flex items-center gap-1 py-1.5 px-3 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-xs transition-colors shrink-0"
+              >
+                <span className="material-symbols-outlined text-[16px]">account_circle</span>
+                <span>Login</span>
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -923,12 +983,19 @@ export default function CartPage() {
       {/* Customer Auth Modal */}
       <CustomerAuthModal
         isOpen={isAuthOpen}
+        initialTab={authModalTab}
         onClose={() => setIsAuthOpen(false)}
         onLoginSuccess={(user: UserProfile) => {
           setCurrentUser(user);
           if (user.name) setCustomerName(user.name);
           if (user.phone) setCustomerPhone(user.phone);
-          showToast(`Logged in as ${user.name || user.phone}`);
+          if (user.savedAddress) {
+            if (user.savedAddress.flat) setFlat(user.savedAddress.flat);
+            if (user.savedAddress.street) setStreet(user.savedAddress.street);
+            if (user.savedAddress.landmark) setLandmark(user.savedAddress.landmark);
+            if (user.savedAddress.pincode) setPincode(user.savedAddress.pincode);
+          }
+          showToast(`Welcome ${user.name || user.phone}!`);
         }}
       />
     </main>
