@@ -8,6 +8,19 @@ import { PrismaService } from '../prisma/prisma.service';
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
 
+  @Get()
+  @ApiOperation({ summary: 'Default Health & Liveness Probe' })
+  @ApiResponse({ status: 200, description: 'Service is alive and healthy.' })
+  getHealth() {
+    return this.getLiveness();
+  }
+
+  @Get('ping')
+  @ApiOperation({ summary: 'Fast ping probe' })
+  getPing() {
+    return 'pong';
+  }
+
   @Get('live')
   @ApiOperation({ summary: 'Process Liveness Probe' })
   @ApiResponse({ status: 200, description: 'Process is alive and responding.' })
