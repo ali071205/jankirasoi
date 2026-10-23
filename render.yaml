@@ -9,10 +9,12 @@ services:
     plan: free
     region: oregon # or ohio / frankfurt / singapore
     autoDeploy: true
-    buildCommand: corepack enable pnpm && pnpm install --frozen-lockfile && pnpm run build:api
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build:api
     startCommand: pnpm run start:api
     healthCheckPath: /api/v1/health/live
     envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
       - key: NODE_ENV
         value: production
       - key: PORT
