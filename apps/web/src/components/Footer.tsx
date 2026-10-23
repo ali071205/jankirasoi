@@ -68,6 +68,16 @@ export default function Footer() {
                   Live Kitchen Order Tracking
                 </Link>
               </li>
+              <li>
+                <a
+                  href={process.env.NEXT_PUBLIC_ADMIN_URL || 'https://jankirasoi-admin.vercel.app'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-[#38754A] transition-colors"
+                >
+                  Staff &amp; Kitchen Console
+                </a>
+              </li>
             </ul>
           </div>
 
