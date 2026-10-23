@@ -146,16 +146,22 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       {/* Toast Notification */}
       {toastMessage && (
         <div
-          className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-full text-xs sm:text-sm font-bold text-white shadow-2xl transition-all flex items-center gap-2.5 max-w-[92vw] border ${
-            isToastError
-              ? 'bg-[#B71C1C] text-white border-red-400'
-              : 'bg-[#1C1C1E] text-white border-slate-700'
-          }`}
+          role="status"
+          aria-live="polite"
+          style={{
+            backgroundColor: isToastError ? '#B91C1C' : '#0F172A',
+            color: '#FFFFFF',
+          }}
+          className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-2xl transition-all flex items-center gap-2 max-w-[90vw] border border-white/20 backdrop-blur-md pointer-events-none animate-in fade-in slide-in-from-bottom-3 duration-200`}
         >
-          <span className="material-symbols-outlined text-[18px] text-amber-300 shrink-0">
-            {isToastError ? 'error' : 'info'}
+          <span
+            className={`material-symbols-outlined text-[18px] shrink-0 ${
+              isToastError ? 'text-red-300' : 'text-emerald-400'
+            }`}
+          >
+            {isToastError ? 'error' : 'check_circle'}
           </span>
-          <span className="text-white font-extrabold tracking-wide drop-shadow-sm">{toastMessage}</span>
+          <span className="text-white font-bold tracking-tight truncate">{toastMessage}</span>
         </div>
       )}
     </CartContext.Provider>
