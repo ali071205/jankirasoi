@@ -44,15 +44,39 @@ export default function CustomerAuthModal({
   useEffect(() => {
     if (isOpen) {
       api.getCurrentUser().then((user) => {
-        if (user && user.role === 'CUSTOMER') {
-          setCurrentUser(user);
-          setName(user.name || '');
-          setPhone(user.phone || '');
-          if (user.savedAddress) {
-            setFlat(user.savedAddress.flat || '');
-            setStreet(user.savedAddress.street || '');
-            setLandmark(user.savedAddress.landmark || '');
-            setPincode(user.savedAddress.pincode || '454774');
+        let activeUser = user;
+        if (!activeUser && typeof window !== 'undefined') {
+          const storedPhone = localStorage.getItem('jr_customer_phone');
+          const storedName = localStorage.getItem('jr_customer_name');
+          const storedAddrRaw =
+            localStorage.getItem('jr_customer_address') ||
+            localStorage.getItem('jr_selected_address');
+          if (storedPhone) {
+            let addrObj: any = undefined;
+            if (storedAddrRaw) {
+              try {
+                addrObj = JSON.parse(storedAddrRaw);
+              } catch {}
+            }
+            activeUser = {
+              id: 'cust_' + storedPhone,
+              name: storedName || 'Customer',
+              phone: storedPhone,
+              role: 'CUSTOMER',
+              savedAddress: addrObj,
+            };
+          }
+        }
+
+        if (activeUser && activeUser.role === 'CUSTOMER') {
+          setCurrentUser(activeUser);
+          setName(activeUser.name || '');
+          setPhone(activeUser.phone || '');
+          if (activeUser.savedAddress) {
+            setFlat(activeUser.savedAddress.flat || '');
+            setStreet(activeUser.savedAddress.street || '');
+            setLandmark(activeUser.savedAddress.landmark || '');
+            setPincode(activeUser.savedAddress.pincode || '454774');
           }
           if (initialTab === 'ORDERS') {
             setActiveTab('ORDERS');
@@ -139,16 +163,22 @@ export default function CustomerAuthModal({
       };
 
       const res = await api.loginCustomer(cleanPhone, name.trim(), addressObj);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('jr_customer_phone', cleanPhone);
+        localStorage.setItem('jr_customer_name', name.trim());
+        localStorage.setItem('jr_customer_address', JSON.stringify(addressObj));
+        localStorage.setItem('jr_user_profile', JSON.stringify(res.user));
+      }
       setCurrentUser(res.user);
       setActiveTab('PROFILE');
       setIsEditingProfile(false);
-      setSuccessMsg('Logged in successfully!');
+      setSuccessMsg('Details saved successfully!');
       if (onLoginSuccess) {
         onLoginSuccess(res.user);
       }
       setTimeout(() => {
         onClose();
-      }, 700);
+      }, 500);
     } catch (err: any) {
       setError(err.message || 'Failed to authenticate. Please check your details.');
     } finally {
@@ -430,10 +460,14 @@ export default function CustomerAuthModal({
                   {/* Primary Actions */}
                   <div className="pt-2 flex flex-col gap-2">
                     <button
-                      onClick={onClose}
-                      className="w-full py-3 bg-[#38754A] hover:bg-[#285C38] text-white rounded-xl font-bold text-xs sm:text-sm shadow-xs transition-colors"
+                      onClick={() => {
+                        if (onLoginSuccess && currentUser) onLoginSuccess(currentUser);
+                        onClose();
+                      }}
+                      className="w-full py-3 bg-[#008848] hover:bg-[#00703c] text-white rounded-xl font-extrabold text-xs sm:text-sm shadow-md transition-all active:scale-98 flex items-center justify-center gap-1.5"
                     >
-                      Continue to Menu / Checkout
+                      <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                      <span>Address Sahi Hai • Confirm &amp; Proceed</span>
                     </button>
                     <button
                       onClick={handleLogout}

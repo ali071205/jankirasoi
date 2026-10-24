@@ -30,6 +30,7 @@ export default function CartPage() {
   // Address & Customer form state
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isAddressConfirmModalOpen, setIsAddressConfirmModalOpen] = useState(false);
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'PROFILE' | 'ORDERS' | 'EDIT'>('PROFILE');
   const [customerName, setCustomerName] = useState('');
@@ -78,7 +79,7 @@ export default function CartPage() {
     fetchSlots();
   }, [today]);
 
-  // Fetch logged in customer and prefill address, or prompt auth modal
+  // Fetch logged in customer and prefill address
   useEffect(() => {
     api.getCurrentUser().then((user) => {
       if (user && user.role === 'CUSTOMER') {
@@ -91,11 +92,37 @@ export default function CartPage() {
           if (user.savedAddress.landmark) setLandmark(user.savedAddress.landmark);
           if (user.savedAddress.pincode) setPincode(user.savedAddress.pincode);
         }
-      } else {
-        setCurrentUser(null);
-        // Prompt login & delivery address when user navigates to cart without active session
-        setAuthModalTab('PROFILE');
-        setIsAuthOpen(true);
+      } else if (typeof window !== 'undefined') {
+        // Fallback to local storage so user data is never lost
+        const savedPhone = localStorage.getItem('jr_customer_phone');
+        const savedName = localStorage.getItem('jr_customer_name');
+        const savedAddrRaw =
+          localStorage.getItem('jr_customer_address') ||
+          localStorage.getItem('jr_selected_address');
+        if (savedPhone) {
+          let addrObj: any = undefined;
+          if (savedAddrRaw) {
+            try {
+              addrObj = JSON.parse(savedAddrRaw);
+            } catch {}
+          }
+          const restored: UserProfile = {
+            id: 'cust_' + savedPhone,
+            name: savedName || 'Customer',
+            phone: savedPhone,
+            role: 'CUSTOMER',
+            savedAddress: addrObj,
+          };
+          setCurrentUser(restored);
+          setCustomerPhone(savedPhone);
+          if (savedName) setCustomerName(savedName);
+          if (addrObj) {
+            if (addrObj.flat) setFlat(addrObj.flat);
+            if (addrObj.street) setStreet(addrObj.street);
+            if (addrObj.landmark) setLandmark(addrObj.landmark);
+            if (addrObj.pincode) setPincode(addrObj.pincode);
+          }
+        }
       }
     });
   }, []);
@@ -254,7 +281,7 @@ export default function CartPage() {
     };
   }, [pincode]);
 
-  // Place Order Handler with Synchronous Locking & Persistent Idempotency
+  // Place Order Handler with 1-Click Address Confirmation
   const handlePlaceOrder = async () => {
     // 1. Guard against concurrent / duplicate submissions
     if (isSubmittingOrderRef.current || placingOrder) {
@@ -267,28 +294,33 @@ export default function CartPage() {
       return;
     }
 
-    if (!currentUser) {
-      setAuthModalTab('PROFILE');
-      setIsAuthOpen(true);
-      showToast('Please enter your mobile number and address to proceed.', true);
-      return;
-    }
-
-    if (!customerName.trim() || !customerPhone.trim()) {
-      setAuthModalTab('PROFILE');
-      setIsAuthOpen(true);
-      showToast('Please provide your name and phone number to proceed.', true);
-      return;
-    }
-
-    if (!flat.trim() || !street.trim() || !pincode.trim()) {
-      setIsMapModalOpen(true);
-      showToast('Please select your delivery location on the map.', true);
+    // If phone or address details are missing, ask user to fill once
+    if (!customerPhone.trim() || !flat.trim() || !street.trim() || !pincode.trim()) {
+      if (!flat.trim() || !street.trim()) {
+        setIsMapModalOpen(true);
+        showToast('Please select your delivery location on the map.', true);
+      } else {
+        setAuthModalTab('PROFILE');
+        setIsAuthOpen(true);
+        showToast('Please provide your mobile number to proceed.', true);
+      }
       return;
     }
 
     if (pinStatusMsg?.isError) {
       showToast(pinStatusMsg.text || 'Cannot deliver to selected location (Beyond 15 km of Sagore Kitchen).', true);
+      return;
+    }
+
+    // Show 1-click address confirmation modal
+    setIsAddressConfirmModalOpen(true);
+  };
+
+  // Execute Order Placement after Address Confirmation
+  const executeOrderPlacement = async () => {
+    setIsAddressConfirmModalOpen(false);
+
+    if (isSubmittingOrderRef.current || placingOrder) {
       return;
     }
 
@@ -336,7 +368,7 @@ export default function CartPage() {
         {
           quoteToken: activeQuoteToken,
           paymentMethod,
-          customerName: customerName.trim(),
+          customerName: customerName.trim() || 'Customer',
           customerPhone: customerPhone.trim(),
           deliveryAddress: {
             flat: flat.trim(),
@@ -357,6 +389,12 @@ export default function CartPage() {
         try {
           window.localStorage.setItem('jr_last_tracking_token', orderResult.trackingToken);
           window.localStorage.setItem('jr_last_order_number', orderResult.orderNumber);
+          window.localStorage.setItem('jr_customer_phone', customerPhone.trim());
+          if (customerName) window.localStorage.setItem('jr_customer_name', customerName.trim());
+          window.localStorage.setItem(
+            'jr_customer_address',
+            JSON.stringify({ flat, street, landmark, pincode })
+          );
           const recents = JSON.parse(window.localStorage.getItem('jr_recent_orders') || '[]');
           recents.unshift({
             orderNumber: orderResult.orderNumber,
@@ -1320,6 +1358,102 @@ export default function CartPage() {
                 Confirm
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 1-Click Delivery Address Confirmation Bottom Sheet */}
+      {isAddressConfirmModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div className="absolute inset-0" onClick={() => setIsAddressConfirmModalOpen(false)} />
+          <div className="relative w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl p-5 z-10 flex flex-col gap-3.5 animate-in slide-in-from-bottom-4">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+                  <span className="material-symbols-outlined text-[20px]">check_circle</span>
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base text-slate-900 leading-tight">
+                    Confirm Delivery Address
+                  </h3>
+                  <p className="text-[11px] text-slate-500">Check karein ki delivery address sahi hai</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddressConfirmModalOpen(false)}
+                className="w-7 h-7 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+
+            {/* Address Details Card */}
+            <div className="bg-[#FFF9F0] border border-[#EEE7DC] rounded-2xl p-3.5 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-emerald-700 text-[18px]">person</span>
+                  <span className="font-extrabold text-xs text-slate-800">{customerName || 'Customer'}</span>
+                  <span className="text-slate-400 text-xs">•</span>
+                  <span className="text-xs font-semibold text-slate-600 font-mono">+91 {customerPhone}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddressConfirmModalOpen(false);
+                    setIsMapModalOpen(true);
+                  }}
+                  className="text-[11px] font-bold text-emerald-700 hover:underline"
+                >
+                  Change
+                </button>
+              </div>
+
+              <div className="flex items-start gap-2 pt-2 border-t border-[#EEE7DC]/80 text-xs text-slate-700 leading-snug">
+                <span className="material-symbols-outlined text-[#E25822] text-[18px] shrink-0 mt-0.5">location_on</span>
+                <div>
+                  <span className="font-bold text-slate-900">{flat}</span>, {street}
+                  {landmark && <span> (Near {landmark})</span>}
+                  <div className="text-[11px] font-bold text-emerald-700 mt-1 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                    <span>Sagore, Pithampur - {pincode}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                type="button"
+                onClick={executeOrderPlacement}
+                disabled={placingOrder}
+                className="w-full py-3.5 rounded-xl bg-[#008848] hover:bg-[#00703c] text-white font-extrabold text-sm shadow-md active:scale-98 transition-all flex items-center justify-center gap-2"
+              >
+                {placingOrder ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                    <span>Address Sahi Hai • Order Confirm Karein</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddressConfirmModalOpen(false);
+                  setIsMapModalOpen(true);
+                }}
+                className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all text-center"
+              >
+                Change Delivery Address
+              </button>
+            </div>
+
           </div>
         </div>
       )}
