@@ -16,7 +16,16 @@ export default function CartPage() {
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   const quoteDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const quoteInFlightRef = useRef(false);
+  const quoteErrorCountRef = useRef(0);
+  const isSubmittingOrderRef = useRef(false);
+  const orderIdempotencyKeyRef = useRef<string | null>(null);
+  const showToastRef = useRef(showToast);
+  useEffect(() => {
+    showToastRef.current = showToast;
+  }, [showToast]);
 
   // Address & Customer form state
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -91,11 +100,50 @@ export default function CartPage() {
     });
   }, []);
 
-  // Request Server-Authoritative Quote
-  const requestQuote = useCallback(async () => {
+  // Online/offline connection listener
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setIsOnline(navigator.onLine);
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      showToastRef.current('Internet restored! Updating billing quote...');
+      requestQuoteRef.current(true);
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      showToastRef.current('Connection lost. Please check your internet connection.', true);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Invalidate idempotency key whenever cart items change
+  useEffect(() => {
+    orderIdempotencyKeyRef.current = null;
+  }, [items]);
+
+  // Request Server-Authoritative Quote (Resilient, Non-Looping)
+  const requestQuote = useCallback(async (isManualRetry = false) => {
     if (items.length === 0 || !selectedSlotId) return;
 
+    // Fast-exit if browser is currently offline
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setQuoteLoading(false);
+      return;
+    }
+
+    // In-flight guard to prevent hammering concurrent requests
+    if (quoteInFlightRef.current) return;
+    quoteInFlightRef.current = true;
     setQuoteLoading(true);
+
     try {
       const q = await api.calculateQuote({
         serviceDate: today,
@@ -115,26 +163,42 @@ export default function CartPage() {
         }),
       });
       setQuote(q);
+      quoteErrorCountRef.current = 0;
     } catch (err: any) {
       console.warn('Quotation notice:', err.message);
-      showToast(err.message || 'Could not fetch quote for selected items', true);
+      // Only toast on explicit manual retry or first error to prevent infinite toast spam
+      if (isManualRetry || quoteErrorCountRef.current === 0) {
+        showToastRef.current(
+          typeof navigator !== 'undefined' && !navigator.onLine
+            ? 'Connection lost. Please check your internet.'
+            : (err.message || 'Could not fetch quote for selected items'),
+          true
+        );
+      }
+      quoteErrorCountRef.current += 1;
     } finally {
+      quoteInFlightRef.current = false;
       setQuoteLoading(false);
     }
-  }, [items, selectedSlotId, pincode, today, showToast]);
+  }, [items, selectedSlotId, pincode, today]);
 
-  const debouncedRequestQuote = useCallback(() => {
-    if (quoteDebounceRef.current) clearTimeout(quoteDebounceRef.current);
-    quoteDebounceRef.current = setTimeout(() => {
-      requestQuote();
-    }, 700);
+  const requestQuoteRef = useRef(requestQuote);
+  useEffect(() => {
+    requestQuoteRef.current = requestQuote;
   }, [requestQuote]);
 
+  // Debounced quote request when items or slot changes (No circular callback dependencies)
   useEffect(() => {
     if (items.length > 0 && selectedSlotId) {
-      debouncedRequestQuote();
+      if (quoteDebounceRef.current) clearTimeout(quoteDebounceRef.current);
+      quoteDebounceRef.current = setTimeout(() => {
+        requestQuoteRef.current();
+      }, 600);
     }
-  }, [items, selectedSlotId, debouncedRequestQuote]);
+    return () => {
+      if (quoteDebounceRef.current) clearTimeout(quoteDebounceRef.current);
+    };
+  }, [items, selectedSlotId, pincode]);
 
   // Automated Pincode Verification & City Loader
   useEffect(() => {
@@ -162,7 +226,7 @@ export default function CartPage() {
             text: `✓ Serviceable zone: ${res.zoneName || res.city || 'Delhi'} (Delivery Fee: ₹${((res.deliveryFeePaise || 0) / 100).toFixed(0)})`,
             isError: false,
           });
-          requestQuote();
+          requestQuoteRef.current();
         } else {
           setPinStatusMsg({
             text: res.message || (res.city ? `We do not deliver to ${res.city} yet.` : 'Pincode outside delivery area.'),
@@ -184,10 +248,21 @@ export default function CartPage() {
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [pincode, requestQuote]);
+  }, [pincode]);
 
-  // Place Order Handler
+  // Place Order Handler with Synchronous Locking & Persistent Idempotency
   const handlePlaceOrder = async () => {
+    // 1. Guard against concurrent / duplicate submissions
+    if (isSubmittingOrderRef.current || placingOrder) {
+      return;
+    }
+
+    // 2. Offline check
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      showToast('You are currently offline. Please check your internet connection before placing order.', true);
+      return;
+    }
+
     if (!currentUser) {
       setAuthModalTab('PROFILE');
       setIsAuthOpen(true);
@@ -208,7 +283,10 @@ export default function CartPage() {
       return;
     }
 
+    // Synchronously lock order submission immediately
+    isSubmittingOrderRef.current = true;
     setPlacingOrder(true);
+
     try {
       let activeQuoteToken = quote?.quoteToken;
       if (!activeQuoteToken) {
@@ -240,6 +318,11 @@ export default function CartPage() {
         deliveryNotes.trim() ? `Cooking: ${deliveryNotes.trim()}` : null,
       ].filter(Boolean).join(' • ');
 
+      // Maintain persistent idempotency key for this order session so retries never double-order
+      if (!orderIdempotencyKeyRef.current) {
+        orderIdempotencyKeyRef.current = `idem_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      }
+
       const orderResult = await api.placeOrder(
         {
           quoteToken: activeQuoteToken,
@@ -254,10 +337,13 @@ export default function CartPage() {
           },
           deliveryNotes: compiledNotes || undefined,
         },
-        'idem_' + Date.now()
+        orderIdempotencyKeyRef.current
       );
 
+      // Successfully placed: reset idempotency key and clear cart
+      orderIdempotencyKeyRef.current = null;
       clearCart();
+
       if (typeof window !== 'undefined') {
         try {
           window.localStorage.setItem('jr_last_tracking_token', orderResult.trackingToken);
@@ -287,7 +373,19 @@ export default function CartPage() {
       }, 800);
     } catch (err: any) {
       setPlacingOrder(false);
-      showToast(err.message || 'Failed to place order', true);
+      isSubmittingOrderRef.current = false;
+
+      const isNetworkError =
+        (typeof navigator !== 'undefined' && !navigator.onLine) ||
+        err.message?.toLowerCase().includes('fetch') ||
+        err.message?.toLowerCase().includes('network') ||
+        err.message?.toLowerCase().includes('failed to fetch');
+
+      if (isNetworkError) {
+        showToast('Connection interrupted. Don\'t worry, your order was not duplicated. Please verify connection and retry.', true);
+      } else {
+        showToast(err.message || 'Failed to place order', true);
+      }
     }
   };
 
@@ -355,6 +453,13 @@ export default function CartPage() {
 
   return (
     <main className="flex flex-col relative w-full pb-36 bg-[#F4F4F6] min-h-screen">
+      {/* Offline Alert Banner */}
+      {!isOnline && (
+        <div className="bg-amber-600 text-white text-xs font-bold py-2 px-4 flex items-center justify-center gap-2 shadow-inner sticky top-0 z-50 animate-in fade-in">
+          <span className="material-symbols-outlined text-[18px]">wifi_off</span>
+          <span>No internet connection. Waiting for network to resume billing...</span>
+        </div>
+      )}
       {/* 1. Top Header Bar with Back Button, Delivery Address, and Profile Action */}
       <header className="sticky top-0 z-40 bg-white border-b border-slate-200/80 px-3 sm:px-4 py-2.5 shadow-2xs">
         <div className="max-w-xl mx-auto flex items-center justify-between gap-2">
@@ -1221,7 +1326,7 @@ export default function CartPage() {
           setDetectedCity(loc.city);
           setIsMapModalOpen(false);
           showToast(`✓ Location updated: ${loc.street}, ${loc.city} (${loc.pincode})`);
-          requestQuote();
+          requestQuoteRef.current(true);
         }}
       />
     </main>
