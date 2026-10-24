@@ -36,6 +36,12 @@ export class DeliveryZonesService {
     const cached = this.locationCache.get(pincode);
     if (cached) return cached;
 
+    if (pincode === '454774') {
+      const sagoreLoc = { city: 'Sagore, Pithampur', district: 'Dhar', state: 'Madhya Pradesh' };
+      this.locationCache.set(pincode, sagoreLoc);
+      return sagoreLoc;
+    }
+
     // Try resolving via postal pincode API with strict 1.5s timeout
     try {
       const controller = new AbortController();
@@ -82,6 +88,23 @@ export class DeliveryZonesService {
     ]);
 
     if (!zone || !zone.isActive) {
+      if (trimmedPin === '454774') {
+        return {
+          serviceable: true,
+          zoneId: 'zone-sagore-454774',
+          zoneName: 'Sagore / Pithampur Central Zone',
+          pincode: '454774',
+          city: 'Sagore, Pithampur',
+          district: 'Dhar',
+          state: 'Madhya Pradesh',
+          minOrderPaise: 0,
+          deliveryFeePaise: 0,
+          freeDeliveryThresholdPaise: 0,
+          estimatedDeliveryMinutes: 30,
+          message: 'Delivering to Sagore, Pithampur (Free Delivery)',
+        };
+      }
+
       return {
         serviceable: false,
         pincode: trimmedPin,
@@ -89,7 +112,7 @@ export class DeliveryZonesService {
         district: location.district || null,
         state: location.state || null,
         message: location.city
-          ? `We do not deliver to ${location.city} yet. Service currently in South & Central Delhi.`
+          ? `We do not deliver to ${location.city} yet. Service currently in Sagore & Delhi NCR.`
           : 'Currently we do not deliver to this pincode.',
       };
     }

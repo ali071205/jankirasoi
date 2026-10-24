@@ -42,10 +42,8 @@ export default function BottomNav() {
           let punchyLine = 'Preparing your wholesome homestyle meal';
           if (data.status === 'OUT_FOR_DELIVERY') {
             punchyLine = 'Rider is on the way with your meal tray';
-          } else if (data.status === 'READY_FOR_PICKUP') {
-            punchyLine = 'Packed warm in spill-proof sealed tray';
-          } else if (data.status === 'PREPARING') {
-            punchyLine = 'Piping hot tawa phulkas being prepared';
+          } else if (data.status === 'READY_FOR_PICKUP' || data.status === 'PREPARING') {
+            punchyLine = 'Piping hot wholesome meal being prepared';
           } else if (data.status === 'ACCEPTED') {
             punchyLine = 'Kitchen confirmed your meal batch';
           } else if (data.status === 'PLACED') {

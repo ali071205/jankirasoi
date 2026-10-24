@@ -75,8 +75,15 @@ async function main() {
   });
   console.log(`🛵 Sample Rider verified: ${riderUser.name} (${riderUser.phone})`);
 
-  // 3. Seed Delivery Zones (Delhi NCR)
+  // 3. Seed Delivery Zones (Delhi NCR & Sagore)
   const zones = [
+    {
+      name: 'Sagore / Pithampur - Main Kitchen Zone',
+      pincode: '454774',
+      minOrderPaise: 0,
+      deliveryFeePaise: 0,
+      freeDeliveryThresholdPaise: 0,
+    },
     {
       name: 'South Delhi - Malviya Nagar & Saket',
       pincode: '110017',

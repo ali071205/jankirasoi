@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { api, DeliverySlot, QuoteResponse, DEFAULT_FOOD_IMAGE, UserProfile } from '../../lib/api';
 import { useCart } from '../../context/CartContext';
 import CustomerAuthModal from '../../components/CustomerAuthModal';
+import LocationMapModal, { LocationData } from '../../components/LocationMapModal';
 
 export default function CartPage() {
   const router = useRouter();
@@ -20,13 +21,15 @@ export default function CartPage() {
   // Address & Customer form state
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  const [addressTag, setAddressTag] = useState<'Home' | 'Work' | 'Other'>('Home');
   const [customerName, setCustomerName] = useState('Rahul Sharma');
   const [customerPhone, setCustomerPhone] = useState('9876543210');
-  const [flat, setFlat] = useState('Flat 402, Block C, Malviya Nagar');
-  const [street, setStreet] = useState('Outer Ring Road');
-  const [landmark, setLandmark] = useState('Near Metro Station');
-  const [pincode, setPincode] = useState('110017');
-  const [detectedCity, setDetectedCity] = useState<string | null>('New Delhi, Delhi');
+  const [flat, setFlat] = useState('Shop 12 / House 44, Main Bazar');
+  const [street, setStreet] = useState('Sagore Main Road');
+  const [landmark, setLandmark] = useState('Near Sagore Police Station');
+  const [pincode, setPincode] = useState('454774');
+  const [detectedCity, setDetectedCity] = useState<string | null>('Sagore, Pithampur');
   const [checkingPin, setCheckingPin] = useState(false);
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [isCutleryNeeded, setIsCutleryNeeded] = useState(false);
@@ -91,7 +94,7 @@ export default function CartPage() {
       const q = await api.calculateQuote({
         serviceDate: today,
         deliverySlotId: selectedSlotId,
-        pincode: pincode.trim() || '110017',
+        pincode: pincode.trim() || '454774',
         items: items.map((i) => {
           let pid = i.productId;
           if (pid === 'spec-full-thali') pid = '09f67dad-2306-49b7-88c7-cae050592f14';
@@ -218,7 +221,8 @@ export default function CartPage() {
       const compiledNotes = [
         ...selectedRiderInstructions,
         directionsToReach.trim() ? `Directions: ${directionsToReach.trim()}` : null,
-        deliveryNotes.trim(),
+        deliveryNotes.trim() ? `Kitchen: ${deliveryNotes.trim()}` : null,
+        !isCutleryNeeded ? 'No cutlery requested (Save plastic 🌿)' : null,
       ].filter(Boolean).join(' • ');
 
       const orderResult = await api.placeOrder(
@@ -348,14 +352,16 @@ export default function CartPage() {
               <span className="material-symbols-outlined text-[22px]">arrow_back</span>
             </button>
             <div
-              onClick={() => setIsEditingAddress(!isEditingAddress)}
+              onClick={() => setIsMapModalOpen(true)}
               className="cursor-pointer flex items-center gap-1.5 min-w-0"
             >
-              <span className="material-symbols-outlined text-[18px] text-slate-800 shrink-0">work</span>
+              <span className="material-symbols-outlined text-[18px] text-emerald-800 shrink-0">
+                {addressTag === 'Home' ? 'home' : addressTag === 'Work' ? 'work' : 'location_on'}
+              </span>
               <div className="flex items-center gap-1 min-w-0">
-                <span className="font-extrabold text-xs sm:text-sm text-slate-900">Work</span>
+                <span className="font-extrabold text-xs sm:text-sm text-slate-900">{addressTag}</span>
                 <span className="text-xs text-slate-500 truncate max-w-[150px] sm:max-w-xs">
-                  | {flat}, {pincode}
+                  | {street || flat}, Sagore ({pincode})
                 </span>
                 <span className="material-symbols-outlined text-[18px] text-slate-600 shrink-0">
                   keyboard_arrow_down
@@ -365,10 +371,11 @@ export default function CartPage() {
           </div>
           <button
             type="button"
-            onClick={() => setIsEditingAddress(!isEditingAddress)}
-            className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full hover:bg-emerald-100 shrink-0 border border-emerald-200"
+            onClick={() => setIsMapModalOpen(true)}
+            className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full hover:bg-emerald-100 shrink-0 border border-emerald-200 flex items-center gap-1"
           >
-            {isEditingAddress ? 'Done' : 'Change'}
+            <span className="material-symbols-outlined text-[14px]">map</span>
+            <span>Change</span>
           </button>
         </div>
       </header>
@@ -379,6 +386,36 @@ export default function CartPage() {
           <div className="bg-[#E6F8F0] border border-emerald-300/70 rounded-xl px-3.5 py-2.5 flex items-center gap-2 text-[#008848] text-xs font-bold shadow-2xs">
             <span className="text-sm">✨</span>
             <span>₹59.85 saved! Including the applied coupon</span>
+          </div>
+        </div>
+
+        {/* 2b. Delivery Location & Interactive Map Banner */}
+        <div className="px-3 pt-2.5">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 flex items-center justify-between gap-3">
+            <div className="flex items-start gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5 border border-emerald-200">
+                <span className="material-symbols-outlined text-[18px]">location_on</span>
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-extrabold text-slate-900">Delivering to {addressTag}</span>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    PIN {pincode} • Sagore
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 truncate mt-0.5">
+                  {flat}, {street}, {landmark ? landmark + ', ' : ''}Sagore
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsMapModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shrink-0 flex items-center gap-1 active:scale-95 transition-transform shadow-xs"
+            >
+              <span className="material-symbols-outlined text-[15px]">explore</span>
+              <span>Map</span>
+            </button>
           </div>
         </div>
 
@@ -477,50 +514,7 @@ export default function CartPage() {
               ))}
             </div>
 
-            {/* 3 Action Buttons */}
-            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
-              <Link
-                href="/menu"
-                className="flex items-center justify-center gap-1 py-2 px-1 rounded-xl border border-slate-200 text-[11px] font-bold text-slate-700 hover:bg-slate-50"
-              >
-                <span className="text-emerald-700 font-bold text-base leading-none">+</span>
-                <span>Add Items</span>
-              </Link>
-              <button
-                type="button"
-                onClick={() => setShowCookingInput(!showCookingInput)}
-                className={`flex items-center justify-center gap-1 py-2 px-1 rounded-xl border text-[11px] font-bold transition-colors ${
-                  showCookingInput || deliveryNotes
-                    ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
-                    : 'border-slate-200 text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <span>✎</span>
-                <span>Cooking requests</span>
-              </button>
-              <label className="flex items-center justify-center gap-1 py-2 px-1 rounded-xl border border-slate-200 text-[11px] font-bold text-slate-700 cursor-pointer hover:bg-slate-50 select-none">
-                <input
-                  type="checkbox"
-                  checked={isCutleryNeeded}
-                  onChange={(e) => setIsCutleryNeeded(e.target.checked)}
-                  className="w-3.5 h-3.5 accent-emerald-600 rounded"
-                />
-                <span className="truncate">Cutlery Needed</span>
-              </label>
-            </div>
-
-            {/* Cooking requests inline editor */}
-            {showCookingInput && (
-              <div className="pt-2">
-                <input
-                  type="text"
-                  value={deliveryNotes}
-                  onChange={(e) => setDeliveryNotes(e.target.value)}
-                  placeholder="e.g. Less spicy dal, no onion-garlic, ring bell twice"
-                  className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 focus:outline-none focus:border-emerald-600"
-                />
-              </div>
-            )}
+            {/* Items list ends */}
           </div>
         </div>
 
@@ -563,24 +557,6 @@ export default function CartPage() {
                   </span>
                 </div>
               ))}
-            </div>
-          </div>
-        </div>
-
-        {/* 6. Savings Corner */}
-        <div className="px-3 pt-3">
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-orange-500 text-white flex items-center justify-center text-xs font-bold shadow-xs">
-                %
-              </div>
-              <div>
-                <p className="text-xs font-extrabold text-slate-900">Saved ₹29 on Janki Rasoi</p>
-                <p className="text-[10px] text-slate-500 font-medium">View all coupons ›</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 text-emerald-700 text-xs font-extrabold">
-              <span>✓ Applied</span>
             </div>
           </div>
         </div>
@@ -717,6 +693,44 @@ export default function CartPage() {
                     />
                   </div>
                 )}
+
+                {/* Cooking & Kitchen Request (Moved here as requested) */}
+                <div className="mt-2 pt-2.5 border-t border-slate-100 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-extrabold text-slate-800 flex items-center gap-1.5">
+                      <span className="text-emerald-700">✎</span>
+                      <span>Cooking &amp; Kitchen Request</span>
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-medium">Optional</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={deliveryNotes}
+                    onChange={(e) => setDeliveryNotes(e.target.value)}
+                    placeholder="e.g. Less spicy dal, no onion-garlic, crisp tawa rotis"
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:outline-none focus:border-emerald-600 text-slate-800"
+                  />
+                </div>
+
+                {/* Cutlery Needed Option (Moved here as requested) */}
+                <div className="pt-2 flex items-center justify-between border-t border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🍴</span>
+                    <div>
+                      <span className="text-xs font-extrabold text-slate-800 block leading-tight">Cutlery &amp; Napkins</span>
+                      <span className="text-[10px] text-slate-500">Uncheck to help reduce single-use plastic waste 🌿</span>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isCutleryNeeded}
+                      onChange={(e) => setIsCutleryNeeded(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                  </label>
+                </div>
               </div>
             )}
 
@@ -929,6 +943,26 @@ export default function CartPage() {
           if (user.name) setCustomerName(user.name);
           if (user.phone) setCustomerPhone(user.phone);
           showToast(`Logged in as ${user.name || user.phone}`);
+        }}
+      />
+
+      {/* Location & Map Selector Modal for Sagore Pincode 454774 */}
+      <LocationMapModal
+        isOpen={isMapModalOpen}
+        onClose={() => setIsMapModalOpen(false)}
+        initialPincode={pincode}
+        initialFlat={flat}
+        initialStreet={street}
+        initialLandmark={landmark}
+        onConfirm={(loc: LocationData) => {
+          setFlat(loc.flat);
+          setStreet(loc.street);
+          setLandmark(loc.landmark);
+          setPincode(loc.pincode);
+          setDetectedCity(loc.city);
+          setAddressTag(loc.addressType);
+          showToast(`✓ Location updated: ${loc.street}, Sagore (${loc.pincode})`);
+          requestQuote();
         }}
       />
     </main>
