@@ -471,6 +471,9 @@ export class CheckoutService {
           razorpayKeyId: this.configService.get<string>('RAZORPAY_KEY_ID') || 'rzp_test_mock',
         },
       };
+    }, {
+      maxWait: 15000,
+      timeout: 30000,
     });
 
     // Real-time instant notification to kitchen admin console

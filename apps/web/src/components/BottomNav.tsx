@@ -19,7 +19,6 @@ export default function BottomNav() {
     imageUrl?: string;
   } | null>(null);
 
-  const [dismissedOrderId, setDismissedOrderId] = useState<string | null>(null);
 
   // Poll / check for active customer orders
   useEffect(() => {
@@ -84,10 +83,6 @@ export default function BottomNav() {
   if (pathname === '/cart' || pathname.startsWith('/rider')) return null;
 
   const showCartPill = totalCount > 0 && pathname !== '/cart';
-  const showActiveOrderPill =
-    activeOrder !== null &&
-    pathname !== '/track' &&
-    dismissedOrderId !== activeOrder.orderNumber;
 
   return (
     <>
@@ -125,51 +120,6 @@ export default function BottomNav() {
               </span>
             </div>
           </Link>
-        </aside>
-      )}
-
-      {/* Floating Active Order Status Bar if order is live and cart is empty */}
-      {!showCartPill && showActiveOrderPill && activeOrder && pathname !== '/track' && (
-        <aside
-          aria-label="Active Order Status"
-          className="fixed bottom-20 md:bottom-6 inset-x-3 sm:inset-x-auto sm:right-6 max-w-sm w-full mx-auto z-50 pointer-events-none animate-fadeIn"
-        >
-          <div className="pointer-events-auto bg-white/95 backdrop-blur-md text-[#292D26] p-3 rounded-2xl shadow-xl shadow-black/5 border border-[#EEE7DC] flex items-center justify-between">
-            <Link
-              href={`/track?token=${activeOrder.token}`}
-              className="flex items-center gap-2.5 min-w-0 flex-1"
-            >
-              <div className="w-8 h-8 rounded-xl bg-[#EAF4ED] text-[#38754A] flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-[18px]">skillet</span>
-              </div>
-              <div className="truncate">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[#38754A] animate-pulse shrink-0"></span>
-                  <span className="text-xs font-bold text-[#292D26] truncate">
-                    {activeOrder.punchyLine}
-                  </span>
-                </div>
-                <div className="text-[11px] text-[#77786F] truncate">
-                  Order #{activeOrder.orderNumber} • {activeOrder.status}
-                </div>
-              </div>
-            </Link>
-            <div className="flex items-center gap-1 shrink-0 ml-2">
-              <Link
-                href={`/track?token=${activeOrder.token}`}
-                className="px-2.5 py-1 rounded-xl bg-[#38754A] text-white text-[11px] font-bold shadow-xs hover:bg-[#285C38] transition-colors"
-              >
-                Track
-              </Link>
-              <button
-                onClick={() => setDismissedOrderId(activeOrder.orderNumber)}
-                className="w-6 h-6 rounded-full hover:bg-[#EEE7DC] text-[#77786F] flex items-center justify-center text-xs ml-1"
-                title="Dismiss"
-              >
-                <span className="material-symbols-outlined text-[16px]">close</span>
-              </button>
-            </div>
-          </div>
         </aside>
       )}
 

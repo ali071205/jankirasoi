@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { api, CatalogResponse, MenuItem, DEFAULT_FOOD_IMAGE } from '../../lib/api';
 import { useCart } from '../../context/CartContext';
 import DishDetailModal from '../../components/DishDetailModal';
+import ActiveOrderBanner from '../../components/ActiveOrderBanner';
 
 export default function MenuPage() {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
@@ -145,9 +146,13 @@ export default function MenuPage() {
     <main className="flex flex-col relative w-full pt-16 pb-28 bg-[#FFF9F0] min-h-screen">
       <div className="flex flex-col w-full max-w-4xl mx-auto pb-10">
 
+        {/* Live Active Order Tracking Banner */}
+        <div className="px-4 pt-3">
+          <ActiveOrderBanner />
+        </div>
 
         {/* 1. Meal Slot Segmented Pill Filter matching reference UI */}
-        <div className="px-4 pt-4 pb-2">
+        <div className="px-4 pt-3 pb-2">
           <div className="w-full bg-[#EFECE4] p-1 rounded-full flex items-center border border-[#E2DBD0] shadow-2xs">
             {/* Lunch Tab */}
             <button

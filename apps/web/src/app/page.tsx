@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
-import { api, MenuItem, CatalogResponse, DEFAULT_FOOD_IMAGE } from '../lib/api';
+import { api, MenuItem, CatalogResponse, TrackOrderResponse, DEFAULT_FOOD_IMAGE } from '../lib/api';
 import { useCart } from '../context/CartContext';
 import DishDetailModal from '../components/DishDetailModal';
+import ActiveOrderBanner from '../components/ActiveOrderBanner';
 
 export default function HomePage() {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
@@ -195,6 +196,9 @@ export default function HomePage() {
           </div>
 
         </div>
+
+        {/* Active Order Tracking Banner (Home-only, hidden when no order) */}
+        <ActiveOrderBanner />
 
         {/* 3. Meal Slot Segmented Pill Filter matching reference UI */}
         <div className="mt-4 flex flex-col gap-2">
