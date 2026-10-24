@@ -364,22 +364,69 @@ export default function CartPage() {
         orderIdempotencyKeyRef.current = `idem_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
       }
 
-      const orderResult = await api.placeOrder(
-        {
-          quoteToken: activeQuoteToken,
-          paymentMethod,
-          customerName: customerName.trim() || 'Customer',
-          customerPhone: customerPhone.trim(),
-          deliveryAddress: {
-            flat: flat.trim(),
-            street: street.trim(),
-            landmark: landmark.trim() || undefined,
-            pincode: pincode.trim(),
-          },
-          deliveryNotes: compiledNotes || undefined,
+      let orderResult;
+      const orderPayload = {
+        paymentMethod,
+        customerName: customerName.trim() || 'Customer',
+        customerPhone: customerPhone.trim(),
+        deliveryAddress: {
+          flat: flat.trim(),
+          street: street.trim(),
+          landmark: landmark.trim() || undefined,
+          pincode: pincode.trim(),
         },
-        orderIdempotencyKeyRef.current
-      );
+        deliveryNotes: compiledNotes || undefined,
+      };
+
+      try {
+        orderResult = await api.placeOrder(
+          {
+            ...orderPayload,
+            quoteToken: activeQuoteToken,
+          },
+          orderIdempotencyKeyRef.current
+        );
+      } catch (placeErr: any) {
+        // If quotation expired or invalid, auto-refresh quote once and retry seamlessly
+        const isQuoteExpired =
+          placeErr.message?.toLowerCase().includes('quotation has expired') ||
+          placeErr.message?.toLowerCase().includes('invalid quote') ||
+          placeErr.message?.toLowerCase().includes('quote');
+
+        if (isQuoteExpired) {
+          console.warn('Quote expired, auto-refreshing quote and retrying placeOrder...');
+          const freshQ = await api.calculateQuote({
+            serviceDate: today,
+            deliverySlotId: selectedSlotId || slots[0]?.id || 'slot-lunch',
+            pincode: pincode.trim() || '454774',
+            items: items.map((i) => {
+              let pid = i.productId;
+              if (pid === 'spec-full-thali') pid = '09f67dad-2306-49b7-88c7-cae050592f14';
+              if (pid === 'spec-home-thali') pid = 'cd02708b-cf9d-460a-878d-3597115602b7';
+              if (pid === 'spec-roti-sabzi') pid = 'a1c1e8ff-8f9e-4a82-98f3-876bd6f9e0f3';
+              return {
+                productId: pid,
+                variantId: i.variantId,
+                quantity: i.quantity,
+                selectedAddonOptionIds: i.selectedAddonOptionIds,
+              };
+            }),
+          });
+          setQuote(freshQ);
+          // New idempotency key for fresh quote attempt
+          orderIdempotencyKeyRef.current = `idem_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+          orderResult = await api.placeOrder(
+            {
+              ...orderPayload,
+              quoteToken: freshQ.quoteToken,
+            },
+            orderIdempotencyKeyRef.current
+          );
+        } else {
+          throw placeErr;
+        }
+      }
 
       // Successfully placed: reset idempotency key and clear cart
       orderIdempotencyKeyRef.current = null;
