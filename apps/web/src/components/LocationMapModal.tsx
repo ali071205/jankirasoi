@@ -312,9 +312,8 @@ export default function LocationMapModal({
     onClose();
   };
 
-  // Map Tile URL with dynamic marker
-  const bboxPadding = 0.005;
-  const mapEmbedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - bboxPadding}%2C${lat - bboxPadding}%2C${lng + bboxPadding}%2C${lat + bboxPadding}&layer=mapnik&marker=${lat}%2C${lng}`;
+  // Google Maps Embed URL with exact coordinates and street-level zoom
+  const mapEmbedUrl = `https://maps.google.com/maps?q=${lat},${lng}&hl=en&z=16&output=embed`;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
@@ -647,26 +646,29 @@ export default function LocationMapModal({
                 )}
               </div>
 
-              {/* OpenStreetMap Iframe */}
+              {/* Google Maps Embed Iframe */}
               <iframe
-                title="Delivery Location Pin"
+                title="Google Maps Delivery Location"
                 src={mapEmbedUrl}
                 className="w-full h-full border-0 pointer-events-auto"
                 loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
               />
 
-              {/* Central Map Marker (Orange Location Pin like Screenshot 2) */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full pointer-events-none z-10 flex flex-col items-center">
-                <div className="relative flex items-center justify-center">
-                  <div className="w-9 h-9 rounded-full bg-[#E25822] shadow-xl flex items-center justify-center text-white border-2 border-white">
-                    <span className="material-symbols-outlined text-[20px]">location_on</span>
-                  </div>
-                </div>
-                {/* Pointer tip */}
-                <div className="w-2.5 h-2.5 bg-[#E25822] rotate-45 -mt-1.5 shadow-xs" />
-                {/* Ground shadow dot */}
-                <div className="w-3 h-1.5 bg-black/30 rounded-full blur-[1px] mt-1" />
-              </div>
+              {/* Open in Google Maps Link (Bottom Left) */}
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="absolute bottom-3 left-3 z-10 px-3 py-1.5 rounded-full bg-white text-slate-800 hover:text-slate-900 text-[11px] font-bold shadow-lg border border-slate-200/90 flex items-center gap-1.5 transition-all active:scale-95 hover:bg-slate-50"
+                title="Open in Google Maps App or Web"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#EA4335"/>
+                  <circle cx="12" cy="9" r="2.5" fill="#FFFFFF"/>
+                </svg>
+                <span>Google Maps</span>
+              </a>
 
               {/* Floating "Current location" Button (Screenshot 2) */}
               <button
