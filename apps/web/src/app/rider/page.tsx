@@ -343,6 +343,7 @@ export default function RiderPage() {
                 onClick={() => {
                   setLoginPhone('9811223344');
                   setLoginPassword('RiderPassword123!');
+                  setLoginError(null);
                 }}
                 className="w-full py-2.5 bg-[#FFF9F0] hover:bg-[#F3EADF] text-xs text-[#38754A] font-bold rounded-xl border border-[#EEE7DC] transition-colors flex items-center justify-center gap-1.5"
               >
