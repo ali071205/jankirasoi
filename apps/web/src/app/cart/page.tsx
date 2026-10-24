@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { api, DeliverySlot, QuoteResponse, DEFAULT_FOOD_IMAGE, UserProfile } from '../../lib/api';
 import { useCart } from '../../context/CartContext';
 import CustomerAuthModal from '../../components/CustomerAuthModal';
+import LocationMapModal, { LocationData } from '../../components/LocationMapModal';
 
 export default function CartPage() {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function CartPage() {
   // Address & Customer form state
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'PROFILE' | 'ORDERS' | 'EDIT'>('PROFILE');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -951,6 +953,16 @@ export default function CartPage() {
               }}
               className="p-5 flex flex-col gap-3 overflow-y-auto"
             >
+              {/* Map & Sagore Presets Trigger */}
+              <button
+                type="button"
+                onClick={() => setIsMapModalOpen(true)}
+                className="w-full py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-colors"
+              >
+                <span className="material-symbols-outlined text-[17px] text-emerald-400">explore</span>
+                <span>Select on Interactive Map / Sagore Presets</span>
+              </button>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 uppercase block mb-1">
@@ -1190,6 +1202,26 @@ export default function CartPage() {
             if (user.savedAddress.pincode) setPincode(user.savedAddress.pincode);
           }
           showToast(`Welcome ${user.name || user.phone}!`);
+        }}
+      />
+
+      {/* Location & Map Selector Modal */}
+      <LocationMapModal
+        isOpen={isMapModalOpen}
+        onClose={() => setIsMapModalOpen(false)}
+        initialPincode={pincode}
+        initialFlat={flat}
+        initialStreet={street}
+        initialLandmark={landmark}
+        onConfirm={(loc: LocationData) => {
+          setFlat(loc.flat);
+          setStreet(loc.street);
+          setLandmark(loc.landmark);
+          setPincode(loc.pincode);
+          setDetectedCity(loc.city);
+          setIsMapModalOpen(false);
+          showToast(`✓ Location updated: ${loc.street}, ${loc.city} (${loc.pincode})`);
+          requestQuote();
         }}
       />
     </main>
