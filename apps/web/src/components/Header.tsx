@@ -81,8 +81,8 @@ export default function Header() {
     window.dispatchEvent(new Event('storage'));
   };
 
-  // Don't show customer header on rider portal or cart page
-  if (pathname === '/cart' || pathname.startsWith('/rider')) return null;
+  // Don't show customer header on admin console, rider portal, or cart page
+  if (pathname === '/cart' || pathname.startsWith('/rider') || pathname.startsWith('/admin')) return null;
 
   const latestOrder = currentUser?.recentOrders && currentUser.recentOrders.length > 0
     ? currentUser.recentOrders[0]
