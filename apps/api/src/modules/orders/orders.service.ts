@@ -313,24 +313,6 @@ export class OrdersService {
 
   async assignRider(orderId: string, riderId: string, adminId?: string) {
     const result = await this.prisma.$transaction(async (tx) => {
-      // Resolve rider profile ID (handle both RiderProfile.id and User.id)
-      let resolvedProfileId = riderId;
-      let profile = await tx.riderProfile.findUnique({ where: { id: riderId } });
-      if (!profile) {
-        profile = await tx.riderProfile.findUnique({ where: { userId: riderId } });
-      }
-      if (!profile) {
-        const riderUser = await tx.user.findUnique({ where: { id: riderId } });
-        if (riderUser && riderUser.role === 'RIDER') {
-          profile = await tx.riderProfile.create({
-            data: { userId: riderUser.id, vehicleNumber: 'MP-09-AB-1234', isAvailable: true },
-          });
-        }
-      }
-      if (profile) {
-        resolvedProfileId = profile.id;
-      }
-
       // 1. Invalidate any active OTPs on this order due to reassignment
       await tx.deliveryOtp.updateMany({
         where: { orderId, isUsed: false },
