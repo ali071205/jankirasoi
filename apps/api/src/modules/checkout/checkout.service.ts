@@ -9,6 +9,7 @@ import { CalculateQuoteDto, PlaceOrderDto } from './dto/checkout.dto';
 import { randomBytes, createHmac } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { OrdersEventsService } from '../events/orders-events.service';
+import { DeliveryZonesService } from '../delivery-zones/delivery-zones.service';
 const Razorpay = require('razorpay');
 
 interface CachedQuote {
@@ -48,6 +49,7 @@ export class CheckoutService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly ordersEventsService: OrdersEventsService,
+    private readonly deliveryZonesService: DeliveryZonesService,
   ) {
     const key_id = this.configService.get<string>('RAZORPAY_KEY_ID');
     const key_secret = this.configService.get<string>('RAZORPAY_KEY_SECRET');
@@ -109,14 +111,35 @@ export class CheckoutService {
       throw new BadRequestException('Invalid service date. Format: YYYY-MM-DD');
     }
 
-    // 1. Verify Delivery Zone
-    const zone = await this.prisma.deliveryZone.findUnique({
-      where: { pincode: dto.pincode },
-    });
-    if (!zone || !zone.isActive) {
+    // 1. Verify Delivery Zone from Sagore Kitchen (5km free delivery, 15km max boundary)
+    const cleanPin = (dto.pincode || '454774').trim().replace(/\D/g, '');
+    const zoneCheck = await this.deliveryZonesService.checkPincode(cleanPin);
+    if (!zoneCheck.serviceable) {
       throw new BadRequestException({
-        code: 'INVALID_PINCODE',
-        message: `Delivery is not currently serviceable for pincode ${dto.pincode}`,
+        code: 'UNSERVICEABLE_ZONE',
+        message: zoneCheck.message || 'Delivery is only available within 15 km of Sagore Kitchen (MP 454774).',
+      });
+    }
+
+    let zone = await this.prisma.deliveryZone.findUnique({
+      where: { pincode: cleanPin },
+    });
+    if (!zone) {
+      zone = await this.prisma.deliveryZone.upsert({
+        where: { pincode: cleanPin },
+        update: {
+          deliveryFeePaise: zoneCheck.deliveryFeePaise,
+          freeDeliveryThresholdPaise: zoneCheck.isFreeDelivery ? 0 : 49900,
+          isActive: true,
+        },
+        create: {
+          name: zoneCheck.zoneName || 'Sagore Delivery Zone',
+          pincode: cleanPin,
+          deliveryFeePaise: zoneCheck.deliveryFeePaise,
+          freeDeliveryThresholdPaise: zoneCheck.isFreeDelivery ? 0 : 49900,
+          minOrderPaise: 0,
+          isActive: true,
+        },
       });
     }
 
@@ -236,8 +259,9 @@ export class CheckoutService {
     }
 
     // 4. Calculate Delivery Fee, Packaging Fee & 5% GST
-    let deliveryFeePaise = zone.deliveryFeePaise;
-    if (zone.freeDeliveryThresholdPaise && subtotalPaise >= zone.freeDeliveryThresholdPaise) {
+    // Sagore Rule: <= 5km is ₹0 (Free Delivery). > 5km <= 15km standard fee applies.
+    let deliveryFeePaise = zoneCheck.deliveryFeePaise;
+    if (zone.freeDeliveryThresholdPaise && zone.freeDeliveryThresholdPaise > 0 && subtotalPaise >= zone.freeDeliveryThresholdPaise) {
       deliveryFeePaise = 0;
     }
 

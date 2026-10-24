@@ -37,8 +37,8 @@ export default function CartPage() {
   const [flat, setFlat] = useState('');
   const [street, setStreet] = useState('');
   const [landmark, setLandmark] = useState('');
-  const [pincode, setPincode] = useState('110017');
-  const [detectedCity, setDetectedCity] = useState<string | null>('New Delhi');
+  const [pincode, setPincode] = useState('454774');
+  const [detectedCity, setDetectedCity] = useState<string | null>('Sagore, Pithampur');
   const [checkingPin, setCheckingPin] = useState(false);
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [isCutleryNeeded, setIsCutleryNeeded] = useState(false);
@@ -148,7 +148,7 @@ export default function CartPage() {
       const q = await api.calculateQuote({
         serviceDate: today,
         deliverySlotId: selectedSlotId,
-        pincode: pincode.trim() || '110017',
+        pincode: pincode.trim() || '454774',
         items: items.map((i) => {
           let pid = i.productId;
           if (pid === 'spec-full-thali') pid = '09f67dad-2306-49b7-88c7-cae050592f14';
@@ -222,14 +222,18 @@ export default function CartPage() {
         }
 
         if (res.serviceable) {
+          const feePaise = res.deliveryFeePaise ?? 0;
+          const feeText = feePaise === 0
+            ? 'Free Delivery (Within 5 km)'
+            : `Delivery Fee: ₹${(feePaise / 100).toFixed(0)} (Beyond 5 km free zone)`;
           setPinStatusMsg({
-            text: `✓ Serviceable zone: ${res.zoneName || res.city || 'Delhi'} (Delivery Fee: ₹${((res.deliveryFeePaise || 0) / 100).toFixed(0)})`,
+            text: `✓ ${res.zoneName || res.city || 'Sagore'} • ${feeText}`,
             isError: false,
           });
           requestQuoteRef.current();
         } else {
           setPinStatusMsg({
-            text: res.message || (res.city ? `We do not deliver to ${res.city} yet.` : 'Pincode outside delivery area.'),
+            text: res.message || 'Delivery not available beyond 15 km from Sagore Kitchen.',
             isError: true,
           });
         }
@@ -283,6 +287,11 @@ export default function CartPage() {
       return;
     }
 
+    if (pinStatusMsg?.isError) {
+      showToast(pinStatusMsg.text || 'Cannot deliver to selected location (Beyond 15 km of Sagore Kitchen).', true);
+      return;
+    }
+
     // Synchronously lock order submission immediately
     isSubmittingOrderRef.current = true;
     setPlacingOrder(true);
@@ -293,7 +302,7 @@ export default function CartPage() {
         const q = await api.calculateQuote({
           serviceDate: today,
           deliverySlotId: selectedSlotId || slots[0]?.id || 'slot-lunch',
-          pincode: pincode.trim() || '110017',
+          pincode: pincode.trim() || '454774',
           items: items.map((i) => {
             let pid = i.productId;
             if (pid === 'spec-full-thali') pid = '09f67dad-2306-49b7-88c7-cae050592f14';
@@ -416,7 +425,9 @@ export default function CartPage() {
   }
 
   const itemsTotalPaise = items.reduce((acc, i) => acc + i.pricePaise * i.quantity, 0);
-  const finalTotalPaise = (quote?.totalPaise ?? itemsTotalPaise + 1500) + tipPaise;
+  const deliveryFeePaise = quote?.deliveryFeePaise ?? 0;
+  const packagingFeePaise = quote?.packagingFeePaise ?? 1500;
+  const finalTotalPaise = (quote?.totalPaise ?? (itemsTotalPaise + deliveryFeePaise + packagingFeePaise)) + tipPaise;
 
   const COMPLETE_MEAL_ADDONS = [
     {
@@ -964,11 +975,24 @@ export default function CartPage() {
               <span className="font-semibold text-slate-900">₹{(itemsTotalPaise / 100).toFixed(0)}</span>
             </div>
             <div className="flex justify-between text-xs text-slate-600">
-              <span>Delivery Partner Fee</span>
-              <span className="font-extrabold text-emerald-700">FREE</span>
+              <span className="flex items-center gap-1">
+                <span>Delivery Partner Fee</span>
+                {deliveryFeePaise === 0 ? (
+                  <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">
+                    Free (Within 5 km)
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded">
+                    Beyond 5 km
+                  </span>
+                )}
+              </span>
+              <span className={`font-extrabold ${deliveryFeePaise === 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
+                {deliveryFeePaise === 0 ? 'FREE' : `₹${(deliveryFeePaise / 100).toFixed(0)}`}
+              </span>
             </div>
             <div className="flex justify-between text-xs text-slate-600">
-              <span>Delivery Tip &amp; Platform Fee</span>
+              <span>Platform &amp; Packaging Fee</span>
               <span className="font-semibold text-slate-900">₹15</span>
             </div>
             {tipPaise > 0 && (
@@ -1011,10 +1035,16 @@ export default function CartPage() {
           <button
             type="button"
             onClick={handlePlaceOrder}
-            disabled={placingOrder || quoteLoading}
+            disabled={placingOrder || quoteLoading || pinStatusMsg?.isError}
             className="bg-[#008848] hover:bg-[#00703c] active:scale-98 text-white font-extrabold text-sm sm:text-base px-6 sm:px-8 py-3 rounded-xl shadow-md transition-all flex items-center gap-2 shrink-0 disabled:opacity-50"
           >
-            <span>{placingOrder ? 'Processing...' : `Pay ₹${(finalTotalPaise / 100).toFixed(0)}`}</span>
+            <span>
+              {placingOrder
+                ? 'Processing...'
+                : pinStatusMsg?.isError
+                ? 'Delivery Unavailable'
+                : `Pay ₹${(finalTotalPaise / 100).toFixed(0)}`}
+            </span>
             {placingOrder && (
               <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0 inline-block" />
             )}
@@ -1124,7 +1154,7 @@ export default function CartPage() {
                     required
                     value={street}
                     onChange={(e) => setStreet(e.target.value)}
-                    placeholder="e.g. Malviya Nagar"
+                    placeholder="e.g. Main Market, Sagore"
                     className="w-full text-xs sm:text-sm px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
                   />
                 </div>
@@ -1138,7 +1168,7 @@ export default function CartPage() {
                     maxLength={6}
                     value={pincode}
                     onChange={(e) => setPincode(e.target.value.replace(/\D/g, ''))}
-                    placeholder="e.g. 110017"
+                    placeholder="e.g. 454774"
                     className="w-full text-xs sm:text-sm px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 font-mono"
                   />
                 </div>

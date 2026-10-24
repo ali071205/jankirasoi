@@ -78,10 +78,17 @@ async function main() {
   // 3. Seed Delivery Zones (Delhi NCR & Sagore)
   const zones = [
     {
-      name: 'Sagore / Pithampur - Main Kitchen Zone',
+      name: 'Sagore / Pithampur - Main Kitchen Zone (<5km)',
       pincode: '454774',
       minOrderPaise: 0,
       deliveryFeePaise: 0,
+      freeDeliveryThresholdPaise: 0,
+    },
+    {
+      name: 'Pithampur Outer / Industrial Area (5-15km)',
+      pincode: '454775',
+      minOrderPaise: 0,
+      deliveryFeePaise: 3500,
       freeDeliveryThresholdPaise: 0,
     },
     {

@@ -24,6 +24,21 @@ interface LocationMapModalProps {
   initialLandmark?: string;
 }
 
+export const SAGORE_KITCHEN_LAT = 22.6288;
+export const SAGORE_KITCHEN_LNG = 75.5684;
+
+export function calculateHaversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c * 10) / 10;
+}
+
 const SAGORE_PRESETS = [
   {
     name: 'Sagore Main Market',
@@ -205,8 +220,17 @@ export default function LocationMapModal({
     );
   };
 
+  const distanceKm = calculateHaversineDistanceKm(SAGORE_KITCHEN_LAT, SAGORE_KITCHEN_LNG, lat, lng);
+  const isWithin5Km = distanceKm <= 5.0;
+  const isWithin15Km = distanceKm <= 15.0;
+
   // Confirm and save location
   const handleConfirmLocation = () => {
+    if (!isWithin15Km) {
+      alert(`Delivery is not available beyond 15 km from Sagore Kitchen. Selected location is ~${distanceKm} km away.`);
+      return;
+    }
+
     onConfirm({
       addressType,
       flat: flat.trim() || 'House / Flat Details',
@@ -325,6 +349,26 @@ export default function LocationMapModal({
 
           {/* Interactive Map Preview with Pinpoint */}
           <div className="relative w-full h-52 sm:h-60 bg-slate-100 overflow-hidden border-b border-slate-200">
+            {/* Live Distance from Sagore Kitchen Overlay */}
+            <div className="absolute top-2.5 left-2.5 z-10">
+              {isWithin5Km ? (
+                <div className="px-2.5 py-1 rounded-full bg-emerald-600/95 text-white text-[10px] font-bold shadow-md flex items-center gap-1 backdrop-blur-xs">
+                  <span className="material-symbols-outlined text-[13px]">check_circle</span>
+                  <span>~{distanceKm} km from Sagore Kitchen • Free Delivery</span>
+                </div>
+              ) : isWithin15Km ? (
+                <div className="px-2.5 py-1 rounded-full bg-amber-600/95 text-white text-[10px] font-bold shadow-md flex items-center gap-1 backdrop-blur-xs">
+                  <span className="material-symbols-outlined text-[13px]">info</span>
+                  <span>~{distanceKm} km • Delivery Fee ₹35 (Beyond 5 km)</span>
+                </div>
+              ) : (
+                <div className="px-2.5 py-1 rounded-full bg-rose-600/95 text-white text-[10px] font-bold shadow-md flex items-center gap-1 backdrop-blur-xs animate-pulse">
+                  <span className="material-symbols-outlined text-[13px]">cancel</span>
+                  <span>~{distanceKm} km • Outside 15 km Delivery Zone</span>
+                </div>
+              )}
+            </div>
+
             <iframe
               title="Sagore Delivery Map"
               src={mapEmbedUrl}
@@ -513,10 +557,23 @@ export default function LocationMapModal({
           <button
             type="button"
             onClick={handleConfirmLocation}
-            className="flex-1 py-2.5 px-5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-98 transition-transform"
+            disabled={!isWithin15Km}
+            className={`flex-1 py-2.5 px-5 rounded-xl font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-98 transition-transform ${
+              !isWithin15Km
+                ? 'bg-rose-100 text-rose-700 border border-rose-300 cursor-not-allowed shadow-none'
+                : 'bg-emerald-700 hover:bg-emerald-800 text-white'
+            }`}
           >
-            <span className="material-symbols-outlined text-[18px]">check_circle</span>
-            <span>Confirm Location &amp; Deliver Here</span>
+            <span className="material-symbols-outlined text-[18px]">
+              {!isWithin15Km ? 'block' : 'check_circle'}
+            </span>
+            <span>
+              {!isWithin15Km
+                ? `Delivery Not Available (>15 km: ~${distanceKm} km)`
+                : isWithin5Km
+                ? 'Confirm Location (Free Delivery - Within 5 km)'
+                : 'Confirm Location (Standard Delivery Fee)'}
+            </span>
           </button>
         </div>
 

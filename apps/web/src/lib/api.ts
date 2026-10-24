@@ -71,8 +71,10 @@ export interface PincodeCheckResponse {
   district?: string | null;
   state?: string | null;
   zoneName?: string;
+  distanceKm?: number;
   deliveryFeePaise?: number;
   freeDeliveryThresholdPaise?: number;
+  isFreeDelivery?: boolean;
   message?: string;
 }
 
@@ -436,20 +438,73 @@ export const api = {
     return setCached(cacheKey, FALLBACK_CATALOG, 180000);
   },
 
-  // 2. Delivery Zones with 5-minute Cache
-  async checkPincode(pincode: string): Promise<PincodeCheckResponse> {
-    const cacheKey = `pin_${pincode}`;
+  // 2. Delivery Zones with 5-minute Cache (Sagore Kitchen 5km Free Delivery / 15km boundary)
+  async checkPincode(pincode: string, lat?: number, lng?: number): Promise<PincodeCheckResponse> {
+    const cleanPin = pincode.trim().replace(/\D/g, '');
+    const cacheKey = `pin_${cleanPin}_${lat ?? ''}_${lng ?? ''}`;
     const cached = getCached<PincodeCheckResponse>(cacheKey);
     if (cached) return cached;
 
     const base = getApiBase();
-    const res = await fetch(`${base}/delivery-zones/check?pincode=${encodeURIComponent(pincode)}`);
-    if (!res.ok) {
+    try {
+      let url = `${base}/delivery-zones/check?pincode=${encodeURIComponent(cleanPin)}`;
+      if (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)) {
+        url += `&lat=${lat}&lng=${lng}`;
+      }
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        return setCached(cacheKey, data, 300000);
+      }
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to verify delivery zone');
+      if (err.message) {
+        throw new Error(err.message);
+      }
+    } catch (fetchErr: any) {
+      if (fetchErr.message && !fetchErr.message.includes('fetch') && !fetchErr.message.includes('NetworkError') && !fetchErr.message.includes('Failed to fetch')) {
+        throw fetchErr;
+      }
     }
-    const data = await res.json();
-    return setCached(cacheKey, data, 300000);
+
+    // Client-side fallback for Sagore kitchen (5km Free Delivery, max 15km boundary)
+    if (cleanPin === '454774') {
+      const sagoreData: PincodeCheckResponse = {
+        serviceable: true,
+        pincode: '454774',
+        city: 'Sagore, Pithampur',
+        district: 'Dhar',
+        state: 'Madhya Pradesh',
+        zoneName: 'Sagore Central Zone (Within 5 km)',
+        distanceKm: 2.0,
+        deliveryFeePaise: 0,
+        isFreeDelivery: true,
+        message: '✓ Delivering to Sagore • Free Delivery (Within 5 km)',
+      };
+      return setCached(cacheKey, sagoreData, 300000);
+    }
+
+    if (cleanPin === '454775') {
+      const outerData: PincodeCheckResponse = {
+        serviceable: true,
+        pincode: '454775',
+        city: 'Pithampur Outer, Dhar',
+        district: 'Dhar',
+        state: 'Madhya Pradesh',
+        zoneName: 'Pithampur Outer (~7.5 km)',
+        distanceKm: 7.5,
+        deliveryFeePaise: 3500,
+        isFreeDelivery: false,
+        message: '✓ Serviceable: Pithampur Outer (~7.5 km) • Delivery Fee ₹35 (Beyond 5 km free zone)',
+      };
+      return setCached(cacheKey, outerData, 300000);
+    }
+
+    const unserviceableData: PincodeCheckResponse = {
+      serviceable: false,
+      pincode: cleanPin,
+      message: 'Delivery not available beyond 15 km from Sagore Kitchen.',
+    };
+    return setCached(cacheKey, unserviceableData, 60000);
   },
 
   // 3. Delivery Slots with 1-minute Cache
@@ -677,15 +732,15 @@ export const api = {
           orderNumber: 'JR-8924',
           customerName: 'Pooja Verma',
           customerPhone: '9812345678',
-          deliveryAddress: 'Flat 302, Block B, Silver Springs, Malviya Nagar (110017)',
-          landmark: 'Opposite Mother Dairy Booth',
-          coordinates: { latitude: 28.5244, longitude: 77.2066 },
+          deliveryAddress: 'Flat 302, Sector 1, Housing Board Colony, Pithampur (454775)',
+          landmark: 'Near Cipla Circle',
+          coordinates: { latitude: 22.6105, longitude: 75.6321 },
           slotLabel: 'Tonight Dinner (07:30 PM - 09:30 PM)',
           itemsSummary: '2x Regular Home Thali + 1x Boondi Raita',
           paymentMethod: 'COD',
           cashDuePaise: 26000,
           status: 'OUT_FOR_DELIVERY',
-          navigationUrl: 'https://www.google.com/maps/dir/?api=1&destination=Malviya+Nagar+New+Delhi+110017',
+          navigationUrl: 'https://www.google.com/maps/dir/?api=1&destination=Sector+1+Pithampur+454775',
         },
       ];
       if (typeof window !== 'undefined') {
