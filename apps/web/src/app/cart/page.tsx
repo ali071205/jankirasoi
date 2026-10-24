@@ -274,16 +274,16 @@ export default function CartPage() {
       return;
     }
 
-    if (
-      !customerName.trim() ||
-      !customerPhone.trim() ||
-      !flat.trim() ||
-      !street.trim() ||
-      !pincode.trim()
-    ) {
+    if (!customerName.trim() || !customerPhone.trim()) {
       setAuthModalTab('PROFILE');
       setIsAuthOpen(true);
-      showToast('Please fill all required delivery details.', true);
+      showToast('Please provide your name and phone number to proceed.', true);
+      return;
+    }
+
+    if (!flat.trim() || !street.trim() || !pincode.trim()) {
+      setIsMapModalOpen(true);
+      showToast('Please select your delivery location on the map.', true);
       return;
     }
 
@@ -485,9 +485,9 @@ export default function CartPage() {
               <span className="material-symbols-outlined text-[20px] sm:text-[22px]">arrow_back</span>
             </button>
             <div
-              onClick={() => setIsEditingAddress(!isEditingAddress)}
+              onClick={() => setIsMapModalOpen(true)}
               className="cursor-pointer flex items-center gap-1.5 min-w-0 hover:opacity-85 transition-opacity"
-              title="Click to view or edit delivery address"
+              title="Click to select or change delivery location"
             >
               <div className="w-7 h-7 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
                 <span className="material-symbols-outlined text-[17px]">location_on</span>
@@ -498,24 +498,25 @@ export default function CartPage() {
                     {currentUser ? 'Delivering to' : 'Delivery Address'}
                   </span>
                   <span className="material-symbols-outlined text-[16px] text-slate-500 shrink-0">
-                    {isEditingAddress ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
+                    expand_more
                   </span>
                 </div>
                 <span className="text-[11px] text-slate-500 truncate max-w-[150px] sm:max-w-xs font-medium">
-                  {flat ? `${flat}${street ? `, ${street}` : ''} • ${pincode}` : 'Tap to enter address'}
+                  {flat ? `${flat}${street ? `, ${street}` : ''} • ${pincode}` : 'Tap to select location on map'}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Right: Address toggle & Profile / Login button */}
+          {/* Right: Address Change Button & Profile / Login button */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button
               type="button"
-              onClick={() => setIsEditingAddress(!isEditingAddress)}
-              className="text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-full border border-emerald-200 transition-colors shrink-0"
+              onClick={() => setIsMapModalOpen(true)}
+              className="text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-full border border-emerald-200 transition-colors shrink-0 flex items-center gap-0.5"
             >
-              {isEditingAddress ? 'Done' : 'Change'}
+              <span>Change</span>
+              <span className="material-symbols-outlined text-[13px]">expand_more</span>
             </button>
 
             {/* Profile / Account Button */}

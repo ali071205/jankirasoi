@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api, UserProfile } from '../lib/api';
 import DeliveryStatusPill from './DeliveryStatusPill';
+import LocationMapModal, { LocationData } from './LocationMapModal';
 
 interface CustomerAuthModalProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ export default function CustomerAuthModal({
   const [pincode, setPincode] = useState('454774');
   const [detectedCity, setDetectedCity] = useState<string | null>('Sagore, Pithampur');
   const [checkingPin, setCheckingPin] = useState(false);
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -472,6 +474,15 @@ export default function CustomerAuthModal({
                     />
                   </div>
 
+                  <button
+                    type="button"
+                    onClick={() => setIsMapModalOpen(true)}
+                    className="w-full py-2 px-3 rounded-xl bg-orange-50 hover:bg-orange-100 border border-orange-200 text-[#E25822] font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">add_location_alt</span>
+                    <span>Choose Location on Map</span>
+                  </button>
+
                   <div>
                     <label className="block text-[11px] font-bold text-[#292D26] uppercase mb-1">
                       Flat / House No. / Building *
@@ -682,6 +693,15 @@ export default function CustomerAuthModal({
               </div>
 
               {/* Delivery Address Details */}
+              <button
+                type="button"
+                onClick={() => setIsMapModalOpen(true)}
+                className="w-full py-2.5 px-3 rounded-xl bg-orange-50 hover:bg-orange-100 border border-orange-200 text-[#E25822] font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[16px]">add_location_alt</span>
+                <span>Select Delivery Location on Map</span>
+              </button>
+
               <div>
                 <label className="block text-[11px] font-bold text-[#292D26] uppercase tracking-wider mb-1">
                   Flat / House No. / Building <span className="text-rose-500">*</span>
@@ -782,6 +802,24 @@ export default function CustomerAuthModal({
           )}
         </div>
       </div>
+
+      {/* Select Your Location Modal (Swiggy Style 2-Step) */}
+      <LocationMapModal
+        isOpen={isMapModalOpen}
+        onClose={() => setIsMapModalOpen(false)}
+        initialPincode={pincode}
+        initialFlat={flat}
+        initialStreet={street}
+        initialLandmark={landmark}
+        onConfirm={(loc: LocationData) => {
+          setFlat(loc.flat);
+          setStreet(loc.street);
+          setLandmark(loc.landmark);
+          setPincode(loc.pincode);
+          setDetectedCity(loc.city);
+          setIsMapModalOpen(false);
+        }}
+      />
     </div>
   );
 }
