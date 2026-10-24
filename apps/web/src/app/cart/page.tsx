@@ -943,7 +943,7 @@ export default function CartPage() {
               <div className="flex flex-col gap-1.5 pt-0.5">
                 <p className="text-[11px] text-slate-500 font-medium">Delivery Mode</p>
                 <div className="px-3 py-2 rounded-xl border border-emerald-600 bg-emerald-50 text-emerald-900 text-xs font-bold flex items-center gap-1.5 shadow-2xs">
-                  <span>⚡</span>
+                  <span className="material-symbols-outlined text-[16px] text-emerald-700">bolt</span>
                   <span>Standard Fresh Dispatch (30-40 mins)</span>
                 </div>
               </div>
@@ -1014,8 +1014,10 @@ export default function CartPage() {
             disabled={placingOrder || quoteLoading}
             className="bg-[#008848] hover:bg-[#00703c] active:scale-98 text-white font-extrabold text-sm sm:text-base px-6 sm:px-8 py-3 rounded-xl shadow-md transition-all flex items-center gap-2 shrink-0 disabled:opacity-50"
           >
-            <span>Pay ₹{(finalTotalPaise / 100).toFixed(0)}</span>
-            {placingOrder && <span className="animate-spin text-xs">⏳</span>}
+            <span>{placingOrder ? 'Processing...' : `Pay ₹${(finalTotalPaise / 100).toFixed(0)}`}</span>
+            {placingOrder && (
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0 inline-block" />
+            )}
           </button>
         </div>
       </div>
