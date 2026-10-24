@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { api, UserProfile } from '../lib/api';
 import CustomerAuthModal from './CustomerAuthModal';
 import { useCart } from '../context/CartContext';
+import DeliveryStatusPill from './DeliveryStatusPill';
 
 export default function Header() {
   const pathname = usePathname();
@@ -189,13 +190,12 @@ export default function Header() {
                         </div>
                       </div>
                     </div>
-                    <Link
-                      href={`/track?token=${latestOrder.trackingToken}`}
+                    <DeliveryStatusPill
+                      orderNumber={latestOrder.orderNumber}
+                      token={latestOrder.trackingToken}
+                      status={latestOrder.status}
                       onClick={() => setIsDropdownOpen(false)}
-                      className="px-2.5 py-1 rounded-xl bg-primary text-white font-bold text-[11px] hover:bg-emerald-800 transition-colors shrink-0"
-                    >
-                      Track
-                    </Link>
+                    />
                   </div>
                 )}
 

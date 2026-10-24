@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { api, UserProfile } from '../lib/api';
+import DeliveryStatusPill from './DeliveryStatusPill';
 
 interface CustomerAuthModalProps {
   isOpen: boolean;
@@ -598,14 +599,14 @@ export default function CustomerAuthModal({
                           </div>
                         </div>
 
-                        <Link
-                          href={`/track?token=${token}`}
+                        <DeliveryStatusPill
+                          orderNumber={ord.orderNumber}
+                          token={token}
+                          status={ord.status || 'PLACED'}
+                          createdAt={ord.createdAt}
+                          deliveryAddress={ord.deliveryAddress || currentUser.savedAddress}
                           onClick={onClose}
-                          className="px-3 py-1.5 rounded-xl bg-[#38754A] hover:bg-[#285C38] text-white text-xs font-bold transition-colors shrink-0 flex items-center gap-1 shadow-xs"
-                        >
-                          <span>Live Track</span>
-                          <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
-                        </Link>
+                        />
                       </div>
                     );
                   })}
