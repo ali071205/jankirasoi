@@ -492,7 +492,7 @@ export default function OperationsConsolePage() {
       const newOrdersCount = fetched.filter((o) => o.status === 'PLACED').length;
       if (isSilent && audioEnabled && newOrdersCount > prevOrdersCountRef.current) {
         playKitchenOrderChime();
-        showToast('🔔 New Customer Order Arrived!');
+        showToast('New Customer Order Arrived!');
       }
       prevOrdersCountRef.current = newOrdersCount;
       setOrders(fetched);
@@ -595,7 +595,7 @@ export default function OperationsConsolePage() {
           if (payload.type === 'PING') return;
           if (payload.type === 'ORDER_CREATED') {
             playKitchenOrderChime();
-            showToast(`⚡ New order received: #${payload.orderNumber || ''}`);
+            showToast(`New order received: #${payload.orderNumber || ''}`);
           }
           loadOrders(true);
         } catch {
@@ -688,7 +688,7 @@ export default function OperationsConsolePage() {
 
     try {
       await adminApi.toggleDishSoldOut(itemId, today, nextSoldOut);
-      showToast(nextSoldOut ? `⚠️ Marked ${itemName} as SOLD OUT (86)` : `✓ Marked ${itemName} back IN STOCK`);
+      showToast(nextSoldOut ? `Marked ${itemName} as SOLD OUT (86)` : `Marked ${itemName} back IN STOCK`);
     } catch (err: any) {
       setSoldOutItemIds(soldOutItemIds);
       showToast(err.message || 'Failed to update item availability in database');
@@ -758,7 +758,7 @@ export default function OperationsConsolePage() {
         imageUrl: newDishImageUrl || PRESET_THALI_IMAGES[0].url,
         dietaryType: 'VEG',
       });
-      showToast(`✓ Added "${newDishName}" to Kitchen Menu!`);
+      showToast(`Added "${newDishName}" to Kitchen Menu!`);
       setShowAddDishModal(false);
       setNewDishName('');
       setNewDishPrice('');
@@ -783,25 +783,30 @@ export default function OperationsConsolePage() {
   const activeOrdersCount = newCount + preparingCount + readyCount + dispatchCount;
   const totalGmvPaise = orders.reduce((sum, o) => sum + (o.status !== 'CANCELLED' ? o.totalAmountPaise : 0), 0);
 
-  // Filter Orders for Dashboard Table & Kitchen Pipeline
-  const filteredOrders = orders.filter((order) => {
-    const matchesSearch =
-      order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.customerPhone.includes(searchQuery) ||
-      order.customerName.toLowerCase().includes(searchQuery.toLowerCase());
+  // Filter & Sort Orders: Arranged according to the largest time when it was ordered (oldest order first in queue)
+  const filteredOrders = orders
+    .filter((order) => {
+      const matchesSearch =
+        order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        order.customerPhone.includes(searchQuery) ||
+        order.customerName.toLowerCase().includes(searchQuery.toLowerCase());
 
-    if (!matchesSearch) return false;
+      if (!matchesSearch) return false;
 
-    // ACTIVE hides delivered and cancelled orders from live screen by default
-    if (activeFilterTab === 'ACTIVE') return order.status !== 'DELIVERED' && order.status !== 'CANCELLED';
-    if (activeFilterTab === 'NEW') return order.status === 'PLACED';
-    if (activeFilterTab === 'PREPARING') return order.status === 'ACCEPTED' || order.status === 'PREPARING';
-    if (activeFilterTab === 'READY') return order.status === 'READY_FOR_PICKUP';
-    if (activeFilterTab === 'DISPATCH') return order.status === 'OUT_FOR_DELIVERY';
-    if (activeFilterTab === 'DELIVERED') return order.status === 'DELIVERED';
-    if (activeFilterTab === 'CANCELLED') return order.status === 'CANCELLED';
-    return true;
-  });
+      // ACTIVE hides delivered and cancelled orders from live screen by default
+      if (activeFilterTab === 'ACTIVE') return order.status !== 'DELIVERED' && order.status !== 'CANCELLED';
+      if (activeFilterTab === 'NEW') return order.status === 'PLACED';
+      if (activeFilterTab === 'PREPARING') return order.status === 'ACCEPTED' || order.status === 'PREPARING';
+      if (activeFilterTab === 'READY') return order.status === 'READY_FOR_PICKUP';
+      if (activeFilterTab === 'DISPATCH') return order.status === 'OUT_FOR_DELIVERY';
+      if (activeFilterTab === 'DELIVERED') return order.status === 'DELIVERED';
+      if (activeFilterTab === 'CANCELLED') return order.status === 'CANCELLED';
+      return true;
+    })
+    .sort((a, b) => {
+      // Largest elapsed time when ordered: earliest timestamp comes first
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
 
   const selectedOrder = orders.find((o) => o.id === selectedOrderId) || filteredOrders[0] || null;
 
@@ -820,8 +825,16 @@ export default function OperationsConsolePage() {
       ? '#' + order.orderNumber.split('-').slice(-1)[0]
       : '#' + order.orderNumber;
 
+    // Formatted ordered time string, e.g. "02:19 PM"
+    const orderCreatedAt = new Date(order.createdAt);
+    const orderedTimeFormatted = orderCreatedAt.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+
     // Urgency calculation: green (<10m), amber (10-20m), pulse red (>20m)
-    const elapsedMins = Math.max(0, Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000));
+    const elapsedMins = Math.max(0, Math.floor((Date.now() - orderCreatedAt.getTime()) / 60000));
     const isUrgent = elapsedMins >= 20 && !isDelivered && !isCancelled;
     const isWarning = elapsedMins >= 10 && elapsedMins < 20 && !isDelivered && !isCancelled;
 
@@ -843,32 +856,21 @@ export default function OperationsConsolePage() {
             : 'border-gray-200/90'
         }`}
       >
-        {/* Card Header: Short Token, Meal Type, Urgency & Status */}
+        {/* Card Header: Short Token, Meal Type (SVG Icon), and Status */}
         <div className="flex items-center justify-between gap-1.5 border-b border-gray-100 pb-2">
           <div className="flex items-center gap-1.5 min-w-0">
             <span className="font-bold font-mono text-gray-950 text-sm tracking-tight shrink-0">
               {shortToken}
             </span>
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-700 shrink-0">
-              {order.slotLabel?.includes('Dinner') ? '🌙 Dinner' : '☀️ Lunch'}
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-700 shrink-0 inline-flex items-center gap-1">
+              <span className={`material-symbols-outlined text-[12px] ${order.slotLabel?.includes('Dinner') ? 'text-indigo-600' : 'text-amber-600'}`}>
+                {order.slotLabel?.includes('Dinner') ? 'dark_mode' : 'light_mode'}
+              </span>
+              <span>{order.slotLabel?.includes('Dinner') ? 'Dinner' : 'Lunch'}</span>
             </span>
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            {!isDelivered && !isCancelled && (
-              <span
-                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
-                  isUrgent
-                    ? 'bg-rose-100 text-rose-800 animate-pulse'
-                    : isWarning
-                    ? 'bg-amber-100 text-amber-900'
-                    : 'bg-emerald-50 text-emerald-800'
-                }`}
-              >
-                {isUrgent ? '🔥' : '⏱️'} {elapsedMins}m
-              </span>
-            )}
-
             {isPlaced && (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
@@ -904,6 +906,34 @@ export default function OperationsConsolePage() {
               </span>
             )}
           </div>
+        </div>
+
+        {/* Prominently Highlighted Order Time & Elapsed Wait Badge */}
+        <div className="flex items-center justify-between bg-stone-50/90 px-2 py-1.5 rounded-xl border border-stone-200/70 text-xs">
+          <div className="flex items-center gap-1.5 text-gray-700">
+            <span className="material-symbols-outlined text-[14px] text-emerald-800">schedule</span>
+            <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Ordered:</span>
+            <span className="font-mono font-bold text-gray-950 text-xs bg-white px-1.5 py-0.5 rounded-md border border-stone-200 shadow-2xs">
+              {orderedTimeFormatted}
+            </span>
+          </div>
+
+          {!isDelivered && !isCancelled && (
+            <span
+              className={`font-bold font-mono px-2 py-0.5 rounded-md text-[10px] flex items-center gap-1 ${
+                isUrgent
+                  ? 'bg-rose-100 text-rose-800 animate-pulse'
+                  : isWarning
+                  ? 'bg-amber-100 text-amber-900'
+                  : 'bg-emerald-100 text-emerald-800'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[12px]">
+                {isUrgent ? 'local_fire_department' : 'timer'}
+              </span>
+              <span>{elapsedMins}m wait</span>
+            </span>
+          )}
         </div>
 
         {/* Minimalist Typographic Food Items */}
@@ -1198,7 +1228,7 @@ export default function OperationsConsolePage() {
             {/* Lunch Service Status Card */}
             <div className="bg-[#fcfdfa] border border-stone-200/80 p-2.5 rounded-xl flex items-center justify-between text-xs">
               <div className="flex items-center gap-2">
-                <span className="text-sm">☀️</span>
+                <span className="material-symbols-outlined text-amber-500 text-[18px]">light_mode</span>
                 <div>
                   <div className="font-bold text-stone-800 text-[11px] leading-tight">Lunch Service</div>
                   <div className="text-[10px] text-stone-500">21 Oct PM – 01:30 PM</div>
@@ -1212,7 +1242,7 @@ export default function OperationsConsolePage() {
             {/* Dinner Service Status Card */}
             <div className="bg-[#fcfdfa] border border-stone-200/80 p-2.5 rounded-xl flex items-center justify-between text-xs">
               <div className="flex items-center gap-2">
-                <span className="text-sm">🌙</span>
+                <span className="material-symbols-outlined text-indigo-500 text-[18px]">dark_mode</span>
                 <div>
                   <div className="font-bold text-stone-800 text-[11px] leading-tight">Dinner Service</div>
                   <div className="text-[10px] text-stone-500">07:30 PM – 08:30 PM</div>
@@ -1929,8 +1959,8 @@ export default function OperationsConsolePage() {
                     {riders.map((r) => (
                       <tr key={r.id} className="hover:bg-gray-50/80 transition-colors">
                         <td className="py-3 px-4 font-bold text-gray-900 flex items-center gap-2">
-                          <span className="w-7 h-7 rounded-full bg-amber-100 text-amber-900 flex items-center justify-center text-xs font-bold">
-                            🛵
+                          <span className="w-7 h-7 rounded-full bg-amber-100 text-amber-900 flex items-center justify-center">
+                            <span className="material-symbols-outlined text-[16px]">two_wheeler</span>
                           </span>
                           <span>{r.name}</span>
                         </td>
@@ -2022,8 +2052,9 @@ export default function OperationsConsolePage() {
                       <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block">LUNCH WINDOW</span>
                       <span className="text-[11px] text-gray-500 mt-0.5 block">Delivery: 12:30 PM – 01:30 PM • Cutoff: 11:30 AM IST</span>
                     </div>
-                    <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                      🟢 OPEN
+                    <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                      <span>OPEN</span>
                     </span>
                   </div>
                   <div className="bg-white p-3.5 rounded-xl border border-stone-200/80 flex items-center justify-between shadow-2xs">
@@ -2031,8 +2062,9 @@ export default function OperationsConsolePage() {
                       <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block">DINNER WINDOW</span>
                       <span className="text-[11px] text-gray-500 mt-0.5 block">Delivery: 07:30 PM – 08:30 PM • Cutoff: 06:30 PM IST</span>
                     </div>
-                    <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                      🟢 OPEN
+                    <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                      <span>OPEN</span>
                     </span>
                   </div>
                 </div>
@@ -2272,7 +2304,7 @@ export default function OperationsConsolePage() {
             <div className="flex flex-col gap-2 pt-3 border-t border-gray-100">
               <div className="bg-[#fcfdfa] border border-stone-200/80 p-2.5 rounded-xl flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm">☀️</span>
+                  <span className="material-symbols-outlined text-amber-500 text-[18px]">light_mode</span>
                   <div>
                     <div className="font-bold text-stone-800 text-[11px] leading-tight">Lunch Service</div>
                     <div className="text-[10px] text-stone-500">12:30 PM – 01:30 PM</div>
@@ -2285,7 +2317,7 @@ export default function OperationsConsolePage() {
 
               <div className="bg-[#fcfdfa] border border-stone-200/80 p-2.5 rounded-xl flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm">🌙</span>
+                  <span className="material-symbols-outlined text-indigo-500 text-[18px]">dark_mode</span>
                   <div>
                     <div className="font-bold text-stone-800 text-[11px] leading-tight">Dinner Service</div>
                     <div className="text-[10px] text-stone-500">07:30 PM – 08:30 PM</div>
@@ -2359,8 +2391,8 @@ export default function OperationsConsolePage() {
                   className="p-3 rounded-xl border border-gray-200 hover:border-emerald-600 hover:bg-emerald-50/50 cursor-pointer transition-all flex items-center justify-between"
                 >
                   <div className="flex items-center gap-2.5">
-                    <span className="w-8 h-8 rounded-full bg-amber-100 text-amber-900 flex items-center justify-center text-xs font-bold">
-                      🛵
+                    <span className="w-8 h-8 rounded-full bg-amber-100 text-amber-900 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-[18px]">two_wheeler</span>
                     </span>
                     <div>
                       <div className="font-bold text-xs text-gray-900">{r.name}</div>
