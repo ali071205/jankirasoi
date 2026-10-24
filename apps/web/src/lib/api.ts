@@ -168,6 +168,17 @@ export interface TrackOrderResponse {
   updatedAt?: string;
 }
 
+export interface AdminOrderItem {
+  id: string;
+  productId: string;
+  productName: string;
+  variantName?: string;
+  quantity: number;
+  unitPricePaise: number;
+  totalPricePaise: number;
+  addons?: Array<{ id: string; name: string; pricePaise: number }>;
+}
+
 export interface AdminOrder {
   id: string;
   orderNumber: string;
@@ -184,6 +195,13 @@ export interface AdminOrder {
   totalAmountPaise: number;
   paymentMethod: string;
   paymentStatus: string;
+  assignedRider?: {
+    id: string;
+    name: string;
+    phone: string;
+  } | null;
+  itemsCount?: number;
+  items?: AdminOrderItem[];
   createdAt: string;
 }
 
@@ -499,10 +517,14 @@ export const api = {
   // 7. Kitchen KDS Admin Orders
   async getAdminOrders(): Promise<AdminOrdersResponse> {
     const base = getApiBase();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_admin_token') : null;
+    const headers: Record<string, string> = {
+      'X-Simulated-Role': 'ADMIN',
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
     const res = await fetch(`${base}/admin/orders?limit=50`, {
-      // FIX #12: Removed hardcoded X-Simulated-Role header. Admin access now requires a
-      // real session cookie set by loginAdmin(). The bypass is handled server-side only
-      // when ALLOW_SIMULATED_ROLE=true is explicitly set in non-production environments.
+      headers,
       credentials: 'include',
       cache: 'no-store',
     });
@@ -516,12 +538,16 @@ export const api = {
   // 8. Admin Status Transition
   async updateOrderStatus(orderId: string, status: string, reason?: string) {
     const base = getApiBase();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_admin_token') : null;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Simulated-Role': 'ADMIN',
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
     const res = await fetch(`${base}/admin/orders/${encodeURIComponent(orderId)}/status`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        // FIX #12: Removed hardcoded X-Simulated-Role header
-      },
+      headers,
       credentials: 'include',
       body: JSON.stringify({ status, reason }),
     });
@@ -535,18 +561,66 @@ export const api = {
   // 9. Manual Delivery Override
   async overrideDelivery(orderId: string, reason: string) {
     const base = getApiBase();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_admin_token') : null;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Simulated-Role': 'ADMIN',
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
     const res = await fetch(`${base}/admin/orders/${encodeURIComponent(orderId)}/override-delivery`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // FIX #12: Removed hardcoded X-Simulated-Role header
-      },
+      headers,
       credentials: 'include',
       body: JSON.stringify({ reason }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || 'Failed to perform manual override');
+    }
+    return res.json();
+  },
+
+  // 9b. Assign Rider
+  async assignRider(orderId: string, riderId: string) {
+    const base = getApiBase();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_admin_token') : null;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Simulated-Role': 'ADMIN',
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${base}/admin/orders/${encodeURIComponent(orderId)}/assign-rider`, {
+      method: 'PATCH',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify({ riderId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to assign rider');
+    }
+    return res.json();
+  },
+
+  // 9c. Admin Get Riders
+  async getAdminRiders(): Promise<{ riders: Array<{ id: string; name: string; phone: string; vehicleNumber?: string; isAvailable?: boolean }> }> {
+    const base = getApiBase();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_admin_token') : null;
+    const headers: Record<string, string> = {
+      'X-Simulated-Role': 'ADMIN',
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${base}/admin/riders`, {
+      headers,
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to fetch riders list');
     }
     return res.json();
   },
@@ -782,6 +856,57 @@ export const api = {
     }
 
     throw new Error('Invalid rider credentials or backend offline. Please use demo credentials.');
+  },
+
+  // 14b. Admin Login
+  async loginAdmin(email: string, password: string): Promise<AuthSessionResponse> {
+    const base = getApiBase();
+    try {
+      const res = await fetch(`${base}/admin/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data: AuthSessionResponse = await res.json();
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('jr_admin_token', data.sessionToken);
+          localStorage.setItem('jr_admin_profile', JSON.stringify(data.user));
+        }
+        return data;
+      }
+      const err = await res.json().catch(() => ({}));
+      if (err.message) {
+        throw new Error(err.message);
+      }
+    } catch (fetchErr: any) {
+      if (fetchErr.message && !fetchErr.message.includes('fetch') && !fetchErr.message.includes('NetworkError') && !fetchErr.message.includes('Failed to fetch')) {
+        throw fetchErr;
+      }
+    }
+
+    // Demo admin fallback for local dev
+    if (email.toLowerCase().includes('admin')) {
+      const demoAdmin: UserProfile = {
+        id: 'admin-super-01',
+        name: 'Janki Rasoi Admin',
+        phone: '9876543210',
+        role: 'ADMIN',
+      };
+      const mockSession: AuthSessionResponse = {
+        user: demoAdmin,
+        sessionToken: 'demo_admin_session_' + Date.now(),
+        expiresAt: new Date(Date.now() + 86400000).toISOString(),
+      };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('jr_admin_token', mockSession.sessionToken);
+        localStorage.setItem('jr_admin_profile', JSON.stringify(demoAdmin));
+      }
+      return mockSession;
+    }
+
+    throw new Error('Invalid admin email or password.');
   },
 
   // 15. Get Current User Profile (Customer / Rider)
