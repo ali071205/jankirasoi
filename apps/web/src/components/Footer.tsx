@@ -78,6 +78,12 @@ export default function Footer() {
                   Staff &amp; Kitchen Console
                 </a>
               </li>
+              <li>
+                <Link href="/rider" className="hover:text-[#38754A] transition-colors flex items-center gap-1">
+                  <span>🛵</span>
+                  <span>Rider Partner App</span>
+                </Link>
+              </li>
             </ul>
           </div>
 
