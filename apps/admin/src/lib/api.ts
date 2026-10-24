@@ -25,6 +25,7 @@ export interface AdminOrder {
     pincode?: string;
     landmark?: string;
   } | string;
+  deliveryNotes?: string | null;
   slotLabel: string;
   totalAmountPaise: number;
   assignedRider?: {

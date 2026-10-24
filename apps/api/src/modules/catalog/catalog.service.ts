@@ -2,11 +2,30 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto, ToggleSoldOutDto } from './dto/catalog.dto';
 
+interface CachedCatalog {
+  data: any;
+  cachedAt: number;
+}
+
 @Injectable()
 export class CatalogService {
+  private readonly catalogCache = new Map<string, CachedCatalog>();
+  private readonly CACHE_TTL_MS = 30_000; // 30s in-memory TTL
+
   constructor(private readonly prisma: PrismaService) {}
 
+  clearCache() {
+    this.catalogCache.clear();
+  }
+
   async getPublicCatalog(serviceDateString?: string) {
+    const cacheKey = serviceDateString || 'default';
+    const cached = this.catalogCache.get(cacheKey);
+    const now = Date.now();
+    if (cached && now - cached.cachedAt < this.CACHE_TTL_MS) {
+      return cached.data;
+    }
+
     const serviceDate = serviceDateString ? new Date(serviceDateString) : new Date();
 
     const categories = await this.prisma.menuCategory.findMany({
@@ -40,7 +59,7 @@ export class CatalogService {
       },
     });
 
-    return {
+    const result = {
       serviceDate: serviceDate.toISOString().split('T')[0],
       categories: categories.map((cat) => ({
         id: cat.id,
@@ -81,9 +100,13 @@ export class CatalogService {
         }),
       })),
     };
+
+    this.catalogCache.set(cacheKey, { data: result, cachedAt: now });
+    return result;
   }
 
   async createProduct(dto: CreateProductDto) {
+    this.clearCache();
     const slug = dto.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now().toString(36);
     return this.prisma.product.create({
       data: {
@@ -107,6 +130,7 @@ export class CatalogService {
   }
 
   async toggleSoldOut(productId: string, dto: ToggleSoldOutDto) {
+    this.clearCache();
     const serviceDate = new Date(dto.serviceDate);
     return this.prisma.productServiceDateAvailability.upsert({
       where: {

@@ -56,6 +56,16 @@ export class PaymentsService {
       });
       if (!order) throw new NotFoundException('Order not found');
 
+      // Idempotency guard: If payment already captured, return success without duplicate writes/SMS
+      if (order.paymentStatus === 'CAPTURED') {
+        return {
+          verified: true,
+          orderId: order.id,
+          status: order.status,
+          message: 'Payment already verified and order confirmed.',
+        };
+      }
+
       // Update payment attempt
       await tx.paymentAttempt.updateMany({
         where: { orderId: dto.orderId, providerOrderId: dto.razorpayOrderId },
@@ -144,11 +154,31 @@ export class PaymentsService {
       if (rzpOrderId) {
         const attempt = await this.prisma.paymentAttempt.findFirst({
           where: { providerOrderId: rzpOrderId },
+          include: { order: true },
         });
-        if (attempt) {
-          await this.prisma.order.update({
-            where: { id: attempt.orderId },
-            data: { status: 'PLACED', paymentStatus: 'CAPTURED' },
+        if (attempt && attempt.order && attempt.order.paymentStatus !== 'CAPTURED') {
+          await this.prisma.$transaction(async (tx) => {
+            await tx.order.update({
+              where: { id: attempt.orderId },
+              data: { status: 'PLACED', paymentStatus: 'CAPTURED' },
+            });
+            await tx.paymentAttempt.update({
+              where: { id: attempt.id },
+              data: {
+                status: 'CAPTURED',
+                providerPaymentId: payment?.id || attempt.providerPaymentId,
+                signatureVerified: true,
+              },
+            });
+            await tx.orderStatusEvent.create({
+              data: {
+                orderId: attempt.orderId,
+                fromStatus: attempt.order.status,
+                toStatus: 'PLACED',
+                actorType: 'SYSTEM',
+                reason: `Payment verified via webhook [${payment?.id || 'event'}]`,
+              },
+            });
           });
         }
       }

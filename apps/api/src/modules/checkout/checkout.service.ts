@@ -315,6 +315,11 @@ export class CheckoutService {
     // Atomic DB Transaction: Capacity Reservation + Order Creation + Payment Attempt
     const orderResult = await this.prisma.$transaction(async (tx) => {
       // 1. Lock and increment slot capacity
+      const slot = await tx.deliverySlot.findUnique({
+        where: { id: cached.deliverySlotId },
+      });
+      const defaultCap = slot?.defaultCapacity ?? 30;
+
       const capacity = await tx.deliverySlotCapacity.upsert({
         where: {
           deliverySlotId_serviceDate: {
@@ -326,13 +331,13 @@ export class CheckoutService {
         create: {
           deliverySlotId: cached.deliverySlotId,
           serviceDate: cached.serviceDate,
-          maxCapacity: 30,
+          maxCapacity: defaultCap,
           bookedCount: 1,
         },
       });
 
-      // FIX #2: Off-by-one fixed — use >= instead of > so capacity is never exceeded
-      if (capacity.bookedCount >= capacity.maxCapacity) {
+      // Strict boundary check: If bookedCount strictly exceeds maxCapacity (e.g. 31 > 30), reject and rollback
+      if (capacity.bookedCount > capacity.maxCapacity) {
         throw new BadRequestException({
           code: 'SLOT_CAPACITY_EXCEEDED',
           message: 'Delivery slot capacity was filled by another order just now.',
@@ -342,7 +347,15 @@ export class CheckoutService {
       // Generate human-friendly order number: JR-YYYYMMDD-XXXX
       const dateStr = cached.serviceDate.toISOString().slice(0, 10).replace(/-/g, '');
       const countToday = await tx.order.count({ where: { serviceDate: cached.serviceDate } });
-      const orderNumber = `JR-${dateStr}-${(countToday + 1).toString().padStart(4, '0')}`;
+      const orderSeq = countToday + 1;
+      let orderNumber = `JR-${dateStr}-${orderSeq.toString().padStart(4, '0')}`;
+      
+      // Concurrency collision protection: if another transaction picked this sequence simultaneously, append random entropy
+      const existingOrderNum = await tx.order.findUnique({ where: { orderNumber } });
+      if (existingOrderNum) {
+        const entropy = randomBytes(2).toString('hex').toUpperCase();
+        orderNumber = `JR-${dateStr}-${orderSeq.toString().padStart(4, '0')}-${entropy}`;
+      }
       const trackingToken = 'trk_' + randomBytes(16).toString('hex');
 
       // Create Order Record
