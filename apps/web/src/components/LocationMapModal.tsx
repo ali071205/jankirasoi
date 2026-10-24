@@ -110,6 +110,8 @@ export default function LocationMapModal({
   const [city, setCity] = useState('Sagore, Pithampur');
   const [displayAddress, setDisplayAddress] = useState('Sagore Main Market, Pithampur, Dhar, Madhya Pradesh 454774, India');
   const [isGpsLoading, setIsGpsLoading] = useState(false);
+  const [showPermissionDialog, setShowPermissionDialog] = useState(false);
+  const [accuracyMode, setAccuracyMode] = useState<'precise' | 'approximate'>('precise');
   const [savedAddresses, setSavedAddresses] = useState<LocationData[]>([]);
 
   // Load saved addresses from localStorage
@@ -196,14 +198,29 @@ export default function LocationMapModal({
     setViewMode('MAP_PINPOINT');
   };
 
-  // GPS Current Location (Screenshot 1 "Turn on Location" & Screenshot 2 "Current location" button)
+  // Open Android-style location permission dialog (Screenshot: "Allow Janki Rasoi to access this device's location?")
   const handleUseCurrentLocation = () => {
+    setShowPermissionDialog(true);
+  };
+
+  // Perform geolocation once user chooses permission in dialog
+  const executeGeolocation = (highAccuracy: boolean, persistPermission: boolean) => {
+    setShowPermissionDialog(false);
+    setIsGpsLoading(true);
+
+    if (persistPermission && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('jr_location_perm', 'granted');
+        localStorage.setItem('jr_location_accuracy', highAccuracy ? 'precise' : 'approximate');
+      } catch {}
+    }
+
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       alert('Geolocation is not supported by your browser.');
+      setIsGpsLoading(false);
       return;
     }
 
-    setIsGpsLoading(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const userLat = pos.coords.latitude;
@@ -245,7 +262,7 @@ export default function LocationMapModal({
         // Fallback to Sagore center
         selectLocation(22.6288, 75.5684, 'Sagore Main Market, Pithampur, MP 454774', '454774');
       },
-      { timeout: 9000, enableHighAccuracy: true }
+      { timeout: 9000, enableHighAccuracy: highAccuracy }
     );
   };
 
@@ -780,6 +797,135 @@ export default function LocationMapModal({
         )}
 
       </div>
+
+      {/* ============================================================== */}
+      {/* ANDROID SYSTEM-STYLE LOCATION PERMISSION DIALOG                 */}
+      {/* (Exact 1:1 Match with User's Reference Screenshot)             */}
+      {/* ============================================================== */}
+      {showPermissionDialog && (
+        <div className="fixed inset-0 z-60 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-[#2B2D30] w-full max-w-[340px] sm:max-w-[360px] rounded-[32px] p-6 sm:p-7 shadow-2xl border border-white/10 flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
+            
+            {/* Top Location Icon */}
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-[#9AA0A6] mb-3">
+              <span className="material-symbols-outlined text-[32px]">location_on</span>
+            </div>
+
+            {/* Title */}
+            <h3 className="text-lg sm:text-[19px] font-normal text-white leading-snug">
+              Allow <span className="font-bold text-white">Janki Rasoi</span> to access this device’s location?
+            </h3>
+
+            {/* Notice Banner */}
+            <div className="mt-4 w-full bg-[#3C4043]/80 border border-[#5F6368]/50 rounded-2xl p-3 flex items-center justify-between text-left hover:bg-[#3C4043] transition-colors">
+              <div className="flex items-start gap-2.5 pr-2">
+                <span className="material-symbols-outlined text-[19px] text-[#9AA0A6] shrink-0 mt-0.5">
+                  security
+                </span>
+                <span className="text-[11px] text-[#BDC1C6] leading-tight font-normal">
+                  This app stated that it may share location data with third parties
+                </span>
+              </div>
+              <span className="material-symbols-outlined text-[18px] text-[#9AA0A6] shrink-0">
+                chevron_right
+              </span>
+            </div>
+
+            {/* Circular Options: Precise vs Approximate */}
+            <div className="grid grid-cols-2 gap-4 w-full my-6">
+              
+              {/* Option 1: Precise */}
+              <button
+                type="button"
+                onClick={() => setAccuracyMode('precise')}
+                className="flex flex-col items-center group cursor-pointer focus:outline-none"
+              >
+                <div className={`w-24 h-24 sm:w-28 sm:h-28 rounded-full relative transition-all duration-200 ${
+                  accuracyMode === 'precise'
+                    ? 'ring-3 ring-[#8AB4F8] shadow-lg shadow-blue-500/25 scale-102'
+                    : 'opacity-55 hover:opacity-80'
+                }`}>
+                  <svg className="w-full h-full" viewBox="0 0 100 100" fill="none">
+                    <rect width="100" height="100" rx="50" fill="#1C2430" />
+                    <ellipse cx="50" cy="50" rx="46" ry="20" stroke="#37475E" strokeWidth="1.2" fill="none" />
+                    <ellipse cx="50" cy="50" rx="46" ry="38" stroke="#37475E" strokeWidth="1.2" fill="none" />
+                    <path d="M50 4v92M4 50h92" stroke="#37475E" strokeWidth="1.2" />
+                    <path d="M18 18l64 64M18 82l64-64" stroke="#2C3B4E" strokeWidth="1.2" />
+                    <circle cx="28" cy="30" r="2.5" fill="#FBBC04" />
+                    <circle cx="75" cy="28" r="2" fill="#8AB4F8" />
+                    <circle cx="22" cy="68" r="2" fill="#8AB4F8" />
+                    <circle cx="50" cy="50" r="14" fill="#1A73E8" fillOpacity="0.25" />
+                    <path d="M50 34c-5.5 0-10 4.5-10 10 0 7.5 10 18 10 18s10-10.5 10-18c0-5.5-4.5-10-10-10z" fill="#4285F4" />
+                    <circle cx="50" cy="44" r="3.5" fill="#FFFFFF" />
+                  </svg>
+                </div>
+                <span className={`mt-2.5 text-xs sm:text-sm transition-colors ${
+                  accuracyMode === 'precise' ? 'text-white font-bold' : 'text-[#9AA0A6] font-medium'
+                }`}>
+                  Precise
+                </span>
+              </button>
+
+              {/* Option 2: Approximate */}
+              <button
+                type="button"
+                onClick={() => setAccuracyMode('approximate')}
+                className="flex flex-col items-center group cursor-pointer focus:outline-none"
+              >
+                <div className={`w-24 h-24 sm:w-28 sm:h-28 rounded-full relative transition-all duration-200 ${
+                  accuracyMode === 'approximate'
+                    ? 'ring-3 ring-[#8AB4F8] shadow-lg shadow-blue-500/25 scale-102'
+                    : 'opacity-55 hover:opacity-80'
+                }`}>
+                  <svg className="w-full h-full" viewBox="0 0 100 100" fill="none">
+                    <rect width="100" height="100" rx="50" fill="#1C2430" />
+                    <path d="M10 35h80M5 52h90M15 70h70M25 15v70M50 10v80M75 15v70" stroke="#37475E" strokeWidth="1.2" />
+                    <path d="M8 82c20-5 35-25 45-42s25-25 40-28" stroke="#F9AB00" strokeWidth="2.5" strokeLinecap="round" />
+                    <path d="M20 12c12 18 22 28 35 48s20 28 35 32" stroke="#F9AB00" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M42 45l35-15" stroke="#F9AB00" strokeWidth="2" strokeLinecap="round" />
+                    <rect x="22" y="62" width="7" height="6" rx="1.5" fill="#1A73E8" />
+                    <rect x="68" y="72" width="7" height="6" rx="1.5" fill="#EA4335" />
+                  </svg>
+                </div>
+                <span className={`mt-2.5 text-xs sm:text-sm transition-colors ${
+                  accuracyMode === 'approximate' ? 'text-white font-bold' : 'text-[#9AA0A6] font-medium'
+                }`}>
+                  Approximate
+                </span>
+              </button>
+
+            </div>
+
+            {/* Action Buttons Stack */}
+            <div className="flex flex-col gap-2.5 w-full">
+              <button
+                type="button"
+                onClick={() => executeGeolocation(accuracyMode === 'precise', true)}
+                className="w-full py-3.5 px-4 rounded-full bg-[#E2E5E9] hover:bg-[#D4D7DB] active:scale-98 transition-all text-[#1F1F1F] font-bold text-xs sm:text-sm text-center shadow-xs"
+              >
+                While using the app
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => executeGeolocation(accuracyMode === 'precise', false)}
+                className="w-full py-3.5 px-4 rounded-full bg-[#E2E5E9] hover:bg-[#D4D7DB] active:scale-98 transition-all text-[#1F1F1F] font-bold text-xs sm:text-sm text-center shadow-xs"
+              >
+                Only this time
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setShowPermissionDialog(false)}
+                className="w-full py-3.5 px-4 rounded-full bg-[#E2E5E9] hover:bg-[#D4D7DB] active:scale-98 transition-all text-[#1F1F1F] font-bold text-xs sm:text-sm text-center shadow-xs"
+              >
+                Don't allow
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
