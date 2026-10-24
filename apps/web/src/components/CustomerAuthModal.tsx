@@ -467,7 +467,7 @@ export default function CustomerAuthModal({
                       className="w-full py-3 bg-[#008848] hover:bg-[#00703c] text-white rounded-xl font-extrabold text-xs sm:text-sm shadow-md transition-all active:scale-98 flex items-center justify-center gap-1.5"
                     >
                       <span className="material-symbols-outlined text-[18px]">check_circle</span>
-                      <span>Address Sahi Hai • Confirm &amp; Proceed</span>
+                      <span>Confirm &amp; Proceed</span>
                     </button>
                     <button
                       onClick={handleLogout}

@@ -1330,7 +1330,7 @@ export default function CartPage() {
                   <h3 className="font-extrabold text-sm sm:text-base text-slate-900 leading-tight">
                     Confirm Delivery Address
                   </h3>
-                  <p className="text-[11px] text-slate-500">Check karein ki delivery address sahi hai</p>
+                  <p className="text-[11px] text-slate-500">Please verify your delivery address</p>
                 </div>
               </div>
               <button
@@ -1389,7 +1389,7 @@ export default function CartPage() {
                 ) : (
                   <>
                     <span className="material-symbols-outlined text-[18px]">check_circle</span>
-                    <span>Address Sahi Hai • Order Confirm Karein</span>
+                    <span>Confirm &amp; Proceed</span>
                   </>
                 )}
               </button>
