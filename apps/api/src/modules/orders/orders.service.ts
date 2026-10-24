@@ -183,6 +183,7 @@ export class OrdersService {
         customerName: o.customerName,
         customerPhone: o.customerPhone,
         deliveryAddress: o.deliveryAddress,
+        deliveryNotes: o.deliveryNotes,
         slotLabel: o.deliverySlot.label,
         totalAmountPaise: o.totalAmountPaise,
         assignedRider: o.riderAssignments[0]?.rider
@@ -225,19 +226,19 @@ export class OrdersService {
     actorId?: string,
     actorType = 'ADMIN',
   ) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) {
-      throw new NotFoundException(`Order not found: ${orderId}`);
-    }
-
-    const allowed = VALID_TRANSITIONS[order.status];
-    if (!allowed || !allowed.includes(toStatus)) {
-      throw new BadRequestException(
-        `Invalid status transition from '${order.status}' to '${toStatus}'. Allowed: [${allowed?.join(', ')}]`,
-      );
-    }
-
     const result = await this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({ where: { id: orderId } });
+      if (!order) {
+        throw new NotFoundException(`Order not found: ${orderId}`);
+      }
+
+      const allowed = VALID_TRANSITIONS[order.status];
+      if (!allowed || !allowed.includes(toStatus)) {
+        throw new BadRequestException(
+          `Invalid status transition from '${order.status}' to '${toStatus}'. Allowed: [${allowed?.join(', ')}]`,
+        );
+      }
+
       const updated = await tx.order.update({
         where: { id: orderId },
         data: { status: toStatus },
