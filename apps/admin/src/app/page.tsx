@@ -469,10 +469,13 @@ export default function OperationsConsolePage() {
   const [showAddDishModal, setShowAddDishModal] = useState(false);
   const [newDishName, setNewDishName] = useState('');
   const [newDishCategory, setNewDishCategory] = useState('');
-  const [newDishPrice, setNewDishPrice] = useState('');
+  const [newDishPrice, setNewDishPrice] = useState('149');
   const [newDishDescription, setNewDishDescription] = useState('');
   const [newDishImageUrl, setNewDishImageUrl] = useState('');
   const [isSubmittingDish, setIsSubmittingDish] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [dishFormError, setDishFormError] = useState<string | null>(null);
+  const [dishFormSuccess, setDishFormSuccess] = useState<string | null>(null);
 
   const prevOrdersCountRef = useRef<number>(0);
 
@@ -539,6 +542,7 @@ export default function OperationsConsolePage() {
       const data = await adminApi.getCatalog();
       const cats = data.categories || [];
       setCatalogCategories(cats);
+      setNewDishCategory((prev) => (prev && cats.some((c: any) => c.id === prev) ? prev : cats[0]?.id || ''));
       const soldOuts = new Set<string>();
       cats.forEach((c: any) => {
         c.items?.forEach((i: any) => {
@@ -715,36 +719,71 @@ export default function OperationsConsolePage() {
     },
   ];
 
-  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('Image size exceeds 5MB limit');
+    if (file.size > 10 * 1024 * 1024) {
+      setDishFormError('Image size exceeds 10MB limit');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setNewDishImageUrl(String(event.target.result));
-      }
-    };
-    reader.readAsDataURL(file);
+    setDishFormError(null);
+    setIsUploadingImage(true);
+    try {
+      const uploadedUrl = await adminApi.uploadFoodImage(file);
+      setNewDishImageUrl(uploadedUrl);
+      showToast('Image uploaded successfully');
+    } catch (err: any) {
+      console.warn('Storage upload fallback:', err.message);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setNewDishImageUrl(String(event.target.result));
+        }
+      };
+      reader.readAsDataURL(file);
+      showToast('Image attached');
+    } finally {
+      setIsUploadingImage(false);
+    }
   };
 
   const handleCreateDish = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newDishName.trim()) {
-      showToast('Please enter a dish name');
+    setDishFormError(null);
+
+    const trimmedName = newDishName.trim();
+    if (!trimmedName) {
+      setDishFormError('Please enter a food name');
       return;
     }
-    const catId = newDishCategory || catalogCategories[0]?.id;
+
+    let catId = newDishCategory || catalogCategories[0]?.id;
     if (!catId) {
-      showToast('Please wait for catalog categories to load');
+      try {
+        const catData = await adminApi.getCatalog();
+        if (catData?.categories?.length) {
+          setCatalogCategories(catData.categories);
+          catId = catData.categories[0].id;
+          setNewDishCategory(catId);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!catId) {
+      setDishFormError('Please wait for catalog categories to load');
       return;
     }
-    const priceNum = parseFloat(newDishPrice);
+
+    const priceNum = parseFloat(newDishPrice || '149');
     if (isNaN(priceNum) || priceNum <= 0) {
-      showToast('Please enter a valid price in ₹');
+      setDishFormError('Please enter a valid price in ₹ (e.g. 149)');
+      return;
+    }
+
+    if (isUploadingImage) {
+      setDishFormError('Please wait for image upload to finish');
       return;
     }
 
@@ -752,21 +791,28 @@ export default function OperationsConsolePage() {
     try {
       await adminApi.createDish({
         categoryId: catId,
-        name: newDishName.trim(),
+        name: trimmedName,
         description: newDishDescription.trim() || 'Pure vegetarian homestyle meal freshly cooked in pure ghee.',
         basePricePaise: Math.round(priceNum * 100),
         imageUrl: newDishImageUrl || PRESET_THALI_IMAGES[0].url,
         dietaryType: 'VEG',
       });
-      showToast(`Added "${newDishName}" to Kitchen Menu!`);
-      setShowAddDishModal(false);
+
+      setDishFormSuccess(`"${trimmedName}" created and published!`);
+      showToast(`Added "${trimmedName}" to Food Menu!`);
       setNewDishName('');
-      setNewDishPrice('');
+      setNewDishPrice('149');
       setNewDishDescription('');
       setNewDishImageUrl('');
       await loadCatalog();
+
+      setTimeout(() => {
+        setShowAddDishModal(false);
+        setDishFormSuccess(null);
+      }, 1000);
     } catch (err: any) {
-      showToast(err.message || 'Failed to add new dish');
+      setDishFormError(err.message || 'Failed to add food item');
+      showToast(err.message || 'Failed to add food item');
     } finally {
       setIsSubmittingDish(false);
     }
@@ -2025,12 +2071,15 @@ export default function OperationsConsolePage() {
                       if (catalogCategories.length > 0 && !newDishCategory) {
                         setNewDishCategory(catalogCategories[0].id);
                       }
+                      setDishFormError(null);
+                      setDishFormSuccess(null);
+                      if (!newDishPrice) setNewDishPrice('149');
                       setShowAddDishModal(true);
                     }}
                     className="px-4 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors"
                   >
                     <span className="material-symbols-outlined text-base">add_circle</span>
-                    <span>Add New Thali</span>
+                    <span>Add New Food</span>
                   </button>
                 </div>
               </div>
@@ -2444,41 +2493,67 @@ export default function OperationsConsolePage() {
         </div>
       )}
 
-      {/* 5. ADD NEW THALI MODAL */}
+      {/* 5. ADD NEW FOOD ITEM MODAL */}
       {showAddDishModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-6 shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-5 my-8">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-4 my-auto max-h-[92vh] overflow-y-auto">
+            {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div>
-                <h3 className="font-bold text-lg text-gray-900 font-headline">Add New Thali / Dish</h3>
-                <p className="text-xs text-gray-500">Add a fresh thali with pricing, description, and auto-cropped photo.</p>
+                <h3 className="font-bold text-lg text-gray-950 font-headline">Add New Food Item</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Enter food details and image to publish immediately to the live menu.</p>
               </div>
               <button
-                onClick={() => setShowAddDishModal(false)}
+                type="button"
+                onClick={() => {
+                  setShowAddDishModal(false);
+                  setDishFormError(null);
+                  setDishFormSuccess(null);
+                }}
                 className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center transition-colors"
               >
                 <span className="material-symbols-outlined text-lg">close</span>
               </button>
             </div>
 
-            <form onSubmit={handleCreateDish} className="flex flex-col gap-4 text-xs">
+            {/* Error & Success State Feedback */}
+            {dishFormError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                <span className="material-symbols-outlined text-base text-rose-600 shrink-0">error</span>
+                <span>{dishFormError}</span>
+              </div>
+            )}
+            {dishFormSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                <span className="material-symbols-outlined text-base text-emerald-600 shrink-0">check_circle</span>
+                <span>{dishFormSuccess}</span>
+              </div>
+            )}
+
+            {/* Food Creation Form */}
+            <form onSubmit={handleCreateDish} className="flex flex-col gap-3.5 text-xs">
+              {/* Food Name */}
               <div>
-                <label className="block font-bold text-gray-700 mb-1">
-                  Thali / Dish Name <span className="text-rose-500">*</span>
+                <label className="block font-bold text-gray-800 mb-1">
+                  Food Name <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={newDishName}
-                  onChange={(e) => setNewDishName(e.target.value)}
+                  onChange={(e) => {
+                    setNewDishName(e.target.value);
+                    if (dishFormError) setDishFormError(null);
+                  }}
                   placeholder="e.g. Special Shahi Paneer Thali"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 focus:outline-hidden focus:border-emerald-600 text-gray-800 font-medium"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 focus:outline-hidden focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 text-gray-900 font-medium"
                 />
               </div>
 
+              {/* Category & Price Row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Category <span className="text-rose-500">*</span></label>
+                  <label className="block font-bold text-gray-800 mb-1">Category <span className="text-rose-500">*</span></label>
                   <select
                     value={newDishCategory}
                     onChange={(e) => setNewDishCategory(e.target.value)}
@@ -2493,7 +2568,7 @@ export default function OperationsConsolePage() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Price in ₹ (INR) <span className="text-rose-500">*</span></label>
+                  <label className="block font-bold text-gray-800 mb-1">Price in ₹ (INR) <span className="text-rose-500">*</span></label>
                   <div className="relative">
                     <span className="absolute left-3 top-2.5 text-gray-400 font-bold">₹</span>
                     <input
@@ -2503,38 +2578,51 @@ export default function OperationsConsolePage() {
                       required
                       value={newDishPrice}
                       onChange={(e) => setNewDishPrice(e.target.value)}
-                      placeholder="189"
+                      placeholder="149"
                       className="w-full pl-7 pr-3.5 py-2.5 rounded-xl border border-stone-300 focus:outline-hidden focus:border-emerald-600 text-gray-800 font-bold"
                     />
                   </div>
                 </div>
               </div>
 
+              {/* Description / Details */}
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Description / Thali Items</label>
+                <label className="block font-bold text-gray-800 mb-1">Description / Details</label>
                 <textarea
                   rows={2}
                   value={newDishDescription}
                   onChange={(e) => setNewDishDescription(e.target.value)}
-                  placeholder="e.g. Pure ghee Dal Makhani, Paneer Lababdar, 4 Phulkas, Basmati Rice, Salad & Gulab Jamun"
-                  className="w-full px-3.5 py-2 rounded-xl border border-stone-300 focus:outline-hidden focus:border-emerald-600 text-gray-800"
+                  placeholder="e.g. 4 Phulkas, Paneer Lababdar, Dal Tadka, Basmati Jeera Rice, Fresh Salad & Sweet"
+                  className="w-full px-3.5 py-2 rounded-xl border border-stone-300 focus:outline-hidden focus:border-emerald-600 text-gray-800 resize-none"
                 />
               </div>
 
+              {/* Food Image Upload & Preview */}
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Dish Photo (Auto-crops into required format)</label>
+                <label className="block font-bold text-gray-800 mb-1">
+                  Food Image <span className="text-gray-400 font-normal">(Upload photo or choose preset)</span>
+                </label>
+
+                {/* Image Preview Box */}
                 <div className="relative aspect-[16/10] w-full rounded-2xl overflow-hidden bg-stone-900 border border-stone-200 mb-2 flex items-center justify-center shadow-inner">
-                  {newDishImageUrl ? (
+                  {isUploadingImage ? (
+                    <div className="flex flex-col items-center justify-center p-4 text-center text-white/90 gap-2">
+                      <span className="material-symbols-outlined text-3xl text-emerald-400 animate-spin">progress_activity</span>
+                      <span className="text-xs font-bold">Uploading image to secure storage...</span>
+                      <span className="text-[10px] text-stone-300">Optimizing resolution for website display</span>
+                    </div>
+                  ) : newDishImageUrl ? (
                     <>
-                      <img src={newDishImageUrl} alt="Preview" className="w-full h-full object-cover object-center" />
-                      <div className="absolute top-2.5 right-2.5 bg-black/75 px-2.5 py-1 rounded-full text-[10px] font-bold text-white flex items-center gap-1 shadow-sm">
-                        <span className="material-symbols-outlined text-[13px] text-emerald-400">crop</span>
-                        <span>Auto-Cropped (16:10 Format)</span>
+                      <img src={newDishImageUrl} alt="Food Preview" className="w-full h-full object-cover object-center" />
+                      <div className="absolute top-2.5 left-2.5 bg-black/75 px-2.5 py-1 rounded-full text-[10px] font-bold text-emerald-400 flex items-center gap-1 shadow-sm">
+                        <span className="material-symbols-outlined text-[13px]">check_circle</span>
+                        <span>Photo Ready</span>
                       </div>
                       <button
                         type="button"
                         onClick={() => setNewDishImageUrl('')}
-                        className="absolute bottom-2.5 right-2.5 bg-rose-600 hover:bg-rose-700 text-white p-1.5 rounded-full shadow-md"
+                        title="Remove image"
+                        className="absolute bottom-2.5 right-2.5 bg-rose-600 hover:bg-rose-700 text-white p-1.5 rounded-full shadow-md transition-colors"
                       >
                         <span className="material-symbols-outlined text-sm">close</span>
                       </button>
@@ -2542,36 +2630,52 @@ export default function OperationsConsolePage() {
                   ) : (
                     <div className="flex flex-col items-center justify-center p-4 text-center text-white/80">
                       <span className="material-symbols-outlined text-3xl text-emerald-400 mb-1">add_a_photo</span>
-                      <span className="text-xs font-bold">Pick or Upload Dish Photo</span>
-                      <span className="text-[10px] text-stone-400 mt-0.5">Auto-cropped to display ratio without distortion</span>
+                      <span className="text-xs font-bold">Upload Food Image</span>
+                      <span className="text-[10px] text-stone-400 mt-0.5">JPG, PNG, WebP supported</span>
                     </div>
                   )}
                 </div>
 
+                {/* Upload Action Row */}
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
-                    <label className="cursor-pointer px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl font-bold flex items-center gap-1.5 border border-stone-300 shrink-0">
-                      <span className="material-symbols-outlined text-[16px]">upload_file</span>
-                      <span>Upload File</span>
-                      <input type="file" accept="image/*" onChange={handleImageFileChange} className="hidden" />
+                    <label className={`cursor-pointer px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 border transition-all shrink-0 ${
+                      isUploadingImage
+                        ? 'bg-stone-200 text-stone-500 border-stone-300 cursor-not-allowed'
+                        : 'bg-stone-100 hover:bg-stone-200 text-stone-800 border-stone-300 shadow-2xs'
+                    }`}>
+                      <span className="material-symbols-outlined text-[17px] text-emerald-800">cloud_upload</span>
+                      <span>{isUploadingImage ? 'Uploading...' : 'Upload Image'}</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/jpg"
+                        disabled={isUploadingImage}
+                        onChange={handleImageFileChange}
+                        className="hidden"
+                      />
                     </label>
                     <input
                       type="url"
                       value={newDishImageUrl}
                       onChange={(e) => setNewDishImageUrl(e.target.value)}
                       placeholder="or paste image URL..."
-                      className="w-full px-3 py-1.5 rounded-xl border border-stone-300 text-stone-700 text-xs"
+                      className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-700 text-xs focus:outline-hidden focus:border-emerald-600"
                     />
                   </div>
 
-                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1">
+                  {/* Preset Quick Select */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
                     <span className="text-[10px] text-gray-500 font-bold shrink-0">Presets:</span>
                     {PRESET_THALI_IMAGES.map((preset) => (
                       <button
                         key={preset.title}
                         type="button"
                         onClick={() => setNewDishImageUrl(preset.url)}
-                        className="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-[10px] font-semibold text-gray-700 whitespace-nowrap border border-gray-200"
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold whitespace-nowrap border transition-colors ${
+                          newDishImageUrl === preset.url
+                            ? 'bg-emerald-50 text-emerald-900 border-emerald-300 font-bold'
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-200'
+                        }`}
                       >
                         {preset.title}
                       </button>
@@ -2580,20 +2684,35 @@ export default function OperationsConsolePage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
+              {/* Form Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100 mt-1">
                 <button
                   type="button"
-                  onClick={() => setShowAddDishModal(false)}
-                  className="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50"
+                  onClick={() => {
+                    setShowAddDishModal(false);
+                    setDishFormError(null);
+                    setDishFormSuccess(null);
+                  }}
+                  className="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmittingDish}
-                  className="px-5 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                  disabled={isSubmittingDish || isUploadingImage}
+                  className="px-5 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold flex items-center gap-1.5 shadow-xs disabled:opacity-50 transition-colors"
                 >
-                  {isSubmittingDish ? 'Saving Dish...' : 'Publish Thali'}
+                  {isSubmittingDish ? (
+                    <>
+                      <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                      <span>Saving Food...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-sm">restaurant</span>
+                      <span>Save &amp; Publish Food</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

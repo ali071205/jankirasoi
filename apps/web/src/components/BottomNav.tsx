@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCart } from '../context/CartContext';
 import { api, TrackOrderResponse } from '../lib/api';
-import DeliveryStatusPill, { resolveOrderFoodImage } from './DeliveryStatusPill';
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -14,22 +13,8 @@ export default function BottomNav() {
     token: string;
     orderNumber: string;
     status: string;
-    punchyLine: string;
-    firstItemName: string;
-    totalItems: number;
-    imageUrl?: string;
-    createdAt?: string;
-    deliveryAddress?: {
-      flat?: string;
-      street?: string;
-      landmark?: string;
-      pincode?: string;
-      latitude?: number;
-      longitude?: number;
-    };
   } | null>(null);
 
-  const [dismissedOrderId, setDismissedOrderId] = useState<string | null>(null);
 
   // Poll / check for active customer orders
   useEffect(() => {
@@ -60,20 +45,10 @@ export default function BottomNav() {
             punchyLine = 'Order received by kitchen station';
           }
 
-          const firstItem = data.items && data.items.length > 0 ? data.items[0].name : 'Homestyle Thali';
-          const totalQty = data.items ? data.items.reduce((acc, i) => acc + (i.quantity || 1), 0) : 1;
-          const resolvedImg = resolveOrderFoodImage(firstItem);
-
           setActiveOrder({
             token: lastToken,
             orderNumber: data.orderNumber,
             status: data.status,
-            punchyLine,
-            firstItemName: firstItem,
-            totalItems: totalQty,
-            imageUrl: resolvedImg,
-            createdAt: data.createdAt,
-            deliveryAddress: data.deliveryAddress,
           });
         } else {
           setActiveOrder(null);
@@ -95,10 +70,6 @@ export default function BottomNav() {
   if (pathname === '/cart' || pathname.startsWith('/rider') || pathname.startsWith('/admin')) return null;
 
   const showCartPill = totalCount > 0 && pathname !== '/cart';
-  const showActiveOrderPill =
-    activeOrder !== null &&
-    pathname !== '/track' &&
-    dismissedOrderId !== activeOrder.orderNumber;
 
   return (
     <>
@@ -136,54 +107,6 @@ export default function BottomNav() {
               </span>
             </div>
           </Link>
-        </aside>
-      )}
-
-      {/* Floating Active Order Status Bar if order is live and cart is empty */}
-      {!showCartPill && showActiveOrderPill && activeOrder && pathname !== '/track' && (
-        <aside
-          aria-label="Active Order Status"
-          className="fixed bottom-20 md:bottom-6 inset-x-3 sm:inset-x-auto sm:right-6 max-w-sm sm:max-w-md w-full mx-auto z-50 pointer-events-none animate-fadeIn"
-        >
-          <div className="pointer-events-auto bg-white/95 backdrop-blur-md text-[#292D26] p-2.5 sm:p-3 rounded-2xl shadow-xl shadow-black/5 border border-[#EEE7DC] flex items-center justify-between gap-2.5">
-            <Link
-              href={`/track?token=${encodeURIComponent(activeOrder.token)}`}
-              className="flex items-center gap-2 min-w-0 flex-1 group"
-            >
-              <div className="truncate">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#38754A] animate-pulse shrink-0"></span>
-                  <span className="text-xs font-bold text-[#292D26] truncate group-hover:text-[#38754A] transition-colors">
-                    Order #{activeOrder.orderNumber}
-                  </span>
-                </div>
-                <div className="text-[11px] text-[#77786F] truncate mt-0.5">
-                  {activeOrder.firstItemName}
-                </div>
-              </div>
-            </Link>
-
-            {/* Positioned at bottom-right of the order card: Minimalistic delivery status pill */}
-            <div className="flex items-center gap-1 shrink-0">
-              <DeliveryStatusPill
-                orderNumber={activeOrder.orderNumber}
-                token={activeOrder.token}
-                status={activeOrder.status}
-                createdAt={activeOrder.createdAt}
-                imageUrl={activeOrder.imageUrl}
-                itemName={activeOrder.firstItemName}
-                deliveryAddress={activeOrder.deliveryAddress}
-              />
-              <button
-                onClick={() => setDismissedOrderId(activeOrder.orderNumber)}
-                className="w-6 h-6 rounded-full hover:bg-[#EEE7DC] text-[#77786F] flex items-center justify-center text-xs ml-0.5 shrink-0 transition-colors"
-                title="Dismiss"
-                aria-label="Dismiss order status"
-              >
-                <span className="material-symbols-outlined text-[15px]">close</span>
-              </button>
-            </div>
-          </div>
         </aside>
       )}
 
