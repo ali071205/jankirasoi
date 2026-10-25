@@ -46,9 +46,18 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   constructor(configService: ConfigService) {
     let databaseUrl = configService.get<string>('DATABASE_URL');
-    if (databaseUrl && (databaseUrl.includes('supabase.co') || databaseUrl.includes('127.0.0.1:6543') || databaseUrl.includes('yxvwgcjavxeqsttzcbty'))) {
-      setupTunnel(new Logger('PrismaTunnel'));
-      databaseUrl = 'postgresql://postgres.yxvwgcjavxeqsttzcbty:Jankirasoi001@127.0.0.1:6543/postgres?pgbouncer=true&sslmode=disable';
+    if (databaseUrl && (databaseUrl.includes('supabase.co') || databaseUrl.includes('yxvwgcjavxeqsttzcbty'))) {
+      try {
+        const parsed = new URL(databaseUrl);
+        const user = parsed.username || 'postgres';
+        const projectRef = 'yxvwgcjavxeqsttzcbty';
+        const poolerUser = user.includes('.') ? user : `${user}.${projectRef}`;
+        const pass = parsed.password ? `:${encodeURIComponent(parsed.password)}` : '';
+        setupTunnel(new Logger('PrismaTunnel'));
+        databaseUrl = `postgresql://${poolerUser}${pass}@127.0.0.1:6543/postgres?pgbouncer=true&sslmode=disable`;
+      } catch {
+        // keep databaseUrl as-is if parsing fails
+      }
     }
 
     super(
@@ -74,6 +83,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleDestroy() {
+    if (tunnelServer) {
+      tunnelServer.close();
+      tunnelServer = null;
+    }
     await this.$disconnect();
     this.logger.log('Prisma disconnected from PostgreSQL.');
   }
