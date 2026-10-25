@@ -54,3 +54,47 @@ export class ToggleSoldOutDto {
   @IsBoolean()
   isSoldOut: boolean;
 }
+
+export class UpdateProductDto {
+  @ApiPropertyOptional({ example: 'cat_01j9a' })
+  @IsString()
+  @IsOptional()
+  categoryId?: string;
+
+  @ApiPropertyOptional({ example: 'Special Dal Makhani Thali' })
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @ApiPropertyOptional({ enum: DietaryTypeDto })
+  @IsEnum(DietaryTypeDto)
+  @IsOptional()
+  dietaryType?: DietaryTypeDto;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  imageUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Base price in integer paise (e.g. 14900 = ₹149.00)', example: 14900 })
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  basePricePaise?: number;
+
+  @ApiPropertyOptional({ default: 5 })
+  @IsInt()
+  @IsOptional()
+  taxRatePercent?: number;
+
+  @ApiPropertyOptional()
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
+}
+

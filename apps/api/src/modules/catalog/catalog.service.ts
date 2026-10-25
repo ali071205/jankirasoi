@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateProductDto, ToggleSoldOutDto } from './dto/catalog.dto';
+import { CreateProductDto, ToggleSoldOutDto, UpdateProductDto } from './dto/catalog.dto';
 
 interface CachedCatalog {
   data: any;
@@ -126,6 +126,45 @@ export class CatalogService {
           },
         },
       },
+    });
+  }
+
+  async updateProduct(id: string, dto: UpdateProductDto) {
+    this.clearCache();
+    const existing = await this.prisma.product.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException(`Product with ID "${id}" not found.`);
+    }
+
+    return this.prisma.product.update({
+      where: { id },
+      data: {
+        ...(dto.categoryId !== undefined && { categoryId: dto.categoryId }),
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.dietaryType !== undefined && { dietaryType: dto.dietaryType as any }),
+        ...(dto.imageUrl !== undefined && { imageUrl: dto.imageUrl }),
+        ...(dto.basePricePaise !== undefined && { basePricePaise: dto.basePricePaise }),
+        ...(dto.taxRatePercent !== undefined && { taxRatePercent: dto.taxRatePercent }),
+        ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+      },
+      include: {
+        variants: true,
+      },
+    });
+  }
+
+  async deleteProduct(id: string) {
+    this.clearCache();
+    const existing = await this.prisma.product.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException(`Product with ID "${id}" not found.`);
+    }
+
+    // Soft delete to protect existing orders and historical receipts
+    return this.prisma.product.update({
+      where: { id },
+      data: { isActive: false },
     });
   }
 

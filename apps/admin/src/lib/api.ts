@@ -236,6 +236,50 @@ export const adminApi = {
     return res.json();
   },
 
+  // 11. Update Existing Dish / Thali
+  async updateDish(
+    productId: string,
+    data: {
+      categoryId?: string;
+      name?: string;
+      description?: string;
+      basePricePaise?: number;
+      imageUrl?: string;
+      dietaryType?: string;
+    },
+  ) {
+    const base = getApiBase();
+    const res = await fetch(`${base}/admin/catalog/products/${encodeURIComponent(productId)}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Simulated-Role': 'STAFF',
+      },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to update dish');
+    }
+    return res.json();
+  },
+
+  // 12. Delete / Archive Dish
+  async deleteDish(productId: string) {
+    const base = getApiBase();
+    const res = await fetch(`${base}/admin/catalog/products/${encodeURIComponent(productId)}`, {
+      method: 'DELETE',
+      headers: {
+        'X-Simulated-Role': 'STAFF',
+      },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to remove dish');
+    }
+    return res.json();
+  },
+
   // 11. Fetch Active Delivery Zones
   async getDeliveryZones() {
     const base = getApiBase();

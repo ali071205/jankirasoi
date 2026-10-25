@@ -477,6 +477,23 @@ export default function OperationsConsolePage() {
   const [dishFormError, setDishFormError] = useState<string | null>(null);
   const [dishFormSuccess, setDishFormSuccess] = useState<string | null>(null);
 
+  // Edit Existing Dish State
+  const [editingDish, setEditingDish] = useState<any | null>(null);
+  const [showEditDishModal, setShowEditDishModal] = useState(false);
+  const [editDishName, setEditDishName] = useState('');
+  const [editDishCategory, setEditDishCategory] = useState('');
+  const [editDishPrice, setEditDishPrice] = useState('149');
+  const [editDishDescription, setEditDishDescription] = useState('');
+  const [editDishImageUrl, setEditDishImageUrl] = useState('');
+  const [isUpdatingDish, setIsUpdatingDish] = useState(false);
+  const [isUploadingEditImage, setIsUploadingEditImage] = useState(false);
+  const [editDishError, setEditDishError] = useState<string | null>(null);
+  const [editDishSuccess, setEditDishSuccess] = useState<string | null>(null);
+
+  // Delete Dish State
+  const [dishToDelete, setDishToDelete] = useState<any | null>(null);
+  const [isDeletingDish, setIsDeletingDish] = useState(false);
+
   const prevOrdersCountRef = useRef<number>(0);
 
   const showToast = (msg: string) => {
@@ -822,6 +839,110 @@ export default function OperationsConsolePage() {
     }
   };
 
+  const handleOpenEditDish = (dish: any, defaultCatId: string) => {
+    setEditingDish(dish);
+    setEditDishName(dish.name || '');
+    setEditDishCategory(dish.categoryId || defaultCatId || catalogCategories[0]?.id || '');
+    setEditDishPrice(dish.basePricePaise ? (dish.basePricePaise / 100).toString() : '149');
+    setEditDishDescription(dish.description || '');
+    setEditDishImageUrl(dish.imageUrl || '');
+    setEditDishError(null);
+    setEditDishSuccess(null);
+    setShowEditDishModal(true);
+  };
+
+  const handleEditImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setEditDishError('Image size exceeds 10MB limit');
+      return;
+    }
+    setEditDishError(null);
+    setIsUploadingEditImage(true);
+    try {
+      const uploadedUrl = await adminApi.uploadFoodImage(file);
+      setEditDishImageUrl(uploadedUrl);
+      showToast('Image updated successfully');
+    } catch (err: any) {
+      console.warn('Storage upload fallback:', err.message);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setEditDishImageUrl(String(event.target.result));
+        }
+      };
+      reader.readAsDataURL(file);
+      showToast('Image attached');
+    } finally {
+      setIsUploadingEditImage(false);
+    }
+  };
+
+  const handleUpdateDish = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDish) return;
+    setEditDishError(null);
+
+    const trimmedName = editDishName.trim();
+    if (!trimmedName) {
+      setEditDishError('Please enter a food name');
+      return;
+    }
+
+    const priceNum = parseFloat(editDishPrice || '149');
+    if (isNaN(priceNum) || priceNum <= 0) {
+      setEditDishError('Please enter a valid price in ₹ (e.g. 149)');
+      return;
+    }
+
+    if (isUploadingEditImage) {
+      setEditDishError('Please wait for image upload to finish');
+      return;
+    }
+
+    setIsUpdatingDish(true);
+    try {
+      await adminApi.updateDish(editingDish.id, {
+        categoryId: editDishCategory || undefined,
+        name: trimmedName,
+        description: editDishDescription.trim() || undefined,
+        basePricePaise: Math.round(priceNum * 100),
+        imageUrl: editDishImageUrl || undefined,
+      });
+
+      setEditDishSuccess(`"${trimmedName}" updated successfully!`);
+      showToast(`Updated "${trimmedName}" in menu!`);
+      await loadCatalog();
+
+      setTimeout(() => {
+        setShowEditDishModal(false);
+        setEditingDish(null);
+        setEditDishSuccess(null);
+      }, 900);
+    } catch (err: any) {
+      setEditDishError(err.message || 'Failed to update dish');
+      showToast(err.message || 'Failed to update dish');
+    } finally {
+      setIsUpdatingDish(false);
+    }
+  };
+
+  const handleConfirmDeleteDish = async () => {
+    if (!dishToDelete) return;
+    setIsDeletingDish(true);
+    try {
+      await adminApi.deleteDish(dishToDelete.id);
+      showToast(`Removed "${dishToDelete.name}" from active menu`);
+      setDishToDelete(null);
+      await loadCatalog();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to remove dish');
+    } finally {
+      setIsDeletingDish(false);
+    }
+  };
+
   // Exact Metrics Matching Reference Image
   const totalOrdersCount = orders.length;
   const newCount = orders.filter((o) => o.status === 'PLACED').length;
@@ -1112,9 +1233,9 @@ export default function OperationsConsolePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8faf7] text-stone-900 flex flex-col font-body selection:bg-emerald-800 selection:text-white antialiased">
+    <div className="h-screen max-h-screen overflow-hidden bg-[#f8faf7] text-stone-900 flex flex-col font-body selection:bg-emerald-800 selection:text-white antialiased">
       {/* 1. TOP COMPACT HEADER */}
-      <header className="sticky top-0 z-40 bg-white border-b border-gray-200/90 px-4 lg:px-6 h-16 flex items-center justify-between shadow-2xs">
+      <header className="h-16 shrink-0 z-40 bg-white border-b border-gray-200/90 px-4 lg:px-6 flex items-center justify-between shadow-2xs">
         <div className="flex items-center gap-3 sm:gap-4">
           {/* Mobile Drawer Hamburger Button */}
           <button
@@ -1190,9 +1311,9 @@ export default function OperationsConsolePage() {
       </header>
 
       {/* 2. BODY LAYOUT: Left Sidebar + Center Workspace (+ Right Panel on Orders) */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Left Persistent Sidebar (Matching Reference Image) */}
-        <aside className="w-56 bg-white border-r border-gray-200/90 flex flex-col justify-between p-3 shrink-0 select-none hidden md:flex overflow-y-auto no-scrollbar">
+        <aside className="w-56 h-full max-h-full bg-white border-r border-gray-200/90 flex flex-col justify-between p-3 shrink-0 select-none hidden md:flex overflow-y-auto no-scrollbar">
           {/* Main Navigation Stack */}
           <nav className="flex flex-col gap-1">
             <button
@@ -1274,7 +1395,7 @@ export default function OperationsConsolePage() {
           </nav>
 
           {/* Bottom Sidebar: Service Status & Capacity Link (Matching Reference Image) */}
-          <div className="flex flex-col gap-2 pt-3 border-t border-gray-100">
+          <div className="shrink-0 pt-3 border-t border-gray-100 flex flex-col gap-2 mt-auto">
             {/* Lunch Service Status Card */}
             <div className="bg-[#fcfdfa] border border-stone-200/80 p-2.5 rounded-xl flex items-center justify-between text-xs">
               <div className="flex items-center gap-2">
@@ -1315,7 +1436,7 @@ export default function OperationsConsolePage() {
         </aside>
 
         {/* 3. CENTER / WORKSPACE AREA */}
-        <div className="flex-1 flex flex-col overflow-y-auto">
+        <div className="flex-1 flex flex-col overflow-y-auto min-h-0 bg-[#f8faf7]">
           {/* Mobile Tab Bar */}
           <div className="md:hidden flex items-center gap-1.5 p-2 bg-white border-b border-gray-200 overflow-x-auto no-scrollbar">
             {(
@@ -2170,29 +2291,51 @@ export default function OperationsConsolePage() {
                               </p>
                             </div>
 
-                            <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                              <span
-                                className={`text-xs font-bold ${
-                                  !is86ed ? 'text-emerald-800' : 'text-stone-500'
-                                }`}
-                              >
-                                {!is86ed ? 'IN STOCK (ON)' : 'SOLD OUT (OFF)'}
-                              </span>
-                              <button
-                                type="button"
-                                role="switch"
-                                aria-checked={!is86ed}
-                                onClick={() => toggleItemStock(item.id, item.name)}
-                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${
-                                  !is86ed ? 'bg-emerald-600' : 'bg-gray-300'
-                                }`}
-                              >
+                            <div className="flex items-center justify-between pt-3 border-t border-gray-100 gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditDish(item, cat.id)}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 text-xs font-bold flex items-center gap-1 transition-all shadow-2xs"
+                                  title="Edit food details, image, or price"
+                                >
+                                  <span className="material-symbols-outlined text-[14px]">edit</span>
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDishToDelete(item)}
+                                  className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold flex items-center justify-center transition-all shadow-2xs"
+                                  title="Remove food from menu"
+                                >
+                                  <span className="material-symbols-outlined text-[15px]">delete</span>
+                                </button>
+                              </div>
+
+                              <div className="flex items-center gap-2">
                                 <span
-                                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition duration-200 ${
-                                    !is86ed ? 'translate-x-5' : 'translate-x-0'
+                                  className={`text-[11px] font-bold ${
+                                    !is86ed ? 'text-emerald-800' : 'text-stone-400'
                                   }`}
-                                />
-                              </button>
+                                >
+                                  {!is86ed ? 'IN STOCK' : '86 / OFF'}
+                                </span>
+                                <button
+                                  type="button"
+                                  role="switch"
+                                  aria-checked={!is86ed}
+                                  onClick={() => toggleItemStock(item.id, item.name)}
+                                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${
+                                    !is86ed ? 'bg-emerald-600' : 'bg-gray-300'
+                                  }`}
+                                >
+                                  <span
+                                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition duration-200 ${
+                                      !is86ed ? 'translate-x-4' : 'translate-x-0'
+                                    }`}
+                                  />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         );
@@ -2720,6 +2863,276 @@ export default function OperationsConsolePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 6. EDIT FOOD ITEM MODAL */}
+      {showEditDishModal && editingDish && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-4 my-auto max-h-[92vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="font-bold text-lg text-gray-950 font-headline">Edit Food Item</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Update dish details, price, description, or image.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEditDishModal(false);
+                  setEditingDish(null);
+                  setEditDishError(null);
+                  setEditDishSuccess(null);
+                }}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center transition-colors"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            {/* Feedback Messages */}
+            {editDishError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                <span className="material-symbols-outlined text-base text-rose-600 shrink-0">error</span>
+                <span>{editDishError}</span>
+              </div>
+            )}
+            {editDishSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                <span className="material-symbols-outlined text-base text-emerald-600 shrink-0">check_circle</span>
+                <span>{editDishSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateDish} className="flex flex-col gap-3.5 text-xs">
+              {/* Food Name */}
+              <div>
+                <label className="block font-bold text-gray-800 mb-1">
+                  Food Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editDishName}
+                  onChange={(e) => {
+                    setEditDishName(e.target.value);
+                    if (editDishError) setEditDishError(null);
+                  }}
+                  placeholder="e.g. Special Shahi Paneer Thali"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 focus:outline-hidden focus:border-emerald-600 text-gray-900 font-medium"
+                />
+              </div>
+
+              {/* Category & Price */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-800 mb-1">Category <span className="text-rose-500">*</span></label>
+                  <select
+                    value={editDishCategory}
+                    onChange={(e) => setEditDishCategory(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 focus:outline-hidden focus:border-emerald-600 text-gray-800 font-medium bg-white"
+                  >
+                    {catalogCategories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-800 mb-1">Price in ₹ (INR) <span className="text-rose-500">*</span></label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-gray-400 font-bold">₹</span>
+                    <input
+                      type="number"
+                      step="1"
+                      min="1"
+                      required
+                      value={editDishPrice}
+                      onChange={(e) => setEditDishPrice(e.target.value)}
+                      placeholder="149"
+                      className="w-full pl-7 pr-3.5 py-2.5 rounded-xl border border-stone-300 focus:outline-hidden focus:border-emerald-600 text-gray-800 font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block font-bold text-gray-800 mb-1">Description / Details</label>
+                <textarea
+                  rows={2}
+                  value={editDishDescription}
+                  onChange={(e) => setEditDishDescription(e.target.value)}
+                  placeholder="Details of the meal..."
+                  className="w-full px-3.5 py-2 rounded-xl border border-stone-300 focus:outline-hidden focus:border-emerald-600 text-gray-800 resize-none"
+                />
+              </div>
+
+              {/* Image Upload & Preview */}
+              <div>
+                <label className="block font-bold text-gray-800 mb-1">
+                  Food Image <span className="text-gray-400 font-normal">(Upload photo or paste URL)</span>
+                </label>
+
+                <div className="relative aspect-[16/10] w-full rounded-2xl overflow-hidden bg-stone-900 border border-stone-200 mb-2 flex items-center justify-center shadow-inner">
+                  {isUploadingEditImage ? (
+                    <div className="flex flex-col items-center justify-center p-4 text-center text-white/90 gap-2">
+                      <span className="material-symbols-outlined text-3xl text-emerald-400 animate-spin">progress_activity</span>
+                      <span className="text-xs font-bold">Uploading new photo...</span>
+                    </div>
+                  ) : editDishImageUrl ? (
+                    <>
+                      <img src={editDishImageUrl} alt="Preview" className="w-full h-full object-cover object-center" />
+                      <div className="absolute top-2.5 left-2.5 bg-black/75 px-2.5 py-1 rounded-full text-[10px] font-bold text-emerald-400 flex items-center gap-1 shadow-sm">
+                        <span className="material-symbols-outlined text-[13px]">check_circle</span>
+                        <span>Photo Ready</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditDishImageUrl('')}
+                        title="Remove image"
+                        className="absolute bottom-2.5 right-2.5 bg-rose-600 hover:bg-rose-700 text-white p-1.5 rounded-full shadow-md transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-sm">close</span>
+                      </button>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center p-4 text-center text-white/80">
+                      <span className="material-symbols-outlined text-3xl text-emerald-400 mb-1">add_a_photo</span>
+                      <span className="text-xs font-bold">Upload Food Image</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <label className={`cursor-pointer px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 border transition-all shrink-0 ${
+                      isUploadingEditImage
+                        ? 'bg-stone-200 text-stone-500 border-stone-300 cursor-not-allowed'
+                        : 'bg-stone-100 hover:bg-stone-200 text-stone-800 border-stone-300 shadow-2xs'
+                    }`}>
+                      <span className="material-symbols-outlined text-[17px] text-emerald-800">cloud_upload</span>
+                      <span>{isUploadingEditImage ? 'Uploading...' : 'Upload Image'}</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/jpg"
+                        disabled={isUploadingEditImage}
+                        onChange={handleEditImageFileChange}
+                        className="hidden"
+                      />
+                    </label>
+                    <input
+                      type="url"
+                      value={editDishImageUrl}
+                      onChange={(e) => setEditDishImageUrl(e.target.value)}
+                      placeholder="or paste image URL..."
+                      className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-700 text-xs focus:outline-hidden focus:border-emerald-600"
+                    />
+                  </div>
+
+                  {/* Presets */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
+                    <span className="text-[10px] text-gray-500 font-bold shrink-0">Presets:</span>
+                    {PRESET_THALI_IMAGES.map((preset) => (
+                      <button
+                        key={preset.title}
+                        type="button"
+                        onClick={() => setEditDishImageUrl(preset.url)}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold whitespace-nowrap border transition-colors ${
+                          editDishImageUrl === preset.url
+                            ? 'bg-emerald-50 text-emerald-900 border-emerald-300 font-bold'
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-200'
+                        }`}
+                      >
+                        {preset.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100 mt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditDishModal(false);
+                    setEditingDish(null);
+                    setEditDishError(null);
+                    setEditDishSuccess(null);
+                  }}
+                  className="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingDish || isUploadingEditImage}
+                  className="px-5 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold flex items-center gap-1.5 shadow-xs disabled:opacity-50 transition-colors"
+                >
+                  {isUpdatingDish ? (
+                    <>
+                      <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                      <span>Saving Changes...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-sm">check</span>
+                      <span>Update &amp; Save Dish</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 7. DELETE DISH CONFIRMATION MODAL */}
+      {dishToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 flex items-center justify-center">
+              <span className="material-symbols-outlined text-2xl">delete_forever</span>
+            </div>
+
+            <div>
+              <h3 className="font-bold text-base text-gray-950 font-headline">Remove "{dishToDelete.name}"?</h3>
+              <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                This will remove the food item from the active customer ordering menu. Existing order records and customer receipts will remain safely preserved in the database.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setDishToDelete(null)}
+                className="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingDish}
+                onClick={handleConfirmDeleteDish}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs disabled:opacity-50 transition-colors"
+              >
+                {isDeletingDish ? (
+                  <>
+                    <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                    <span>Removing...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-sm">delete</span>
+                    <span>Yes, Remove Food</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
