@@ -18,7 +18,8 @@
     "start:worker": "pnpm --filter ./apps/api start:worker",
     "postinstall": "pnpm --filter ./apps/api prisma:generate || true",
     "lint": "pnpm --filter ./apps/api lint",
-    "test": "pnpm --filter ./apps/api test"
+    "test": "pnpm --filter ./apps/api test",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "next": "^14.2.23",
@@ -26,6 +27,7 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "typescript": "^5.7.3"
   }
 }
