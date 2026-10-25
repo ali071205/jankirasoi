@@ -264,7 +264,14 @@ export default function HomePage() {
             <h2 className="text-base sm:text-lg font-extrabold text-slate-900 font-headline">
               Recommended ({allDishes.length > 0 ? allDishes.length : topSpecials.length})
             </h2>
-            <span className="material-symbols-outlined text-[18px] text-slate-700">keyboard_arrow_down</span>
+            <svg
+              className="w-4 h-4 text-slate-700 shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+            </svg>
           </div>
           <Link
             href={`/menu?slot=${selectedSlot}`}
