@@ -250,9 +250,18 @@ export class DeliveryZonesService {
     };
   }
 
+  private cachedActiveZones: { data: any; cachedAt: number } | null = null;
+  private readonly ZONES_TTL_MS = 600_000; // 10 minutes
+
   async getAllActiveZones() {
-    return this.prisma.deliveryZone.findMany({
+    const now = Date.now();
+    if (this.cachedActiveZones && now - this.cachedActiveZones.cachedAt < this.ZONES_TTL_MS) {
+      return this.cachedActiveZones.data;
+    }
+    const zones = await this.prisma.deliveryZone.findMany({
       where: { isActive: true },
     });
+    this.cachedActiveZones = { data: zones, cachedAt: now };
+    return zones;
   }
 }

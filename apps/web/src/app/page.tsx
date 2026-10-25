@@ -25,7 +25,7 @@ export default function HomePage() {
 
     async function loadData() {
       try {
-        const catalogData = await api.getCatalog(undefined, true).catch(() => null);
+        const catalogData = await api.getCatalog(undefined, false).catch(() => null);
         if (catalogData?.categories?.length) {
           setCatalog(catalogData as CatalogResponse);
         }
@@ -167,6 +167,8 @@ export default function HomePage() {
             <img
               className="w-full h-full object-cover"
               alt="Indian royal vegetarian thali overhead view"
+              fetchPriority="high"
+              decoding="async"
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuAmNaJ5ALgFMsHGc_5ZSAC4yWBAEsiB_kuk55Pd1H9gFrmgaGDcNyEl7tf2oRF-iskUz0TCTd0EaaujsArEQT0yE1XaYDWkZldDdaZ6ZZk1hH_CzReVsHLDdPMRSTstB8uXB5RagmdAg9paaPnyYuEFONYhWSpAjxa8hH_ZGLxTvoz-QKjPwoSoJ0ZIznftCy3FX_hZl1ThZniWwlAiFwCLgQMR67wwmb8szFdmwZy7ZVkb6QhQMw6H"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent"></div>
@@ -305,6 +307,8 @@ export default function HomePage() {
                   <img
                     className="w-full h-full object-cover group-hover:scale-104 transition-transform duration-300"
                     style={{ aspectRatio: '1 / 1' }}
+                    loading="lazy"
+                    decoding="async"
                     src={dish.imageUrl || DEFAULT_FOOD_IMAGE}
                     alt={dish.name}
                     onError={(e) => {

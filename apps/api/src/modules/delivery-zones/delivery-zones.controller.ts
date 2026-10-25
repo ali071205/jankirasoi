@@ -1,4 +1,4 @@
-import { Controller, Get, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Query, BadRequestException, Header } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { DeliveryZonesService } from './delivery-zones.service';
 
@@ -8,6 +8,7 @@ export class DeliveryZonesController {
   constructor(private readonly zonesService: DeliveryZonesService) {}
 
   @Get('check')
+  @Header('Cache-Control', 'public, max-age=60, stale-while-revalidate=300')
   @ApiOperation({ summary: 'Check pincode and distance serviceability from Sagore Kitchen' })
   @ApiQuery({ name: 'pincode', required: true, example: '454774' })
   @ApiQuery({ name: 'lat', required: false, example: '22.6288' })
@@ -26,6 +27,7 @@ export class DeliveryZonesController {
   }
 
   @Get()
+  @Header('Cache-Control', 'public, max-age=300, stale-while-revalidate=1800')
   @ApiOperation({ summary: 'List all active delivery zones' })
   async listZones() {
     return this.zonesService.getAllActiveZones();

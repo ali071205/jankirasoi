@@ -10,8 +10,9 @@ function setupTunnel(logger: Logger) {
   try {
     const server = net.createServer((clientSocket) => {
       logger.log('Prisma client connected to local tunnel');
-      const remoteSocket = net.createConnection({ host: '15.165.245.138', port: 6543 }, () => {
-        logger.log('Tunnel connected to Supabase pooler');
+      const remoteHost = process.env.SUPABASE_POOLER_HOST || '15.165.245.138';
+      const remoteSocket = net.createConnection({ host: remoteHost, port: 6543 }, () => {
+        logger.log(`Tunnel connected to Supabase pooler (${remoteHost})`);
       });
       clientSocket.pipe(remoteSocket);
       remoteSocket.pipe(clientSocket);
@@ -32,7 +33,7 @@ function setupTunnel(logger: Logger) {
       }
     });
     server.listen(6543, '127.0.0.1', () => {
-      logger.log('⚡ Local IPv4 proxy active on 127.0.0.1:6543 -> Supabase Pooler (Seoul)');
+      logger.log('⚡ Local IPv4 proxy active on 127.0.0.1:6543 -> Supabase Pooler (Seoul ap-northeast-2)');
     });
     tunnelServer = server;
   } catch (err: any) {

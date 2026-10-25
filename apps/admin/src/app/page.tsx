@@ -575,8 +575,12 @@ export default function OperationsConsolePage() {
     loadRiders();
     loadSlots();
 
-    // 1. Resilient polling fallback every 6 seconds
-    const interval = setInterval(() => loadOrders(true), 6000);
+    // 1. Resilient polling fallback every 8 seconds when active tab is visible
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        loadOrders(true);
+      }
+    }, 8000);
 
     // 2. Instant sync when browser tab regains focus or visibility
     const handleVisibilityOrFocus = () => {

@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  poweredByHeader: false,
+  compress: true,
+  swcMinify: true,
   allowedDevOrigins: ['10.103.206.252:3002', '10.103.206.252', 'localhost:3002'],
   async rewrites() {
     const rawApiUrl =

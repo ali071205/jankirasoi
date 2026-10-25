@@ -51,7 +51,7 @@ export default function MenuPage() {
 
     async function loadCatalog() {
       try {
-        const data = await api.getCatalog(undefined, true);
+        const data = await api.getCatalog(undefined, false);
         setCatalog(data);
 
         // Pre-select default variants
@@ -294,6 +294,8 @@ export default function MenuPage() {
                           <img
                             className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-300"
                             alt={dish.name}
+                            loading="lazy"
+                            decoding="async"
                             src={dish.imageUrl || DEFAULT_FOOD_IMAGE}
                             onError={(e) => {
                               e.currentTarget.onerror = null;
