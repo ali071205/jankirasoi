@@ -235,6 +235,39 @@ export const adminApi = {
     }
     return res.json();
   },
+
+  // 11. Upload Food Image to Cloudinary via backend-signed signature
+  async uploadFoodImage(file: File): Promise<string> {
+    const base = getApiBase();
+    const sigRes = await fetch(`${base}/admin/uploads/signature?folder=jankirasoi/menu`, {
+      headers: {
+        'X-Simulated-Role': 'STAFF',
+      },
+    });
+    if (!sigRes.ok) {
+      const err = await sigRes.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to get upload signature');
+    }
+    const { apiKey, timestamp, folder, signature, uploadUrl } = await sigRes.json();
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('api_key', apiKey);
+    formData.append('timestamp', String(timestamp));
+    formData.append('folder', folder);
+    formData.append('signature', signature);
+
+    const uploadRes = await fetch(uploadUrl, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!uploadRes.ok) {
+      const err = await uploadRes.json().catch(() => ({}));
+      throw new Error(err.error?.message || 'Failed to upload food image');
+    }
+    const uploadData = await uploadRes.json();
+    return uploadData.secure_url || uploadData.url;
+  },
 };
 
 export interface AdminCustomer {

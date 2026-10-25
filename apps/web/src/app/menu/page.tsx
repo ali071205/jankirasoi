@@ -51,7 +51,7 @@ export default function MenuPage() {
 
     async function loadCatalog() {
       try {
-        const data = await api.getCatalog();
+        const data = await api.getCatalog(undefined, true);
         setCatalog(data);
 
         // Pre-select default variants

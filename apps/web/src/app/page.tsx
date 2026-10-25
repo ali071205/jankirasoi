@@ -25,7 +25,7 @@ export default function HomePage() {
 
     async function loadData() {
       try {
-        const catalogData = await api.getCatalog().catch(() => null);
+        const catalogData = await api.getCatalog(undefined, true).catch(() => null);
         if (catalogData?.categories?.length) {
           setCatalog(catalogData as CatalogResponse);
         }
