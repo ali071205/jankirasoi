@@ -4,41 +4,50 @@ import { PrismaClient } from '@prisma/client';
 import * as net from 'net';
 
 let tunnelServer: net.Server | null = null;
+let tunnelInitPromise: Promise<void> | null = null;
 
-function setupTunnel(logger: Logger) {
-  if (tunnelServer) return;
-  try {
-    const server = net.createServer((clientSocket) => {
-      logger.log('Prisma client connected to local tunnel');
-      const remoteHost = process.env.SUPABASE_POOLER_HOST || '15.165.245.138';
-      const remoteSocket = net.createConnection({ host: remoteHost, port: 6543 }, () => {
-        logger.log(`Tunnel connected to Supabase pooler (${remoteHost})`);
+function setupTunnel(logger: Logger): Promise<void> {
+  if (tunnelInitPromise) return tunnelInitPromise;
+  tunnelInitPromise = new Promise((resolve) => {
+    try {
+      const server = net.createServer((clientSocket) => {
+        clientSocket.setKeepAlive(true, 10000);
+        clientSocket.setNoDelay(true);
+        const remoteHost = process.env.SUPABASE_POOLER_HOST || '15.165.245.138';
+        const remoteSocket = net.createConnection({ host: remoteHost, port: 6543 }, () => {
+          remoteSocket.setKeepAlive(true, 10000);
+          remoteSocket.setNoDelay(true);
+        });
+        clientSocket.pipe(remoteSocket);
+        remoteSocket.pipe(clientSocket);
+        clientSocket.on('error', (err) => {
+          logger.warn(`Tunnel clientSocket error: ${err.message}`);
+          remoteSocket.destroy();
+        });
+        remoteSocket.on('error', (err) => {
+          logger.error(`Tunnel remoteSocket error: ${err.message}`);
+          clientSocket.destroy();
+        });
+        clientSocket.on('close', () => remoteSocket.destroy());
+        remoteSocket.on('close', () => clientSocket.destroy());
       });
-      clientSocket.pipe(remoteSocket);
-      remoteSocket.pipe(clientSocket);
-      clientSocket.on('error', (err) => {
-        logger.warn(`clientSocket error: ${err.message}`);
-        remoteSocket.destroy();
+      server.on('error', (err: any) => {
+        if (err.code !== 'EADDRINUSE') {
+          logger.error(`Tunnel error: ${err.message}`);
+        }
+        resolve();
       });
-      remoteSocket.on('error', (err) => {
-        logger.warn(`remoteSocket error: ${err.message}`);
-        clientSocket.destroy();
+      server.listen(6543, '127.0.0.1', () => {
+        logger.log('⚡ Local IPv4 proxy active on 127.0.0.1:6543 -> Supabase Pooler (Seoul ap-northeast-2)');
+        resolve();
       });
-      clientSocket.on('close', () => remoteSocket.destroy());
-      remoteSocket.on('close', () => clientSocket.destroy());
-    });
-    server.on('error', (err: any) => {
-      if (err.code !== 'EADDRINUSE') {
-        logger.error(`Tunnel error: ${err.message}`);
-      }
-    });
-    server.listen(6543, '127.0.0.1', () => {
-      logger.log('⚡ Local IPv4 proxy active on 127.0.0.1:6543 -> Supabase Pooler (Seoul ap-northeast-2)');
-    });
-    tunnelServer = server;
-  } catch (err: any) {
-    logger.warn(`Could not start tunnel: ${err.message}`);
-  }
+      tunnelServer = server;
+    } catch (err: any) {
+      logger.warn(`Could not start tunnel: ${err.message}`);
+      resolve();
+    }
+  });
+  return tunnelInitPromise;
 }
 
 @Injectable()
@@ -54,8 +63,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         const projectRef = 'yxvwgcjavxeqsttzcbty';
         const poolerUser = user.includes('.') ? user : `${user}.${projectRef}`;
         const pass = parsed.password ? `:${encodeURIComponent(parsed.password)}` : '';
+        const poolSize = configService.get<string>('DATABASE_POOL_SIZE') || '30';
+        const poolTimeout = configService.get<string>('DATABASE_POOL_TIMEOUT') || '30';
         setupTunnel(new Logger('PrismaTunnel'));
-        databaseUrl = `postgresql://${poolerUser}${pass}@127.0.0.1:6543/postgres?pgbouncer=true&sslmode=disable`;
+        databaseUrl = `postgresql://${poolerUser}${pass}@127.0.0.1:6543/postgres?pgbouncer=true&sslmode=require&connection_limit=${poolSize}&pool_timeout=${poolTimeout}`;
       } catch {
         // keep databaseUrl as-is if parsing fails
       }
@@ -75,11 +86,22 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleInit() {
-    try {
-      await this.$connect();
-      this.logger.log('Prisma connected to PostgreSQL successfully.');
-    } catch (error) {
-      this.logger.warn(`Initial database connection deferred: ${(error as Error).message}`);
+    if (tunnelInitPromise) {
+      await tunnelInitPromise;
+    }
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await this.$connect();
+        this.logger.log('Prisma connected to PostgreSQL successfully.');
+        return;
+      } catch (error) {
+        this.logger.warn(`Database connection attempt ${attempt}/3: ${(error as Error).message}`);
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, 1000));
+        } else {
+          this.logger.warn(`Initial database connection deferred: ${(error as Error).message}`);
+        }
+      }
     }
   }
 

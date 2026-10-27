@@ -49,9 +49,9 @@ export default function MenuPage() {
       setSelectedVariants(cachedVariants);
     }
 
-    async function loadCatalog() {
+    async function loadCatalog(force = true) {
       try {
-        const data = await api.getCatalog(undefined, false);
+        const data = await api.getCatalog(undefined, force);
         setCatalog(data);
 
         // Pre-select default variants
@@ -75,7 +75,20 @@ export default function MenuPage() {
         setLoading(false);
       }
     }
-    loadCatalog();
+    loadCatalog(true);
+
+    const unsubscribe = api.subscribeToCatalogUpdates(() => {
+      loadCatalog(true);
+    });
+
+    const interval = setInterval(() => {
+      loadCatalog(true);
+    }, 15000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
   }, []);
 
   const handleVariantChange = (productId: string, variantId: string, variants: any[]) => {
@@ -292,7 +305,7 @@ export default function MenuPage() {
                         {/* Top Food Image */}
                         <div className="relative w-full h-44 bg-surface-container overflow-hidden">
                           <img
-                            className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-300"
+                            className={`w-full h-full object-cover group-hover:scale-103 transition-transform duration-300 ${dish.isSoldOut ? 'grayscale contrast-75 opacity-60' : ''}`}
                             alt={dish.name}
                             loading="lazy"
                             decoding="async"
@@ -303,20 +316,28 @@ export default function MenuPage() {
                             }}
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-inverse-surface/60 via-transparent to-transparent"></div>
-                          <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                            <span className="px-2.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm font-bold shadow-xs uppercase tracking-wide">
-                              Fresh Batch
-                            </span>
-                            <span className="px-2 py-0.5 rounded-full bg-surface-container-lowest/90 backdrop-blur-sm text-on-surface font-label-sm text-label-sm flex items-center gap-1 font-semibold">
-                              <span
-                                className="material-symbols-outlined text-secondary text-[14px]"
-                                style={{ fontVariationSettings: "'FILL' 1" }}
-                              >
-                                star
+                          {dish.isSoldOut ? (
+                            <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center p-2">
+                              <span className="px-3 py-1 rounded-full bg-stone-900/90 text-stone-100 text-[11px] font-extrabold uppercase tracking-wider border border-white/20 shadow-sm">
+                                Sold Out Today
                               </span>
-                              4.9
-                            </span>
-                          </div>
+                            </div>
+                          ) : (
+                            <div className="absolute top-3 left-3 flex items-center gap-1.5">
+                              <span className="px-2.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm font-bold shadow-xs uppercase tracking-wide">
+                                Fresh Batch
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-surface-container-lowest/90 backdrop-blur-sm text-on-surface font-label-sm text-label-sm flex items-center gap-1 font-semibold">
+                                <span
+                                  className="material-symbols-outlined text-secondary text-[14px]"
+                                  style={{ fontVariationSettings: "'FILL' 1" }}
+                                >
+                                  star
+                                </span>
+                                4.9
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         {/* Content Area */}
@@ -375,7 +396,11 @@ export default function MenuPage() {
                               Homestyle Pure
                             </span>
 
-                            {qty > 0 ? (
+                            {dish.isSoldOut ? (
+                              <span className="h-9 px-4 rounded-full bg-stone-100 text-stone-400 font-label-md text-label-md flex items-center border border-stone-200 cursor-not-allowed font-bold">
+                                Sold Out
+                              </span>
+                            ) : qty > 0 ? (
                               <div
                                 onClick={(e) => e.stopPropagation()}
                                 className="flex items-center bg-primary-container text-on-primary rounded-full px-2.5 py-1 shadow-xs gap-3"

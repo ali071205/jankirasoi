@@ -3,7 +3,7 @@ import { Subject, Observable, interval, merge } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 export interface OrderStreamEvent {
-  type: 'ORDER_CREATED' | 'ORDER_UPDATED' | 'RIDER_ASSIGNED' | 'PING';
+  type: 'ORDER_CREATED' | 'ORDER_UPDATED' | 'RIDER_ASSIGNED' | 'PING' | 'CATALOG_UPDATED';
   orderId?: string;
   orderNumber?: string;
   status?: string;

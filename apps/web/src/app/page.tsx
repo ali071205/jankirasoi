@@ -23,9 +23,9 @@ export default function HomePage() {
       setLoading(false);
     }
 
-    async function loadData() {
+    async function loadData(force = true) {
       try {
-        const catalogData = await api.getCatalog(undefined, false).catch(() => null);
+        const catalogData = await api.getCatalog(undefined, force).catch(() => null);
         if (catalogData?.categories?.length) {
           setCatalog(catalogData as CatalogResponse);
         }
@@ -35,7 +35,21 @@ export default function HomePage() {
         setLoading(false);
       }
     }
-    loadData();
+    loadData(true);
+
+    // Subscribe to cross-tab updates & focus revalidation
+    const unsubscribe = api.subscribeToCatalogUpdates(() => {
+      loadData(true);
+    });
+
+    const interval = setInterval(() => {
+      loadData(true);
+    }, 15000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
   }, []);
 
   const allDishes = useMemo(() => {
@@ -312,7 +326,7 @@ export default function HomePage() {
                   style={{ aspectRatio: '1 / 1' }}
                 >
                   <img
-                    className="w-full h-full object-cover group-hover:scale-104 transition-transform duration-300"
+                    className={`w-full h-full object-cover group-hover:scale-104 transition-transform duration-300 ${dish.isSoldOut ? 'grayscale contrast-75 opacity-60' : ''}`}
                     style={{ aspectRatio: '1 / 1' }}
                     loading="lazy"
                     decoding="async"
@@ -323,6 +337,13 @@ export default function HomePage() {
                       e.currentTarget.src = DEFAULT_FOOD_IMAGE;
                     }}
                   />
+                  {dish.isSoldOut && (
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center p-2">
+                      <span className="px-2.5 py-1 rounded-full bg-stone-900/90 text-stone-100 text-[10px] font-extrabold uppercase tracking-wider border border-white/20 shadow-sm text-center">
+                        Sold Out Today
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* 2. Content below image */}
@@ -333,12 +354,20 @@ export default function HomePage() {
                       <span className="w-3.5 h-3.5 rounded-2xs border border-emerald-600 flex items-center justify-center p-0.5 bg-white shrink-0">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
                       </span>
-                      <span className="text-[10px] font-bold text-[#E23744] flex items-center gap-0.5 uppercase tracking-wide">
-                        <span className="text-[11px]">⭐</span> Bestseller
-                      </span>
-                      <span className="text-[10px] font-bold text-[#008848] bg-[#EAF4ED] px-1.5 py-0.2 rounded border border-emerald-200/60">
-                        ★ 4.2 (12)
-                      </span>
+                      {dish.isSoldOut ? (
+                        <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wide">
+                          Currently Unavailable
+                        </span>
+                      ) : (
+                        <>
+                          <span className="text-[10px] font-bold text-[#E23744] flex items-center gap-0.5 uppercase tracking-wide">
+                            <span className="text-[11px]">⭐</span> Bestseller
+                          </span>
+                          <span className="text-[10px] font-bold text-[#008848] bg-[#EAF4ED] px-1.5 py-0.2 rounded border border-emerald-200/60">
+                            ★ 4.2 (12)
+                          </span>
+                        </>
+                      )}
                     </div>
 
                     {/* Dish Name (Fixed 2-line height so all cards align perfectly!) */}
@@ -358,7 +387,11 @@ export default function HomePage() {
                       ₹{(dish.basePricePaise / 100).toFixed(0)}
                     </span>
 
-                    {qty > 0 ? (
+                    {dish.isSoldOut ? (
+                      <span className="px-3 py-1 rounded-lg bg-stone-100 text-stone-400 font-extrabold text-[11px] border border-stone-200 cursor-not-allowed">
+                        SOLD OUT
+                      </span>
+                    ) : qty > 0 ? (
                       <div
                         onClick={(e) => e.stopPropagation()}
                         className="flex items-center bg-[#008848] text-white rounded-lg px-2 py-0.5 shadow-xs gap-2 font-bold text-xs"

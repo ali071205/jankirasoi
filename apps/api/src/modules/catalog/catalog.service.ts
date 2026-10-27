@@ -1,32 +1,69 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto, ToggleSoldOutDto, UpdateProductDto } from './dto/catalog.dto';
+import { OrdersEventsService } from '../events/orders-events.service';
 
 interface CachedCatalog {
   data: any;
   cachedAt: number;
 }
 
+/**
+ * Ensures Cloudinary image URLs use automatic perceptual compression (q_auto),
+ * responsive format conversion (f_auto: WebP/AVIF), and max-width dimension limiting (w_1200,c_limit).
+ */
+export function optimizeCloudinaryUrl(url?: string): string | undefined {
+  if (!url) return url;
+  if (url.includes('cloudinary.com') && url.includes('/upload/') && !url.includes('/f_auto')) {
+    return url.replace('/upload/', '/upload/f_auto,q_auto,w_1200,c_limit/');
+  }
+  return url;
+}
+
+/**
+ * Normalizes dates to Indian Standard Time (IST / Asia/Kolkata) calendar day
+ * to guarantee accurate day-boundaries across midnight and exact @db.Date matching in PostgreSQL.
+ */
+function getNormalizedServiceDate(serviceDateString?: string): { dateObj: Date; dateStr: string } {
+  let dateStr = serviceDateString;
+  if (!dateStr) {
+    dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  } else {
+    dateStr = dateStr.split('T')[0];
+  }
+  return {
+    dateObj: new Date(`${dateStr}T00:00:00.000Z`),
+    dateStr,
+  };
+}
+
 @Injectable()
 export class CatalogService {
   private readonly catalogCache = new Map<string, CachedCatalog>();
-  private readonly CACHE_TTL_MS = 30_000; // 30s in-memory TTL
+  private readonly CACHE_TTL_MS = 5_000; // 5s short in-memory cache for high-concurrency surge protection
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly eventsService?: OrdersEventsService,
+  ) {}
 
   clearCache() {
     this.catalogCache.clear();
+    try {
+      this.eventsService?.emitOrderEvent('CATALOG_UPDATED' as any, {});
+    } catch {
+      // safe fallback if events bus not active
+    }
   }
 
   async getPublicCatalog(serviceDateString?: string) {
-    const cacheKey = serviceDateString || 'default';
+    const { dateObj: serviceDate, dateStr } = getNormalizedServiceDate(serviceDateString);
+    const cacheKey = dateStr;
     const cached = this.catalogCache.get(cacheKey);
     const now = Date.now();
     if (cached && now - cached.cachedAt < this.CACHE_TTL_MS) {
       return cached.data;
     }
-
-    const serviceDate = serviceDateString ? new Date(serviceDateString) : new Date();
 
     const categories = await this.prisma.menuCategory.findMany({
       where: { isActive: true },
@@ -60,7 +97,7 @@ export class CatalogService {
     });
 
     const result = {
-      serviceDate: serviceDate.toISOString().split('T')[0],
+      serviceDate: dateStr,
       categories: categories.map((cat) => ({
         id: cat.id,
         name: cat.name,
@@ -75,7 +112,7 @@ export class CatalogService {
             slug: p.slug,
             description: p.description,
             dietaryType: p.dietaryType,
-            imageUrl: p.imageUrl,
+            imageUrl: optimizeCloudinaryUrl(p.imageUrl),
             basePricePaise: p.basePricePaise,
             taxRatePercent: p.taxRatePercent,
             isSoldOut,
@@ -107,15 +144,31 @@ export class CatalogService {
 
   async createProduct(dto: CreateProductDto) {
     this.clearCache();
-    const slug = dto.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now().toString(36);
-    return this.prisma.product.create({
+
+    // Verify category exists to prevent unhandled foreign key database constraint violations
+    const category = await this.prisma.menuCategory.findUnique({
+      where: { id: dto.categoryId },
+    });
+    if (!category) {
+      throw new BadRequestException(`Category with ID "${dto.categoryId}" does not exist.`);
+    }
+
+    const trimmedName = dto.name.trim();
+    if (!trimmedName) {
+      throw new BadRequestException('Dish name cannot be empty.');
+    }
+
+    const optimizedImageUrl = optimizeCloudinaryUrl(dto.imageUrl);
+    const slug = trimmedName.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now().toString(36);
+
+    const product = await this.prisma.product.create({
       data: {
         categoryId: dto.categoryId,
-        name: dto.name,
+        name: trimmedName,
         slug,
-        description: dto.description,
+        description: dto.description?.trim(),
         dietaryType: dto.dietaryType as any,
-        imageUrl: dto.imageUrl,
+        imageUrl: optimizedImageUrl,
         basePricePaise: dto.basePricePaise,
         taxRatePercent: dto.taxRatePercent ?? 5,
         variants: {
@@ -126,7 +179,13 @@ export class CatalogService {
           },
         },
       },
+      include: {
+        variants: true,
+      },
     });
+
+    this.clearCache();
+    return product;
   }
 
   async updateProduct(id: string, dto: UpdateProductDto) {
@@ -136,14 +195,25 @@ export class CatalogService {
       throw new NotFoundException(`Product with ID "${id}" not found.`);
     }
 
-    return this.prisma.product.update({
+    if (dto.categoryId !== undefined) {
+      const category = await this.prisma.menuCategory.findUnique({
+        where: { id: dto.categoryId },
+      });
+      if (!category) {
+        throw new BadRequestException(`Category with ID "${dto.categoryId}" does not exist.`);
+      }
+    }
+
+    const optimizedImageUrl = dto.imageUrl !== undefined ? optimizeCloudinaryUrl(dto.imageUrl) : undefined;
+
+    const updated = await this.prisma.product.update({
       where: { id },
       data: {
         ...(dto.categoryId !== undefined && { categoryId: dto.categoryId }),
-        ...(dto.name !== undefined && { name: dto.name }),
-        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.name !== undefined && { name: dto.name.trim() }),
+        ...(dto.description !== undefined && { description: dto.description.trim() }),
         ...(dto.dietaryType !== undefined && { dietaryType: dto.dietaryType as any }),
-        ...(dto.imageUrl !== undefined && { imageUrl: dto.imageUrl }),
+        ...(optimizedImageUrl !== undefined && { imageUrl: optimizedImageUrl }),
         ...(dto.basePricePaise !== undefined && { basePricePaise: dto.basePricePaise }),
         ...(dto.taxRatePercent !== undefined && { taxRatePercent: dto.taxRatePercent }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
@@ -152,6 +222,9 @@ export class CatalogService {
         variants: true,
       },
     });
+
+    this.clearCache();
+    return updated;
   }
 
   async deleteProduct(id: string) {
@@ -162,16 +235,20 @@ export class CatalogService {
     }
 
     // Soft delete to protect existing orders and historical receipts
-    return this.prisma.product.update({
+    const deleted = await this.prisma.product.update({
       where: { id },
       data: { isActive: false },
     });
+
+    this.clearCache();
+    return deleted;
   }
 
   async toggleSoldOut(productId: string, dto: ToggleSoldOutDto) {
     this.clearCache();
-    const serviceDate = new Date(dto.serviceDate);
-    return this.prisma.productServiceDateAvailability.upsert({
+    const { dateObj: serviceDate } = getNormalizedServiceDate(dto.serviceDate);
+
+    const record = await this.prisma.productServiceDateAvailability.upsert({
       where: {
         productId_serviceDate: {
           productId,
@@ -187,5 +264,8 @@ export class CatalogService {
         isSoldOut: dto.isSoldOut,
       },
     });
+
+    this.clearCache();
+    return record;
   }
 }

@@ -60,6 +60,19 @@ const getApiBase = () => {
   return '/api/v1';
 };
 
+function notifyMenuChange() {
+  if (typeof window !== 'undefined') {
+    try {
+      const channel = new BroadcastChannel('jankirasoi_menu_channel');
+      channel.postMessage({ type: 'MENU_UPDATED', timestamp: Date.now() });
+      channel.close();
+    } catch {}
+    try {
+      localStorage.setItem('jr_menu_timestamp', String(Date.now()));
+    } catch {}
+  }
+}
+
 export const adminApi = {
   // 1. Fetch Orders Queue with Status Filter
   async getOrders(status?: string): Promise<AdminOrdersResponse> {
@@ -201,7 +214,9 @@ export const adminApi = {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || 'Failed to toggle item availability');
     }
-    return res.json();
+    const data = await res.json();
+    notifyMenuChange();
+    return data;
   },
 
   // 10. Create New Dish / Thali
@@ -233,7 +248,9 @@ export const adminApi = {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || 'Failed to create new dish');
     }
-    return res.json();
+    const created = await res.json();
+    notifyMenuChange();
+    return created;
   },
 
   // 11. Update Existing Dish / Thali
@@ -261,7 +278,9 @@ export const adminApi = {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || 'Failed to update dish');
     }
-    return res.json();
+    const updated = await res.json();
+    notifyMenuChange();
+    return updated;
   },
 
   // 12. Delete / Archive Dish
@@ -277,7 +296,9 @@ export const adminApi = {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || 'Failed to remove dish');
     }
-    return res.json();
+    const deleted = await res.json();
+    notifyMenuChange();
+    return deleted;
   },
 
   // 11. Fetch Active Delivery Zones
@@ -325,7 +346,12 @@ export const adminApi = {
       throw new Error(err.error?.message || 'Failed to upload food image');
     }
     const uploadData = await uploadRes.json();
-    return uploadData.secure_url || uploadData.url;
+    let url = uploadData.secure_url || uploadData.url;
+    // Automatically apply Cloudinary lossless compression & smart format conversion (WebP/AVIF)
+    if (url && url.includes('cloudinary.com') && url.includes('/upload/') && !url.includes('/f_auto')) {
+      url = url.replace('/upload/', '/upload/f_auto,q_auto,w_1200,c_limit/');
+    }
+    return url;
   },
 };
 

@@ -397,6 +397,14 @@ export const FALLBACK_CATALOG: CatalogResponse = {
   ],
 };
 
+export function optimizeImageUrl(url?: string): string {
+  if (!url) return '';
+  if (url.includes('cloudinary.com') && url.includes('/upload/') && !url.includes('/f_auto')) {
+    return url.replace('/upload/', '/upload/f_auto,q_auto,w_1200,c_limit/');
+  }
+  return url;
+}
+
 // In api client:
 export const api = {
   // Synchronous cache accessors for zero-flicker instant hydration
@@ -413,7 +421,7 @@ export const api = {
     return getCached<PincodeCheckResponse>(`pin_${pincode}`);
   },
 
-  // 1. Live Catalog with 3-minute Client Cache & Resilient Fallback
+  // 1. Live Catalog with Instant SWR Refresh & Resilient Fallback
   async getCatalog(serviceDate?: string, forceRefresh = false): Promise<CatalogResponse> {
     const cacheKey = `catalog_${serviceDate || 'today'}`;
     if (!forceRefresh) {
@@ -424,18 +432,63 @@ export const api = {
     try {
       const base = getApiBase();
       const url = serviceDate ? `${base}/catalog?service_date=${encodeURIComponent(serviceDate)}` : `${base}/catalog`;
-      const res = await fetch(url);
+      const res = await fetch(url, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         if (data?.categories?.length) {
-          return setCached(cacheKey, data, 180000); // 3 minutes cache
+          data.categories.forEach((cat: any) => {
+            cat.items?.forEach((it: any) => {
+              if (it.imageUrl) it.imageUrl = optimizeImageUrl(it.imageUrl);
+            });
+          });
+          return setCached(cacheKey, data, 10000); // 10s fresh cache
         }
       }
     } catch {
       // Backend not running on local/remote port, seamlessly use fallback
     }
 
-    return setCached(cacheKey, FALLBACK_CATALOG, 180000);
+    return setCached(cacheKey, FALLBACK_CATALOG, 10000);
+  },
+
+  // Real-time listener for cross-tab and cross-window menu changes
+  subscribeToCatalogUpdates(callback: () => void): () => void {
+    if (typeof window === 'undefined') return () => {};
+
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('jankirasoi_menu_channel');
+      channel.onmessage = () => {
+        memoryCache.delete('catalog_today');
+        try { window.sessionStorage.removeItem('jr_cache_catalog_today'); } catch {}
+        callback();
+      };
+    } catch {}
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'jr_menu_timestamp') {
+        memoryCache.delete('catalog_today');
+        try { window.sessionStorage.removeItem('jr_cache_catalog_today'); } catch {}
+        callback();
+      }
+    };
+
+    const handleFocus = () => {
+      memoryCache.delete('catalog_today');
+      try { window.sessionStorage.removeItem('jr_cache_catalog_today'); } catch {}
+      callback();
+    };
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      channel?.close();
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
   },
 
   // 2. Delivery Zones with 5-minute Cache (Sagore Kitchen 5km Free Delivery / 15km boundary)

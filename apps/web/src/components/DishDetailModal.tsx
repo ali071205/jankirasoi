@@ -154,7 +154,11 @@ export default function DishDetailModal({ dish, onClose }: DishDetailModalProps)
 
             {/* Action / Add to Cart Button (matches reference screenshot) */}
             <div className="flex flex-col items-center shrink-0">
-              {qty > 0 ? (
+              {dish.isSoldOut ? (
+                <span className="min-w-[110px] py-2 px-4 rounded-xl bg-stone-100 text-stone-400 font-extrabold text-xs sm:text-sm text-center border border-stone-200 cursor-not-allowed">
+                  SOLD OUT
+                </span>
+              ) : qty > 0 ? (
                 <div className="flex items-center bg-[#38754A] text-white rounded-xl px-3 py-2 shadow-xs gap-3.5 font-bold text-sm min-w-[110px] justify-between">
                   <button
                     onClick={handleDecrease}

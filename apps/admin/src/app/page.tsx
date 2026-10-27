@@ -553,7 +553,7 @@ export default function OperationsConsolePage() {
   }, []);
 
   // 4. Fetch Catalog (for Menu 86-ing)
-  const loadCatalog = useCallback(async () => {
+  const loadCatalog = useCallback(async (retryCount = 0) => {
     setCatalogLoading(true);
     try {
       const data = await adminApi.getCatalog();
@@ -568,7 +568,11 @@ export default function OperationsConsolePage() {
       });
       setSoldOutItemIds(soldOuts);
     } catch (err: any) {
-      showToast(err.message || 'Failed to fetch catalog');
+      if (retryCount < 2) {
+        setTimeout(() => loadCatalog(retryCount + 1), 2000);
+      } else {
+        showToast(err.message || 'Failed to fetch catalog');
+      }
     } finally {
       setCatalogLoading(false);
     }
@@ -702,7 +706,7 @@ export default function OperationsConsolePage() {
 
   // Toggle Item Stock (86-ing)
   const toggleItemStock = async (itemId: string, itemName: string) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
     const isCurrentlySoldOut = soldOutItemIds.has(itemId);
     const nextSoldOut = !isCurrentlySoldOut;
 
@@ -743,6 +747,10 @@ export default function OperationsConsolePage() {
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setDishFormError('Please select a valid image file (JPG, PNG, or WebP)');
+      return;
+    }
     if (file.size > 10 * 1024 * 1024) {
       setDishFormError('Image size exceeds 10MB limit');
       return;
@@ -752,17 +760,11 @@ export default function OperationsConsolePage() {
     try {
       const uploadedUrl = await adminApi.uploadFoodImage(file);
       setNewDishImageUrl(uploadedUrl);
-      showToast('Image uploaded successfully');
+      showToast('Image uploaded & compressed via Cloudinary');
     } catch (err: any) {
-      console.warn('Storage upload fallback:', err.message);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setNewDishImageUrl(String(event.target.result));
-        }
-      };
-      reader.readAsDataURL(file);
-      showToast('Image attached');
+      console.error('Image upload failed:', err);
+      setDishFormError(err.message || 'Image upload failed. Please try again.');
+      showToast(err.message || 'Image upload failed');
     } finally {
       setIsUploadingImage(false);
     }
@@ -825,12 +827,9 @@ export default function OperationsConsolePage() {
       setNewDishPrice('149');
       setNewDishDescription('');
       setNewDishImageUrl('');
+      setShowAddDishModal(false);
+      setDishFormSuccess(null);
       await loadCatalog();
-
-      setTimeout(() => {
-        setShowAddDishModal(false);
-        setDishFormSuccess(null);
-      }, 1000);
     } catch (err: any) {
       setDishFormError(err.message || 'Failed to add food item');
       showToast(err.message || 'Failed to add food item');
@@ -854,6 +853,10 @@ export default function OperationsConsolePage() {
   const handleEditImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setEditDishError('Please select a valid image file (JPG, PNG, or WebP)');
+      return;
+    }
     if (file.size > 10 * 1024 * 1024) {
       setEditDishError('Image size exceeds 10MB limit');
       return;
@@ -863,17 +866,11 @@ export default function OperationsConsolePage() {
     try {
       const uploadedUrl = await adminApi.uploadFoodImage(file);
       setEditDishImageUrl(uploadedUrl);
-      showToast('Image updated successfully');
+      showToast('Image updated & compressed via Cloudinary');
     } catch (err: any) {
-      console.warn('Storage upload fallback:', err.message);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setEditDishImageUrl(String(event.target.result));
-        }
-      };
-      reader.readAsDataURL(file);
-      showToast('Image attached');
+      console.error('Image upload failed:', err);
+      setEditDishError(err.message || 'Image upload failed. Please try again.');
+      showToast(err.message || 'Image upload failed');
     } finally {
       setIsUploadingEditImage(false);
     }
@@ -913,13 +910,10 @@ export default function OperationsConsolePage() {
 
       setEditDishSuccess(`"${trimmedName}" updated successfully!`);
       showToast(`Updated "${trimmedName}" in menu!`);
+      setShowEditDishModal(false);
+      setEditingDish(null);
+      setEditDishSuccess(null);
       await loadCatalog();
-
-      setTimeout(() => {
-        setShowEditDishModal(false);
-        setEditingDish(null);
-        setEditDishSuccess(null);
-      }, 900);
     } catch (err: any) {
       setEditDishError(err.message || 'Failed to update dish');
       showToast(err.message || 'Failed to update dish');
@@ -1358,6 +1352,7 @@ export default function OperationsConsolePage() {
             </button>
 
             <button
+              data-testid="admin-nav-menu-btn"
               onClick={() => setMainView('MENU')}
               className={`w-full px-3 py-2.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-2.5 ${
                 mainView === 'MENU'
