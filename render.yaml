@@ -23,8 +23,23 @@ services:
       - key: NODE_OPTIONS
         value: --max-old-space-size=384
       # Database connection string (PostgreSQL e.g. Neon, Supabase, or Render PostgreSQL)
-      # Append ?connection_limit=5&pool_timeout=10 to optimize for free pool limits
       - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_POOL_SIZE
+        value: "20"
+      - key: DATABASE_POOL_TIMEOUT
+        value: "30"
+      # Cloudinary Storage Credentials (Required for food image uploads & auto-compression)
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      # Encryption Secrets (HMAC for OTPs & Session)
+      - key: SESSION_SECRET
+        sync: false
+      - key: OTP_ENCRYPTION_SECRET
         sync: false
       # Production JWT signing secret (generate with: openssl rand -hex 32)
       - key: JWT_SECRET
