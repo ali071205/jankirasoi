@@ -93,19 +93,28 @@ export default function CartPage() {
           if (user.savedAddress.pincode) setPincode(user.savedAddress.pincode);
         }
       } else if (typeof window !== 'undefined') {
-        // Fallback to local storage so user data is never lost
+        // Fallback to local storage so user data and chosen location are never lost
         const savedPhone = localStorage.getItem('jr_customer_phone');
         const savedName = localStorage.getItem('jr_customer_name');
         const savedAddrRaw =
           localStorage.getItem('jr_customer_address') ||
           localStorage.getItem('jr_selected_address');
+
+        let addrObj: any = undefined;
+        if (savedAddrRaw) {
+          try {
+            addrObj = JSON.parse(savedAddrRaw);
+            if (addrObj) {
+              if (addrObj.flat) setFlat(addrObj.flat);
+              if (addrObj.street) setStreet(addrObj.street);
+              if (addrObj.landmark) setLandmark(addrObj.landmark);
+              if (addrObj.pincode) setPincode(addrObj.pincode);
+              if (addrObj.city) setDetectedCity(addrObj.city);
+            }
+          } catch {}
+        }
+
         if (savedPhone) {
-          let addrObj: any = undefined;
-          if (savedAddrRaw) {
-            try {
-              addrObj = JSON.parse(savedAddrRaw);
-            } catch {}
-          }
           const restored: UserProfile = {
             id: 'cust_' + savedPhone,
             name: savedName || 'Customer',
@@ -116,12 +125,6 @@ export default function CartPage() {
           setCurrentUser(restored);
           setCustomerPhone(savedPhone);
           if (savedName) setCustomerName(savedName);
-          if (addrObj) {
-            if (addrObj.flat) setFlat(addrObj.flat);
-            if (addrObj.street) setStreet(addrObj.street);
-            if (addrObj.landmark) setLandmark(addrObj.landmark);
-            if (addrObj.pincode) setPincode(addrObj.pincode);
-          }
         }
       }
     });

@@ -13,7 +13,7 @@ function setupTunnel(logger: Logger): Promise<void> {
       const server = net.createServer((clientSocket) => {
         clientSocket.setKeepAlive(true, 10000);
         clientSocket.setNoDelay(true);
-        const remoteHost = process.env.SUPABASE_POOLER_HOST || '15.165.245.138';
+        const remoteHost = process.env.SUPABASE_POOLER_HOST || 'aws-0-ap-northeast-2.pooler.supabase.com';
         const remoteSocket = net.createConnection({ host: remoteHost, port: 6543 }, () => {
           remoteSocket.setKeepAlive(true, 10000);
           remoteSocket.setNoDelay(true);
@@ -56,17 +56,18 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   constructor(configService: ConfigService) {
     let databaseUrl = configService.get<string>('DATABASE_URL');
-    if (databaseUrl && (databaseUrl.includes('supabase.co') || databaseUrl.includes('yxvwgcjavxeqsttzcbty'))) {
+    if (databaseUrl && (databaseUrl.includes('supabase.co') || databaseUrl.includes('yxvwgcjavxeqsttzcbty') || databaseUrl.includes('pooler.supabase.com'))) {
       try {
         const parsed = new URL(databaseUrl);
         const user = parsed.username || 'postgres';
         const projectRef = 'yxvwgcjavxeqsttzcbty';
         const poolerUser = user.includes('.') ? user : `${user}.${projectRef}`;
         const pass = parsed.password ? `:${encodeURIComponent(parsed.password)}` : '';
-        const poolSize = configService.get<string>('DATABASE_POOL_SIZE') || '30';
-        const poolTimeout = configService.get<string>('DATABASE_POOL_TIMEOUT') || '30';
-        setupTunnel(new Logger('PrismaTunnel'));
-        databaseUrl = `postgresql://${poolerUser}${pass}@127.0.0.1:6543/postgres?pgbouncer=true&sslmode=require&connection_limit=${poolSize}&pool_timeout=${poolTimeout}`;
+        const poolSize = configService.get<string>('DATABASE_POOL_SIZE') || '15';
+        const poolTimeout = configService.get<string>('DATABASE_POOL_TIMEOUT') || '20';
+        const host = parsed.hostname.includes('pooler.supabase.com') ? parsed.hostname : 'aws-0-ap-northeast-2.pooler.supabase.com';
+        const port = parsed.port || '6543';
+        databaseUrl = `postgresql://${poolerUser}${pass}@${host}:${port}/postgres?pgbouncer=true&sslmode=require&connection_limit=${poolSize}&pool_timeout=${poolTimeout}`;
       } catch {
         // keep databaseUrl as-is if parsing fails
       }

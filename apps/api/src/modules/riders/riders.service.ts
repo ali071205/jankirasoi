@@ -83,8 +83,32 @@ export class RidersService {
     return {
       deliveries: ordersToDisplay.map((o) => {
         const addr = (o.deliveryAddress as any) || {};
-        const lat = addr.latitude || 28.52728;
-        const lng = addr.longitude || 77.21832;
+        const rawLat = Number(addr.latitude);
+        const rawLng = Number(addr.longitude);
+        const hasValidLocalCoords =
+          !isNaN(rawLat) &&
+          !isNaN(rawLng) &&
+          rawLat >= 22.0 &&
+          rawLat <= 23.5 &&
+          rawLng >= 75.0 &&
+          rawLng <= 76.5;
+
+        const lat = hasValidLocalCoords ? rawLat : 22.6288;
+        const lng = hasValidLocalCoords ? rawLng : 75.5684;
+
+        const addressParts = [
+          addr.flat,
+          addr.street,
+          addr.landmark ? `Near ${addr.landmark}` : null,
+          'Sagore',
+          'Pithampur',
+          addr.pincode || '454774',
+        ].filter(Boolean);
+        const destinationText = addressParts.join(', ');
+
+        const navigationUrl = hasValidLocalCoords
+          ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
+          : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destinationText)}`;
 
         return {
           orderId: o.id,
@@ -92,10 +116,10 @@ export class RidersService {
           status: o.status,
           customerName: o.customerName,
           customerPhone: o.customerPhone,
-          deliveryAddress: `${addr.flat || ''}, ${addr.street || ''}, ${addr.pincode || ''}`,
+          deliveryAddress: `${addr.flat || ''}, ${addr.street || ''}, ${addr.pincode || ''}`.replace(/^,\s*|,\s*$/g, ''),
           landmark: addr.landmark,
           coordinates: { latitude: lat, longitude: lng },
-          navigationUrl: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,
+          navigationUrl,
           slotLabel: o.deliverySlot.label,
           paymentMethod: o.paymentMethod,
           cashDuePaise: o.paymentMethod === 'COD' && o.paymentStatus !== 'CAPTURED' ? o.totalAmountPaise : 0,

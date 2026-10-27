@@ -27,6 +27,64 @@ export default function RiderPage() {
   const [verifySuccess, setVerifySuccess] = useState<boolean>(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
+  // In-App Map & Route Navigation State
+  const [activeMapDelivery, setActiveMapDelivery] = useState<RiderDelivery | null>(null);
+  const [riderGps, setRiderGps] = useState<{ lat: number; lng: number } | null>(null);
+  const [isGpsLocating, setIsGpsLocating] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  const SAGORE_KITCHEN_COORDS = { lat: 22.6288, lng: 75.5684 };
+
+  const calculateDistanceKm = useCallback((lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(R * c * 10) / 10;
+  }, []);
+
+  const showRiderToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3000);
+  };
+
+  // Request Rider GPS silently without multiple annoying dialogs
+  const requestRiderGps = useCallback((forcePrompt = false) => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+
+    if (!forcePrompt && typeof window !== 'undefined') {
+      const isAllowed = localStorage.getItem('jr_rider_gps_enabled') === 'true';
+      if (!isAllowed) return; // don't ask unless rider initiated or previously enabled
+    }
+
+    setIsGpsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setRiderGps({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setIsGpsLocating(false);
+        try { localStorage.setItem('jr_rider_gps_enabled', 'true'); } catch {}
+        if (forcePrompt) showRiderToast('GPS active • Distances calibrated');
+      },
+      (err) => {
+        setIsGpsLocating(false);
+        console.warn('Rider GPS notice:', err.message);
+        if (forcePrompt) showRiderToast('Could not access GPS. Distances calculated from Sagore Kitchen.');
+      },
+      { timeout: 8000, enableHighAccuracy: true, maximumAge: 60000 }
+    );
+  }, []);
+
+  // Check saved GPS permission on mount
+  useEffect(() => {
+    if (riderUser && isOnDuty) {
+      requestRiderGps(false);
+    }
+  }, [riderUser, isOnDuty, requestRiderGps]);
+
   // Initial Auth Check
   useEffect(() => {
     async function checkRiderAuth() {
@@ -227,6 +285,23 @@ export default function RiderPage() {
 
           {riderUser ? (
             <div className="flex items-center gap-2">
+              {/* Rider GPS toggle button */}
+              <button
+                type="button"
+                onClick={() => requestRiderGps(true)}
+                disabled={isGpsLocating}
+                title={riderGps ? 'GPS Active • Distances Calibrated' : 'Calibrate GPS Location'}
+                className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors shadow-2xs ${
+                  riderGps
+                    ? 'bg-[#EAF4ED] text-[#38754A] border-[#38754A]/30'
+                    : 'bg-white text-[#77786F] border-[#EEE7DC] hover:text-[#292D26]'
+                }`}
+              >
+                <span className={`material-symbols-outlined text-[18px] ${isGpsLocating ? 'animate-spin' : ''}`}>
+                  {isGpsLocating ? 'sync' : riderGps ? 'my_location' : 'location_searching'}
+                </span>
+              </button>
+
               {/* Duty Status Toggle */}
               <button
                 onClick={() => setIsOnDuty(!isOnDuty)}
@@ -499,22 +574,58 @@ export default function RiderPage() {
                           <span className="material-symbols-outlined text-[#77786F] text-[18px]">person</span>
                           {del.customerName}
                         </h3>
-                        <a
-                          href={`tel:${del.customerPhone}`}
-                          className="px-3 py-1 rounded-full bg-[#38754A] hover:bg-[#285C38] text-white font-bold text-xs flex items-center gap-1 active:scale-95 transition-transform shadow-2xs"
-                        >
-                          <span className="material-symbols-outlined text-[15px]">call</span>
-                          Call
-                        </a>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                navigator.clipboard.writeText(
+                                  `${del.customerName}, ${del.deliveryAddress}${del.landmark ? ' (Landmark: ' + del.landmark + ')' : ''}`
+                                );
+                                showRiderToast('Address copied!');
+                              }
+                            }}
+                            title="Copy customer delivery address"
+                            className="p-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[15px]">content_copy</span>
+                          </button>
+                          <a
+                            href={`tel:${del.customerPhone}`}
+                            className="px-3 py-1 rounded-full bg-[#38754A] hover:bg-[#285C38] text-white font-bold text-xs flex items-center gap-1 active:scale-95 transition-transform shadow-2xs"
+                          >
+                            <span className="material-symbols-outlined text-[15px]">call</span>
+                            Call
+                          </a>
+                        </div>
                       </div>
                       <div className="text-xs text-[#292D26] flex items-start gap-1.5 bg-[#FFF9F0] p-2.5 rounded-xl border border-[#EEE7DC]">
                         <span className="material-symbols-outlined text-[#38754A] text-[18px] shrink-0 mt-0.5">
                           location_on
                         </span>
-                        <div>
-                          <p className="leading-snug font-medium">{del.deliveryAddress}</p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1 mb-0.5">
+                            <span className="text-[10px] font-bold text-[#77786F] uppercase tracking-wider">
+                              Drop Location
+                            </span>
+                            <span className="text-[10px] font-bold text-[#38754A] flex items-center gap-0.5">
+                              <span className="material-symbols-outlined text-[12px]">near_me</span>
+                              ~{del.coordinates
+                                ? calculateDistanceKm(
+                                    riderGps ? riderGps.lat : SAGORE_KITCHEN_COORDS.lat,
+                                    riderGps ? riderGps.lng : SAGORE_KITCHEN_COORDS.lng,
+                                    del.coordinates.latitude,
+                                    del.coordinates.longitude
+                                  )
+                                : 2.5} km {riderGps ? '(from you)' : '(from kitchen)'}
+                            </span>
+                          </div>
+                          <p className="leading-snug font-medium text-slate-800">{del.deliveryAddress}</p>
                           {del.landmark && (
-                            <p className="text-[11px] text-[#77786F] mt-0.5">Landmark: {del.landmark}</p>
+                            <p className="text-[11px] text-[#38754A] font-semibold mt-0.5 flex items-center gap-1">
+                              <span>Landmark:</span>
+                              <span>{del.landmark}</span>
+                            </p>
                           )}
                         </div>
                       </div>
@@ -522,45 +633,44 @@ export default function RiderPage() {
 
                     {/* Actions */}
                     {!isDelivered && (
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    {/* Google Maps GPS Navigation Intent */}
-                    <a
-                      href={del.navigationUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="h-11 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 text-slate-800 active:scale-95 transition-transform shadow-xs"
-                    >
-                      <span className="material-symbols-outlined text-[#38754A] text-[18px]">near_me</span>
-                      <span>Google Maps</span>
-                    </a>
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        {/* In-app Map & Navigation Trigger */}
+                        <button
+                          type="button"
+                          onClick={() => setActiveMapDelivery(del)}
+                          className="h-11 rounded-xl bg-white hover:bg-[#FFF9F0] border border-[#EEE7DC] font-bold text-xs flex items-center justify-center gap-1.5 text-[#292D26] active:scale-95 transition-transform shadow-2xs"
+                        >
+                          <span className="material-symbols-outlined text-[#38754A] text-[18px]">map</span>
+                          <span>Map & Route</span>
+                        </button>
 
-                    {/* Step Transitions */}
-                    {isReady ? (
-                      <button
-                        onClick={() => handleStartTrip(del.orderId)}
-                        disabled={actionLoadingId === del.orderId}
-                        className="h-11 rounded-xl bg-[#38754A] hover:bg-[#285C38] font-bold text-xs flex items-center justify-center gap-1.5 text-white active:scale-95 transition-transform shadow-xs"
-                      >
-                        {actionLoadingId === del.orderId ? (
-                          <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+                        {/* Step Transitions */}
+                        {isReady ? (
+                          <button
+                            onClick={() => handleStartTrip(del.orderId)}
+                            disabled={actionLoadingId === del.orderId}
+                            className="h-11 rounded-xl bg-[#38754A] hover:bg-[#285C38] font-bold text-xs flex items-center justify-center gap-1.5 text-white active:scale-95 transition-transform shadow-xs"
+                          >
+                            {actionLoadingId === del.orderId ? (
+                              <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+                            ) : (
+                              <>
+                                <span className="material-symbols-outlined text-[18px]">two_wheeler</span>
+                                <span>Start Ride</span>
+                              </>
+                            )}
+                          </button>
                         ) : (
-                          <>
-                            <span className="material-symbols-outlined text-[18px]">two_wheeler</span>
-                            <span>Start Ride</span>
-                          </>
+                          <button
+                            onClick={() => openPinModal(del)}
+                            className="h-11 rounded-xl bg-[#E99A32] hover:bg-[#D38520] font-bold text-xs flex items-center justify-center gap-1.5 text-white active:scale-95 transition-all shadow-xs"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">dialpad</span>
+                            <span>Verify PIN</span>
+                          </button>
                         )}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => openPinModal(del)}
-                        className="h-11 rounded-xl bg-[#E99A32] hover:bg-[#D38520] font-bold text-xs flex items-center justify-center gap-1.5 text-white active:scale-95 transition-all shadow-xs"
-                      >
-                        <span className="material-symbols-outlined text-[18px]">dialpad</span>
-                        <span>Verify PIN</span>
-                      </button>
+                      </div>
                     )}
-                  </div>
-                )}
                   </div>
                 );
               })
@@ -669,6 +779,147 @@ export default function RiderPage() {
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* IN-APP INTERACTIVE ROUTE & MAP MODAL */}
+          {activeMapDelivery && (
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+              <div className="bg-white border border-[#EEE7DC] w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 flex flex-col gap-3.5 shadow-2xl max-h-[92vh] overflow-hidden">
+                {/* Modal Header */}
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-headline font-bold text-base text-[#292D26]">Delivery Route & Map</h3>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EAF4ED] text-[#38754A]">
+                        #{activeMapDelivery.orderNumber}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#77786F]">
+                      {activeMapDelivery.customerName} • {activeMapDelivery.slotLabel}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveMapDelivery(null)}
+                    className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">close</span>
+                  </button>
+                </div>
+
+                {/* Embedded Map Canvas */}
+                <div className="relative w-full h-56 rounded-2xl bg-slate-100 overflow-hidden border border-[#EEE7DC] shrink-0">
+                  <iframe
+                    title="Customer Delivery Destination Map"
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(
+                      (activeMapDelivery.coordinates
+                        ? `${activeMapDelivery.coordinates.latitude},${activeMapDelivery.coordinates.longitude}`
+                        : activeMapDelivery.deliveryAddress) + ', Sagore, Pithampur'
+                    )}&hl=en&z=15&output=embed`}
+                    className="w-full h-full border-0 pointer-events-auto"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                  <div className="absolute top-2.5 left-2.5 z-10 px-2.5 py-1 rounded-full bg-white/95 text-[#292D26] text-[10px] font-bold shadow-md flex items-center gap-1 backdrop-blur-xs border border-slate-200">
+                    <span className="material-symbols-outlined text-[13px] text-[#38754A]">near_me</span>
+                    <span>
+                      ~{activeMapDelivery.coordinates
+                        ? calculateDistanceKm(
+                            riderGps ? riderGps.lat : SAGORE_KITCHEN_COORDS.lat,
+                            riderGps ? riderGps.lng : SAGORE_KITCHEN_COORDS.lng,
+                            activeMapDelivery.coordinates.latitude,
+                            activeMapDelivery.coordinates.longitude
+                          )
+                        : 2.5} km {riderGps ? '(from you)' : '(from kitchen)'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Route Breakdown: Pickup -> Drop-off */}
+                <div className="flex flex-col gap-2 bg-[#FFF9F0] p-3 rounded-2xl border border-[#EEE7DC] text-xs">
+                  {/* Pickup Stop */}
+                  <div className="flex items-start gap-2.5 pb-2 border-b border-[#EEE7DC]/70">
+                    <span className="w-5 h-5 rounded-full bg-[#EAF4ED] text-[#38754A] flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
+                      A
+                    </span>
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-bold text-[#77786F] uppercase tracking-wider block">
+                        Kitchen Pickup
+                      </span>
+                      <span className="font-bold text-[#292D26] block">Janki Rasoi Cloud Kitchen</span>
+                      <span className="text-[11px] text-[#77786F]">Main Bazar, Sagore, Pithampur (454774)</span>
+                    </div>
+                  </div>
+
+                  {/* Drop-off Stop */}
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#FFF1DC] text-[#E99A32] flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
+                      B
+                    </span>
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-bold text-[#77786F] uppercase tracking-wider block">
+                        Customer Drop-off
+                      </span>
+                      <span className="font-bold text-[#292D26] block">{activeMapDelivery.deliveryAddress}</span>
+                      {activeMapDelivery.landmark && (
+                        <span className="text-[11px] text-[#38754A] font-semibold block mt-0.5">
+                          Landmark: {activeMapDelivery.landmark}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Navigation and Call Actions */}
+                <div className="flex flex-col gap-2 pt-1">
+                  <a
+                    href={activeMapDelivery.navigationUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full h-12 rounded-xl bg-[#38754A] hover:bg-[#285C38] active:scale-98 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-all"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">directions</span>
+                    <span>Start Turn-by-Turn GPS (Google Maps)</span>
+                  </a>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <a
+                      href={`tel:${activeMapDelivery.customerPhone}`}
+                      className="h-10 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 text-slate-800 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[#38754A] text-[16px]">call</span>
+                      <span>Call Customer</span>
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                          navigator.clipboard.writeText(
+                            `${activeMapDelivery.customerName}, ${activeMapDelivery.deliveryAddress}${
+                              activeMapDelivery.landmark ? ', Landmark: ' + activeMapDelivery.landmark : ''
+                            }`
+                          );
+                          showRiderToast('Address copied!');
+                        }
+                      }}
+                      className="h-10 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 text-slate-800 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-slate-500 text-[16px]">content_copy</span>
+                      <span>Copy Address</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Rider Toast Notification */}
+          {toastMsg && (
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-60 bg-[#292D26] text-white px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold flex items-center gap-2 animate-in fade-in slide-in-from-bottom duration-200 border border-white/10">
+              <span className="material-symbols-outlined text-[18px] text-emerald-400">check_circle</span>
+              <span>{toastMsg}</span>
             </div>
           )}
         </>

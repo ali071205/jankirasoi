@@ -22,22 +22,57 @@ export default function Header() {
 
   // Sync session on mount and listen to storage events
   useEffect(() => {
+    // Restore chosen location name from local storage
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('jr_selected_address');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const label = parsed.street?.split(',')[0] || parsed.flat || parsed.city;
+          if (label) setLocationName(label);
+        }
+      } catch {}
+    }
+
     api.getCurrentUser().then((user) => {
       if (user && user.role === 'CUSTOMER') {
         setCurrentUser(user);
+        if (user.savedAddress?.street) {
+          setLocationName(user.savedAddress.street.split(',')[0]);
+        }
       } else {
         setCurrentUser(null);
       }
     });
 
     const handleStorage = () => {
+      try {
+        const stored = localStorage.getItem('jr_selected_address');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const label = parsed.street?.split(',')[0] || parsed.flat || parsed.city;
+          if (label) setLocationName(label);
+        }
+      } catch {}
+
       api.getCurrentUser().then((user) => {
-        if (user && user.role === 'CUSTOMER') setCurrentUser(user);
-        else setCurrentUser(null);
+        if (user && user.role === 'CUSTOMER') {
+          setCurrentUser(user);
+          if (user.savedAddress?.street) {
+            setLocationName(user.savedAddress.street.split(',')[0]);
+          }
+        } else {
+          setCurrentUser(null);
+        }
       });
     };
+
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+    window.addEventListener('jr_address_changed', handleStorage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('jr_address_changed', handleStorage);
+    };
   }, []);
 
   // Close dropdown on route change

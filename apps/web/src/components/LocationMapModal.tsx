@@ -198,76 +198,92 @@ export default function LocationMapModal({
     setViewMode('MAP_PINPOINT');
   };
 
-  // Open Android-style location permission dialog (or execute directly if already granted "While using the app")
+  // Request location directly without duplicate permission dialogs
   const handleUseCurrentLocation = () => {
-    if (typeof window !== 'undefined' && localStorage.getItem('jr_location_perm') === 'granted') {
-      const isPrecise = localStorage.getItem('jr_location_accuracy') !== 'approximate';
-      executeGeolocation(isPrecise, false);
-      return;
-    }
-    setShowPermissionDialog(true);
+    executeGeolocation(true, true);
   };
 
-  // Perform geolocation once user chooses permission in dialog
+  // Perform geolocation with resilient network fallback and 5-minute caching
   const executeGeolocation = (highAccuracy: boolean, persistPermission: boolean) => {
     setShowPermissionDialog(false);
     setIsGpsLoading(true);
 
-    if (persistPermission && typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('jr_location_perm', 'granted');
-        localStorage.setItem('jr_location_accuracy', highAccuracy ? 'precise' : 'approximate');
-      } catch {}
-    }
-
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      alert('Geolocation is not supported by your browser.');
       setIsGpsLoading(false);
+      selectLocation(22.6288, 75.5684, 'Sagore Main Market, Pithampur, MP 454774', '454774');
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const userLat = pos.coords.latitude;
-        const userLng = pos.coords.longitude;
-        setLat(userLat);
-        setLng(userLng);
-
+    const onGeoSuccess = async (pos: GeolocationPosition) => {
+      if (persistPermission && typeof window !== 'undefined') {
         try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${userLat}&lon=${userLng}`,
-            { headers: { 'Accept-Language': 'en' } }
-          );
-          if (res.ok) {
-            const data = await res.json();
-            const addr = data.address || {};
-            const pin = addr.postcode || '454774';
-            const detectedArea = addr.suburb || addr.neighbourhood || addr.road || 'Sagore Main Area';
-            const detectedCity = addr.city || addr.town || addr.village || 'Sagore, Pithampur';
+          localStorage.setItem('jr_location_perm', 'granted');
+        } catch {}
+      }
 
-            setAreaTitle(detectedArea);
-            setDisplayAddress(data.display_name || `${detectedArea}, ${detectedCity} ${pin}`);
-            setStreet(detectedArea);
-            setPincode(pin === '454774' ? '454774' : pin);
-            setCity(detectedCity);
-          }
-        } catch {
-          setAreaTitle('Current GPS Location');
-          setDisplayAddress('Near Current GPS Location, Sagore, Pithampur (454774)');
-          setStreet('Near Current Location, Sagore');
-          setPincode('454774');
-        } finally {
-          setIsGpsLoading(false);
-          setViewMode('MAP_PINPOINT');
+      const userLat = pos.coords.latitude;
+      const userLng = pos.coords.longitude;
+      setLat(userLat);
+      setLng(userLng);
+
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${userLat}&lon=${userLng}`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const addr = data.address || {};
+          const pin = addr.postcode || '454774';
+          const detectedArea = addr.suburb || addr.neighbourhood || addr.road || 'Sagore Main Area';
+          const detectedCity = addr.city || addr.town || addr.village || 'Sagore, Pithampur';
+
+          setAreaTitle(detectedArea);
+          setDisplayAddress(data.display_name || `${detectedArea}, ${detectedCity} ${pin}`);
+          setStreet(detectedArea);
+          setPincode(pin === '454774' ? '454774' : pin);
+          setCity(detectedCity);
+        } else {
+          throw new Error('Reverse geocode failed');
         }
-      },
-      (err) => {
+      } catch {
+        setAreaTitle('Current GPS Location');
+        setDisplayAddress('Near Current GPS Location, Sagore, Pithampur (454774)');
+        setStreet('Near Current Location, Sagore');
+        setPincode('454774');
+      } finally {
         setIsGpsLoading(false);
-        console.warn('GPS location error:', err.message);
-        // Fallback to Sagore center
-        selectLocation(22.6288, 75.5684, 'Sagore Main Market, Pithampur, MP 454774', '454774');
-      },
-      { timeout: 15000, enableHighAccuracy: highAccuracy, maximumAge: 0 }
+        setViewMode('MAP_PINPOINT');
+      }
+    };
+
+    const onGeoError = (err: GeolocationPositionError) => {
+      // If high accuracy timed out, retry with standard cell/network positioning
+      if (highAccuracy && err.code === err.TIMEOUT) {
+        navigator.geolocation.getCurrentPosition(
+          onGeoSuccess,
+          () => {
+            setIsGpsLoading(false);
+            selectLocation(22.6288, 75.5684, 'Sagore Main Market, Pithampur, MP 454774', '454774');
+          },
+          { timeout: 7000, enableHighAccuracy: false, maximumAge: 300000 }
+        );
+        return;
+      }
+
+      setIsGpsLoading(false);
+      if (err.code === err.PERMISSION_DENIED && typeof window !== 'undefined') {
+        try { localStorage.setItem('jr_location_perm', 'denied'); } catch {}
+      }
+      console.warn('GPS location notice:', err.message);
+      // Fallback to Sagore center without getting stuck
+      selectLocation(22.6288, 75.5684, 'Sagore Main Market, Pithampur, MP 454774', '454774');
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      onGeoSuccess,
+      onGeoError,
+      { timeout: 8000, enableHighAccuracy: highAccuracy, maximumAge: 300000 }
     );
   };
 
@@ -316,6 +332,7 @@ export default function LocationMapModal({
         localStorage.setItem('jr_saved_addresses', JSON.stringify(updated));
         localStorage.setItem('jr_selected_address', JSON.stringify(confirmedLocation));
         setSavedAddresses(updated);
+        window.dispatchEvent(new Event('jr_address_changed'));
       } catch {}
     }
 
@@ -328,6 +345,7 @@ export default function LocationMapModal({
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem('jr_selected_address', JSON.stringify(addr));
+        window.dispatchEvent(new Event('jr_address_changed'));
       } catch {}
     }
     onConfirm(addr);
