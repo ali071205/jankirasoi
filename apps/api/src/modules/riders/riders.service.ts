@@ -43,7 +43,7 @@ export class RidersService {
     if (riderProfileId) {
       const unassignedOrders = await this.prisma.order.findMany({
         where: {
-          status: { in: ['PLACED', 'ACCEPTED', 'PREPARING', 'READY_FOR_PICKUP'] },
+          status: { in: ['READY_FOR_PICKUP'] },
           riderAssignments: {
             none: { status: 'ASSIGNED' },
           },

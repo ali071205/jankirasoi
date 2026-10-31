@@ -733,7 +733,7 @@ export const api = {
     return res.json();
   },
 
-  // 10. Rider Deliveries Queue
+  // 10. Rider Deliveries Queue (Live database state only - zero mock data)
   async getRiderDeliveries(signal?: AbortSignal): Promise<{ deliveries: RiderDelivery[] }> {
     const base = getApiBase();
     const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
@@ -751,62 +751,10 @@ export const api = {
         }
       }
     } catch {
-      // Backend not running on local port, fallback to realistic demo trips
+      // Backend unavailable or request aborted
     }
 
-    // Authenticated riders should see genuine backend state, not demo trips
-    if (token) {
-      return { deliveries: [] };
-    }
-
-    // Pull from localStorage or generate realistic active deliveries
-    let localDeliveries: RiderDelivery[] = [];
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('jr_demo_rider_deliveries');
-        if (stored) localDeliveries = JSON.parse(stored);
-      } catch {}
-    }
-
-    if (localDeliveries.length === 0) {
-      localDeliveries = [
-        {
-          orderId: 'demo-ord-101',
-          orderNumber: 'JR-8921',
-          customerName: 'Rahul Sharma',
-          customerPhone: '9876543210',
-          deliveryAddress: 'Shop 12 / House 44, Main Bazar Road, Sagore (454774)',
-          landmark: 'Near Sagore Police Station',
-          coordinates: { latitude: 22.6288, longitude: 75.5684 },
-          slotLabel: 'Tonight Dinner (07:30 PM - 09:30 PM)',
-          itemsSummary: '1x Janaki Special Full Thali (Standard) + 2x Plain Paratha',
-          paymentMethod: 'ONLINE',
-          cashDuePaise: 0,
-          status: 'READY_FOR_PICKUP',
-          navigationUrl: 'https://www.google.com/maps/dir/?api=1&destination=Sagore+Pithampur+454774',
-        },
-        {
-          orderId: 'demo-ord-102',
-          orderNumber: 'JR-8924',
-          customerName: 'Pooja Verma',
-          customerPhone: '9812345678',
-          deliveryAddress: 'Flat 302, Sector 1, Housing Board Colony, Pithampur (454775)',
-          landmark: 'Near Cipla Circle',
-          coordinates: { latitude: 22.6105, longitude: 75.6321 },
-          slotLabel: 'Tonight Dinner (07:30 PM - 09:30 PM)',
-          itemsSummary: '2x Regular Home Thali + 1x Boondi Raita',
-          paymentMethod: 'COD',
-          cashDuePaise: 26000,
-          status: 'OUT_FOR_DELIVERY',
-          navigationUrl: 'https://www.google.com/maps/dir/?api=1&destination=Sector+1+Pithampur+454775',
-        },
-      ];
-      if (typeof window !== 'undefined') {
-        try { localStorage.setItem('jr_demo_rider_deliveries', JSON.stringify(localDeliveries)); } catch {}
-      }
-    }
-
-    return { deliveries: localDeliveries };
+    return { deliveries: [] };
   },
 
   // 11. Rider Mark Out for Delivery (generates customer PIN)
@@ -829,20 +777,7 @@ export const api = {
       // Offline fallback
     }
 
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('jr_demo_rider_deliveries');
-        if (stored) {
-          const list: RiderDelivery[] = JSON.parse(stored);
-          const found = list.find((d) => d.orderId === orderId);
-          if (found) {
-            found.status = 'OUT_FOR_DELIVERY';
-            localStorage.setItem('jr_demo_rider_deliveries', JSON.stringify(list));
-          }
-        }
-      } catch {}
-    }
-    return { success: true, status: 'OUT_FOR_DELIVERY' };
+    throw new Error('Unable to update delivery trip status. Please check backend connection.');
   },
 
   // 12. Rider Verify Delivery OTP PIN
@@ -872,25 +807,7 @@ export const api = {
       }
     }
 
-    // Demo/offline PIN verification: Accept valid 6-digit PIN
-    if (/^\d{6}$/.test(code)) {
-      if (typeof window !== 'undefined') {
-        try {
-          const stored = localStorage.getItem('jr_demo_rider_deliveries');
-          if (stored) {
-            const list: RiderDelivery[] = JSON.parse(stored);
-            const found = list.find((d) => d.orderId === orderId);
-            if (found) {
-              found.status = 'DELIVERED';
-              localStorage.setItem('jr_demo_rider_deliveries', JSON.stringify(list));
-            }
-          }
-        } catch {}
-      }
-      return { success: true, status: 'DELIVERED', message: 'PIN verified successfully' };
-    }
-
-    throw new Error('Incorrect PIN. Please enter a valid 6-digit code.');
+    throw new Error('PIN verification failed. Please enter the valid 6-digit delivery PIN provided by the customer.');
   },
 
   // 13. Customer Phone Login / Registration
@@ -973,33 +890,7 @@ export const api = {
       }
     }
 
-    // Resilient Fallback for Demo / Local Test Rider when API backend is offline
-    const cleanPhone = phone.trim().replace(/\D/g, '');
-    if (cleanPhone === '9811223344' || cleanPhone === '9876543210' || cleanPhone.endsWith('3344')) {
-      const demoUser: UserProfile = {
-        id: 'mock-rider-amit',
-        name: 'Amit Sharma (Rider)',
-        phone: '9811223344',
-        role: 'RIDER',
-        riderProfile: {
-          id: 'mock-rider-profile-01',
-          vehicleNumber: 'DL-01-AB-1234',
-          isAvailable: true,
-        },
-      };
-      const mockSession: AuthSessionResponse = {
-        user: demoUser,
-        sessionToken: 'demo_rider_session_' + Date.now(),
-        expiresAt: new Date(Date.now() + 86400000).toISOString(),
-      };
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('jr_rider_token', mockSession.sessionToken);
-        localStorage.setItem('jr_rider_profile', JSON.stringify(demoUser));
-      }
-      return mockSession;
-    }
-
-    throw new Error('Invalid rider credentials or backend offline. Please use demo credentials.');
+    throw new Error('Invalid rider credentials or backend offline. Please verify registered rider mobile number and shift password.');
   },
 
   // 14b. Admin Login

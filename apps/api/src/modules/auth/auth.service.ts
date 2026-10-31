@@ -161,6 +161,10 @@ export class AuthService {
       });
       this.logger.log(`Created new customer account: ${user.name} (${user.phone})`);
     } else {
+      // Prevent customer login from hijacking/overwriting Admin, Staff, or Rider accounts
+      if (user.role !== 'CUSTOMER') {
+        throw new BadRequestException('This phone number is registered for administrative or delivery fleet access. Please use your personal customer mobile number.');
+      }
       if (dto.name && dto.name.trim() && user.name !== dto.name.trim()) {
         user = await this.prisma.user.update({
           where: { id: user.id },

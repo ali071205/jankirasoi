@@ -228,41 +228,6 @@ export default function CustomerAuthModal({
     }
   };
 
-  // 1-Tap Quick Demo Customer
-  const handleQuickDemo = async () => {
-    setPhone('9876543210');
-    setName('Rahul Sharma');
-    setFlat('House 14, Main Market');
-    setStreet('Near Sagore Post Office, Sagore');
-    setLandmark('Near Sagore Bus Stand');
-    setPincode('454774');
-    setError(null);
-    setLoading(true);
-
-    try {
-      const addressObj = {
-        flat: 'House 14, Main Market',
-        street: 'Near Sagore Post Office, Sagore',
-        landmark: 'Near Sagore Bus Stand',
-        pincode: '454774',
-      };
-      const res = await api.loginCustomer('9876543210', 'Rahul Sharma', addressObj);
-      setCurrentUser(res.user);
-      setActiveTab('PROFILE');
-      setIsEditingProfile(false);
-      setSuccessMsg('Logged in as Rahul Sharma (Sagore)!');
-      if (onLoginSuccess) {
-        onLoginSuccess(res.user);
-      }
-      setTimeout(() => {
-        onClose();
-      }, 700);
-    } catch (err: any) {
-      setError(err.message || 'Demo login failed');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleLogout = async () => {
     setLoading(true);
@@ -503,7 +468,7 @@ export default function CustomerAuthModal({
                       required
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g. Rahul Sharma"
+                      placeholder="e.g. Rajesh Kumar"
                       className="w-full px-3 py-2 text-xs border border-[#EEE7DC] rounded-xl focus:border-[#38754A] outline-none"
                     />
                   </div>
@@ -719,7 +684,7 @@ export default function CustomerAuthModal({
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Rahul Sharma"
+                  placeholder="e.g. Rajesh Kumar"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full px-3.5 py-2 text-xs border border-[#EEE7DC] rounded-xl focus:border-[#38754A] outline-none"
@@ -816,19 +781,7 @@ export default function CustomerAuthModal({
                 )}
               </button>
 
-              {/* Quick 1-Tap Demo Customer */}
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={handleQuickDemo}
-                  disabled={loading}
-                  className="w-full py-2 px-3 bg-[#EAF4ED] hover:bg-[#d8eed7] border border-[#38754A]/30 text-[#38754A] rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <span className="material-symbols-outlined text-[16px]">touch_app</span>
-                  <span>1-Tap Test Customer (Rahul Sharma • Malviya Nagar)</span>
-                </button>
-              </div>
-
+              
               <p className="text-[11px] text-[#77786F] text-center leading-tight">
                 No OTP passwords required. We only use your phone number for rider delivery contact.
               </p>

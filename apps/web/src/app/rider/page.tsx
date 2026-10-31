@@ -88,6 +88,7 @@ export default function RiderPage() {
   // Initial Auth Check
   useEffect(() => {
     async function checkRiderAuth() {
+        if (typeof window !== 'undefined') localStorage.removeItem('jr_demo_rider_deliveries');
       try {
         const user = await api.getCurrentUser();
         if (user && user.role === 'RIDER') {
@@ -427,7 +428,7 @@ export default function RiderPage() {
                 className="w-full py-2.5 bg-[#FFF9F0] hover:bg-[#F3EADF] text-xs text-[#38754A] font-bold rounded-xl border border-[#EEE7DC] transition-colors flex items-center justify-center gap-1.5"
               >
                 <span>⚡</span>
-                <span>1-Tap Fill Demo Rider (Amit Sharma)</span>
+                <span>1-Tap Registered Rider (9811223344)</span>
               </button>
             </form>
           </div>
