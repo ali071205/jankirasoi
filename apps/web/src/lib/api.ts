@@ -746,12 +746,17 @@ export const api = {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data && Array.isArray(data.deliveries) && data.deliveries.length > 0) {
+        if (data && Array.isArray(data.deliveries)) {
           return data;
         }
       }
     } catch {
       // Backend not running on local port, fallback to realistic demo trips
+    }
+
+    // Authenticated riders should see genuine backend state, not demo trips
+    if (token) {
+      return { deliveries: [] };
     }
 
     // Pull from localStorage or generate realistic active deliveries

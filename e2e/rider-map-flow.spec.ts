@@ -5,6 +5,34 @@ test.describe('Rider Web App, In-App Route Maps & Location System', () => {
 
   test('1. Rider portal login, active deliveries, and in-app route map modal', async ({ page }) => {
     test.setTimeout(60000);
+
+    // Mock active delivery so map & navigation modal can be verified independently of empty database order state
+    await page.route('**/rider/deliveries', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          deliveries: [
+            {
+              orderId: 'test-ord-1',
+              orderNumber: 'JR-8921',
+              customerName: 'Rahul Sharma',
+              customerPhone: '9876543210',
+              deliveryAddress: 'Shop 12 / House 44, Main Bazar Road, Sagore (454774)',
+              landmark: 'Near Sagore Police Station',
+              coordinates: { latitude: 22.6288, longitude: 75.5684 },
+              slotLabel: 'Tonight Dinner (07:30 PM - 09:30 PM)',
+              itemsSummary: '1x Janaki Special Full Thali (Standard)',
+              paymentMethod: 'ONLINE',
+              cashDuePaise: 0,
+              status: 'READY_FOR_PICKUP',
+              navigationUrl: 'https://www.google.com/maps/dir/?api=1&destination=Sagore+Pithampur+454774',
+            },
+          ],
+        }),
+      });
+    });
+
     await page.goto(`${WEB_BASE}/rider`, { waitUntil: 'domcontentloaded' });
 
     // Step 1: Fill credentials

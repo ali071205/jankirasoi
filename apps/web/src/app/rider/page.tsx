@@ -111,6 +111,9 @@ export default function RiderPage() {
     setLoginError(null);
     try {
       const res = await api.loginRider(loginPhone.trim(), loginPassword.trim());
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('jr_demo_rider_deliveries');
+      }
       setRiderUser(res.user);
       loadDeliveries();
     } catch (err: any) {
@@ -126,6 +129,7 @@ export default function RiderPage() {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('jr_rider_token');
       localStorage.removeItem('jr_rider_profile');
+      localStorage.removeItem('jr_demo_rider_deliveries');
     }
   };
 
