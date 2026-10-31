@@ -510,28 +510,7 @@ export class CheckoutService {
         });
       }
 
-      // Auto-assign available active rider immediately upon order creation
-      try {
-        const availableRider = await tx.riderProfile.findFirst({
-          where: {
-            isAvailable: true,
-            user: { isActive: true },
-          },
-        });
-        if (availableRider) {
-          await tx.riderAssignment.create({
-            data: {
-              orderId: order.id,
-              riderId: availableRider.id,
-              status: 'ASSIGNED',
-            },
-          });
-          this.logger.log(`Auto-assigned rider ${availableRider.id} to new order #${order.orderNumber}`);
-        }
-      } catch (err: any) {
-        this.logger.warn(`Could not auto-assign rider: ${err.message}`);
-      }
-
+      
       // Enqueue notification outbox
       await tx.outboxMessage.create({
         data: {

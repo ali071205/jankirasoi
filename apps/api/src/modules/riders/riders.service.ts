@@ -26,17 +26,20 @@ export class RidersService {
         where: { userId: riderUserId },
       });
       if (!profile) {
-        profile = await this.prisma.riderProfile.create({
-          data: { userId: riderUserId, vehicleNumber: 'MP-09-AB-1234', isAvailable: true },
-        });
+        const user = await this.prisma.user.findUnique({ where: { id: riderUserId } });
+        if (user && user.role === 'RIDER') {
+          profile = await this.prisma.riderProfile.create({
+            data: { userId: riderUserId, vehicleNumber: 'MP-09-AB-1234', isAvailable: true },
+          });
+        }
       }
-      riderProfileId = profile.id;
-    } else {
-      // Dev / fallback: pick first active rider profile
-      const primary = await this.prisma.riderProfile.findFirst({
-        where: { isAvailable: true },
-      });
-      if (primary) riderProfileId = primary.id;
+      if (profile) {
+        riderProfileId = profile.id;
+      }
+    }
+
+    if (!riderProfileId) {
+      return { deliveries: [] };
     }
 
     // Auto-assign any active unassigned orders to available rider so riders can immediately deliver
