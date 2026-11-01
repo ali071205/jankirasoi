@@ -1,13 +1,13 @@
-import { Controller, Post, Get, Body, Res, Req, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Param, Body, Res, Req, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { AdminLoginDto, RiderLoginDto, CustomerLoginDto } from './dto/auth.dto';
+import { AdminLoginDto, RiderLoginDto, CustomerLoginDto, CreateRiderDto, ToggleRiderAvailabilityDto } from './dto/auth.dto';
 import { Response, Request } from 'express';
 
 @ApiTags('Authentication')
 @Controller()
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Post('auth/customer/login')
   @ApiOperation({ summary: 'Instant phone-first customer login or registration' })
@@ -57,6 +57,27 @@ export class AuthController {
   @ApiOperation({ summary: 'Admin list all riders and vehicle details' })
   async getRiders() {
     return this.authService.getAdminRiders();
+  }
+
+  @Post('admin/riders')
+  @ApiOperation({ summary: 'Admin register new delivery rider with credentials' })
+  async createRider(@Body() dto: CreateRiderDto) {
+    return this.authService.createAdminRider(dto);
+  }
+
+  @Patch('admin/riders/:id/availability')
+  @ApiOperation({ summary: 'Admin toggle rider live duty availability' })
+  async toggleRiderAvailability(
+    @Param('id') riderId: string,
+    @Body() dto: ToggleRiderAvailabilityDto,
+  ) {
+    return this.authService.toggleAdminRiderAvailability(riderId, dto.isAvailable);
+  }
+
+  @Delete('admin/riders/:id')
+  @ApiOperation({ summary: 'Admin remove/delete delivery rider' })
+  async deleteRider(@Param('id') riderId: string) {
+    return this.authService.deleteAdminRider(riderId);
   }
 
   @Post('admin/auth/login')

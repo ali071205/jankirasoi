@@ -40,3 +40,32 @@ export class CustomerLoginDto {
   @IsOptional()
   address?: any;
 }
+
+export class CreateRiderDto {
+  @ApiProperty({ example: 'Delivery Rider' })
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+
+  @ApiProperty({ example: '987654321' })
+  @IsString()
+  @IsNotEmpty()
+  phone: string;
+
+  @ApiProperty({ example: '200720', required: false })
+  @IsString()
+  @IsOptional()
+  password?: string;
+
+  @ApiProperty({ example: 'MP-09-JR-2026', required: false })
+  @IsString()
+  @IsOptional()
+  vehicleNumber?: string;
+}
+
+export class ToggleRiderAvailabilityDto {
+  @ApiProperty({ example: true })
+  @IsNotEmpty()
+  isAvailable: boolean;
+}
+

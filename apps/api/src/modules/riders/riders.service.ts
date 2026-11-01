@@ -253,4 +253,33 @@ export class RidersService {
       };
     });
   }
+
+  async updateDutyStatus(riderUserId: string, isAvailable: boolean) {
+    let profile = await this.prisma.riderProfile.findFirst({
+      where: {
+        OR: [{ id: riderUserId }, { userId: riderUserId }],
+      },
+    });
+
+    if (!profile) {
+      profile = await this.prisma.riderProfile.create({
+        data: {
+          userId: riderUserId,
+          vehicleNumber: 'MP-09-JR-2026',
+          isAvailable,
+        },
+      });
+    } else {
+      profile = await this.prisma.riderProfile.update({
+        where: { id: profile.id },
+        data: { isAvailable },
+      });
+    }
+
+    return {
+      success: true,
+      isAvailable: profile.isAvailable,
+      message: profile.isAvailable ? 'Rider marked ON DUTY' : 'Rider marked OFFLINE',
+    };
+  }
 }

@@ -20,3 +20,9 @@ export class DeliveryExceptionDto {
   @IsNotEmpty()
   notes: string;
 }
+
+export class UpdateDutyStatusDto {
+  @ApiProperty({ example: true })
+  @IsNotEmpty()
+  isAvailable: boolean;
+}

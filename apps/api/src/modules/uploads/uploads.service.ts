@@ -7,9 +7,13 @@ export class UploadsService {
   constructor(private readonly configService: ConfigService) {}
 
   getUploadSignature(folder = 'jankirasoi/menu') {
-    const cloudName = this.configService.get<string>('CLOUDINARY_CLOUD_NAME') || 'jankirasoi';
-    const apiKey = this.configService.get<string>('CLOUDINARY_API_KEY') || 'mock_api_key';
-    const apiSecret = this.configService.get<string>('CLOUDINARY_API_SECRET') || 'mock_secret';
+    const cloudName = this.configService.get<string>('CLOUDINARY_CLOUD_NAME') || 'mdax5iq1';
+    const apiKey = this.configService.get<string>('CLOUDINARY_API_KEY');
+    const apiSecret = this.configService.get<string>('CLOUDINARY_API_SECRET');
+
+    if (!apiKey || !apiSecret) {
+      throw new BadRequestException('Cloudinary credentials (CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET) are not configured.');
+    }
 
     const timestamp = Math.floor(Date.now() / 1000);
 

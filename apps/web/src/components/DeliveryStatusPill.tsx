@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { DEFAULT_FOOD_IMAGE, FALLBACK_CATALOG } from '../lib/api';
+import { DEFAULT_FOOD_IMAGE } from '../lib/api';
 
 export interface DeliveryStatusPillProps {
   orderNumber: string;
@@ -134,18 +134,6 @@ export function resolveOrderFoodImage(itemName?: string, fallbackUrl?: string): 
 
   if (!itemName) return DEFAULT_FOOD_IMAGE;
   const lower = itemName.toLowerCase();
-
-  // Search catalog items
-  for (const cat of FALLBACK_CATALOG.categories) {
-    for (const itm of cat.items) {
-      if (
-        itm.name.toLowerCase().includes(lower) ||
-        lower.includes(itm.name.toLowerCase())
-      ) {
-        if (itm.imageUrl) return itm.imageUrl;
-      }
-    }
-  }
 
   // Common homestyle dish category images
   if (lower.includes('thali') || lower.includes('special')) {

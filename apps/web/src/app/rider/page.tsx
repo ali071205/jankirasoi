@@ -14,10 +14,11 @@ export default function RiderPage() {
   // Rider Auth State
   const [riderUser, setRiderUser] = useState<UserProfile | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
-  const [loginPhone, setLoginPhone] = useState('9811223344');
-  const [loginPassword, setLoginPassword] = useState('RiderPassword123!');
+  const [loginPhone, setLoginPhone] = useState('987654321');
+  const [loginPassword, setLoginPassword] = useState('200720');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [isTogglingDuty, setIsTogglingDuty] = useState(false);
 
   // Keypad & PIN Verification State
   const [selectedOrder, setSelectedOrder] = useState<RiderDelivery | null>(null);
@@ -93,10 +94,19 @@ export default function RiderPage() {
         const user = await api.getCurrentUser();
         if (user && user.role === 'RIDER') {
           setRiderUser(user);
+          if (user.riderProfile?.isAvailable !== undefined) {
+            setIsOnDuty(user.riderProfile.isAvailable);
+          }
         } else {
           const cached = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_profile') : null;
           if (cached) {
-            try { setRiderUser(JSON.parse(cached)); } catch {}
+            try {
+              const parsed = JSON.parse(cached);
+              setRiderUser(parsed);
+              if (parsed?.riderProfile?.isAvailable !== undefined) {
+                setIsOnDuty(parsed.riderProfile.isAvailable);
+              }
+            } catch {}
           }
         }
       } finally {
@@ -112,15 +122,43 @@ export default function RiderPage() {
     setLoginError(null);
     try {
       const res = await api.loginRider(loginPhone.trim(), loginPassword.trim());
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('jr_demo_rider_deliveries');
-      }
       setRiderUser(res.user);
+      if (res.user?.riderProfile?.isAvailable !== undefined) {
+        setIsOnDuty(res.user.riderProfile.isAvailable);
+      }
       loadDeliveries();
     } catch (err: any) {
       setLoginError(err.message || 'Invalid rider phone or password.');
     } finally {
       setLoginLoading(false);
+    }
+  };
+
+  const handleToggleDuty = async () => {
+    if (isTogglingDuty) return;
+    const nextStatus = !isOnDuty;
+    setIsTogglingDuty(true);
+    setIsOnDuty(nextStatus);
+    try {
+      await api.updateRiderDutyStatus(nextStatus);
+      if (riderUser && riderUser.riderProfile) {
+        const updated = {
+          ...riderUser,
+          riderProfile: {
+            ...riderUser.riderProfile,
+            isAvailable: nextStatus,
+          },
+        };
+        setRiderUser(updated);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('jr_rider_profile', JSON.stringify(updated));
+        }
+      }
+    } catch (err: any) {
+      console.warn('Failed to update duty status on server:', err.message);
+      setIsOnDuty(!nextStatus);
+    } finally {
+      setIsTogglingDuty(false);
     }
   };
 
@@ -130,7 +168,6 @@ export default function RiderPage() {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('jr_rider_token');
       localStorage.removeItem('jr_rider_profile');
-      localStorage.removeItem('jr_demo_rider_deliveries');
     }
   };
 
@@ -309,15 +346,16 @@ export default function RiderPage() {
 
               {/* Duty Status Toggle */}
               <button
-                onClick={() => setIsOnDuty(!isOnDuty)}
+                onClick={handleToggleDuty}
+                disabled={isTogglingDuty}
                 className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 transition-colors border shadow-2xs ${
                   isOnDuty
                     ? 'bg-[#EAF4ED] text-[#38754A] border-[#38754A]/30'
                     : 'bg-rose-50 text-rose-700 border-rose-200'
-                }`}
+                } ${isTogglingDuty ? 'opacity-70 cursor-wait' : ''}`}
               >
                 <span className={`w-2 h-2 rounded-full ${isOnDuty ? 'bg-[#38754A] animate-pulse' : 'bg-rose-500'}`}></span>
-                {isOnDuty ? 'ON DUTY' : 'OFFLINE'}
+                {isTogglingDuty ? 'SYNCING...' : isOnDuty ? 'ON DUTY' : 'OFFLINE'}
               </button>
 
               {/* Quick Refresh */}
@@ -421,14 +459,14 @@ export default function RiderPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setLoginPhone('9811223344');
-                  setLoginPassword('RiderPassword123!');
+                  setLoginPhone('987654321');
+                  setLoginPassword('200720');
                   setLoginError(null);
                 }}
                 className="w-full py-2.5 bg-[#FFF9F0] hover:bg-[#F3EADF] text-xs text-[#38754A] font-bold rounded-xl border border-[#EEE7DC] transition-colors flex items-center justify-center gap-1.5"
               >
-                <span>⚡</span>
-                <span>1-Tap Registered Rider (9811223344)</span>
+                <span className="material-symbols-outlined text-[16px]">bolt</span>
+                <span>Quick Fill Registered Rider (987654321)</span>
               </button>
             </form>
           </div>

@@ -1,7 +1,7 @@
 import { Controller, Get, Patch, Post, Param, Body, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { RidersService } from './riders.service';
-import { VerifyOtpDto, DeliveryExceptionDto } from './dto/riders.dto';
+import { VerifyOtpDto, DeliveryExceptionDto, UpdateDutyStatusDto } from './dto/riders.dto';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Request } from 'express';
@@ -12,6 +12,13 @@ import { Request } from 'express';
 @Roles('RIDER', 'ADMIN')
 export class RidersController {
   constructor(private readonly ridersService: RidersService) {}
+
+  @Patch('duty-status')
+  @ApiOperation({ summary: 'Update rider online/offline duty availability status' })
+  async updateDutyStatus(@Body() dto: UpdateDutyStatusDto, @Req() req: Request) {
+    const riderUserId = (req as any).user?.id;
+    return this.ridersService.updateDutyStatus(riderUserId, dto.isAvailable);
+  }
 
   @Get()
   @ApiOperation({ summary: 'Get deliveries assigned to logged-in rider' })

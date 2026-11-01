@@ -297,106 +297,6 @@ const getApiBase = () => {
   return '/api/v1';
 };
 
-export const FALLBACK_CATALOG: CatalogResponse = {
-  serviceDate: new Date().toISOString().split('T')[0],
-  categories: [
-    {
-      id: 'cat-thalis',
-      name: 'Homestyle Thalis',
-      slug: 'homestyle-thalis',
-      displayOrder: 1,
-      items: [
-        {
-          id: '09f67dad-2306-49b7-88c7-cae050592f14',
-          name: 'Janaki Special Full Thali',
-          slug: 'janaki-special-full-thali',
-          description: '4 Soft Rotis, 1 Paneer Sabzi, 1 Seasonal Sabzi, Dal Tadka, Jeera Rice, Curd & Sweet.',
-          dietaryType: 'VEG',
-          imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDS9UZxeQL2XEwyu0K3PCfLt6xcAGFdQTQk0Ms6V2E_dNfemHxFYbIONpeD6RzRRoWWDyO18R_xwGBdtSE7xBHjmyObtY6kkODeMHHLUBjBohji3E4P1D7CsA6o0vz6TtyD5iFo0-ftcqqVkGA5aPZ6gqonSl0tiLeWavjPSF7RoRAjy-R35op1kvBkcA6DHoxU8eSbBL0OcSYbkU4Gi0pIkUstEckNKwAK8RsxyMFSxFnUKcwd2Fok',
-          basePricePaise: 18000,
-          taxRatePercent: 5,
-          isSoldOut: false,
-          variants: [
-            { id: 'd897e546-e669-4f5f-8f98-dd2db0308313', name: 'Full Thali (Standard)', priceModifierPaise: 0, isDefault: true },
-            { id: 'var-royal', name: 'Royal Portion (+Extra Sweet)', priceModifierPaise: 3500, isDefault: false },
-          ],
-          addonGroups: [],
-        },
-        {
-          id: 'cd02708b-cf9d-460a-878d-3597115602b7',
-          name: 'Regular Home Thali',
-          slug: 'regular-home-thali',
-          description: '4 Rotis, Seasonal Veg Sabzi, Dal Fry, Steamed Rice, Pickle & Salad.',
-          dietaryType: 'VEG',
-          imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBTHONkUFMlDOhbV8ZAksbZ3MFW81rMV0imOKG7b6sJsRN2StBpZW54kblxWOMQylv1X4vOJzgSkTy4gM3Z1ypQAk3U9TjdYZiZpd2e4RLirD0HL58J8DokQiAG_gm6CX5lrfbRwel5UXuvUoP3AD4f9T_s8Buuq22rghfLWtl-gHYATlEEnfvUW1xXaDUHTd2ri-3nRNvGFfssW_Zka0tU0w_egIYYxQTa--nhGHmHOM0tD0QbDU9C',
-          basePricePaise: 13000,
-          taxRatePercent: 5,
-          isSoldOut: false,
-          variants: [
-            { id: '7ee248f8-545a-46ba-b790-03a4e79cde96', name: 'Standard Thali', priceModifierPaise: 0, isDefault: true },
-          ],
-          addonGroups: [],
-        },
-        {
-          id: 'dal-bati-thali-01',
-          name: 'Dal Bati Churma Thali',
-          slug: 'dal-bati-thali',
-          description: '2 Ghee Baati, Panchmel Daal, Red Rajasthani Lahsun Chutney, Salad & Gulab Jamun Sweet.',
-          dietaryType: 'VEG',
-          imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80',
-          basePricePaise: 26500,
-          taxRatePercent: 5,
-          isSoldOut: false,
-          variants: [
-            { id: 'db-var-std', name: 'Standard Portion', priceModifierPaise: 0, isDefault: true },
-            { id: 'db-var-extra', name: 'Extra Baati (+2 Pcs)', priceModifierPaise: 5000, isDefault: false },
-          ],
-          addonGroups: [],
-        },
-      ],
-    },
-    {
-      id: 'cat-combos',
-      name: 'Roti & Rice Combos',
-      slug: 'roti-rice-combos',
-      displayOrder: 2,
-      items: [
-        {
-          id: 'a1c1e8ff-8f9e-4a82-98f3-876bd6f9e0f3',
-          name: 'Roti & Sabzi Duo',
-          slug: 'roti-sabzi-duo',
-          description: '4 Phulkas with spiced, fresh cottage cheese Paneer Bhurji & pickled salad.',
-          dietaryType: 'VEG',
-          imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD7FyfUzzLfU1zFeV9Kj0MuGwv3uOnBcOQnd59q3rdLwp86vcmEMSGNPqMzXfDxESKSt57aby9gMNqThGtOkZzquiH8qAUb7Q4LWqTabE2_IWIAegP4TTTbmASnzNA2PcgQXre_ZQX-PJSiJaIgicviQpj0iPuITd_o1l0YYcymiDaTeFNel4PUpcf2khbY4suRtZ6_PBLoP87PJ02DZFeDKOYWiT7pAPJI2hs4AakxWt8Ry9pUsjMS',
-          basePricePaise: 9500,
-          taxRatePercent: 5,
-          isSoldOut: false,
-          variants: [
-            { id: 'var-4phulka', name: '4 Phulkas + Bhurji', priceModifierPaise: 0, isDefault: true },
-            { id: 'var-6phulka', name: '6 Phulkas + Bhurji', priceModifierPaise: 3000, isDefault: false },
-          ],
-          addonGroups: [],
-        },
-        {
-          id: 'moong-khichdi-bowl',
-          name: 'Moong Dal Khichdi Bowl',
-          slug: 'moong-dal-khichdi',
-          description: 'Soothing yellow moong daal & rice khichdi tempered with cumin, pure cow ghee & curd.',
-          dietaryType: 'VEG',
-          imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80',
-          basePricePaise: 11000,
-          taxRatePercent: 5,
-          isSoldOut: false,
-          variants: [
-            { id: 'kh-var-std', name: 'Regular Bowl (500ml)', priceModifierPaise: 0, isDefault: true },
-          ],
-          addonGroups: [],
-        },
-      ],
-    },
-  ],
-};
-
 export function optimizeImageUrl(url?: string): string {
   if (!url) return '';
   if (url.includes('cloudinary.com') && url.includes('/upload/') && !url.includes('/f_auto')) {
@@ -409,7 +309,7 @@ export function optimizeImageUrl(url?: string): string {
 export const api = {
   // Synchronous cache accessors for zero-flicker instant hydration
   getCachedCatalog(serviceDate?: string): CatalogResponse | null {
-    return getCached<CatalogResponse>(`catalog_${serviceDate || 'today'}`) || FALLBACK_CATALOG;
+    return getCached<CatalogResponse>(`catalog_${serviceDate || 'today'}`);
   },
 
   getCachedSlots(date?: string): SlotsResponse | null {
@@ -421,7 +321,7 @@ export const api = {
     return getCached<PincodeCheckResponse>(`pin_${pincode}`);
   },
 
-  // 1. Live Catalog with Instant SWR Refresh & Resilient Fallback
+  // 1. Live Catalog with Instant SWR Refresh
   async getCatalog(serviceDate?: string, forceRefresh = false): Promise<CatalogResponse> {
     const cacheKey = `catalog_${serviceDate || 'today'}`;
     if (!forceRefresh) {
@@ -429,26 +329,22 @@ export const api = {
       if (cached) return cached;
     }
 
-    try {
-      const base = getApiBase();
-      const url = serviceDate ? `${base}/catalog?service_date=${encodeURIComponent(serviceDate)}` : `${base}/catalog`;
-      const res = await fetch(url, { cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.categories?.length) {
-          data.categories.forEach((cat: any) => {
-            cat.items?.forEach((it: any) => {
-              if (it.imageUrl) it.imageUrl = optimizeImageUrl(it.imageUrl);
-            });
-          });
-          return setCached(cacheKey, data, 10000); // 10s fresh cache
-        }
-      }
-    } catch {
-      // Backend not running on local/remote port, seamlessly use fallback
+    const base = getApiBase();
+    const url = serviceDate ? `${base}/catalog?service_date=${encodeURIComponent(serviceDate)}` : `${base}/catalog`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to fetch catalog from server');
     }
-
-    return setCached(cacheKey, FALLBACK_CATALOG, 10000);
+    const data = await res.json();
+    if (data?.categories?.length) {
+      data.categories.forEach((cat: any) => {
+        cat.items?.forEach((it: any) => {
+          if (it.imageUrl) it.imageUrl = optimizeImageUrl(it.imageUrl);
+        });
+      });
+    }
+    return setCached(cacheKey, data, 10000); // 10s fresh cache
   },
 
   // Real-time listener for cross-tab and cross-window menu changes
@@ -499,65 +395,17 @@ export const api = {
     if (cached) return cached;
 
     const base = getApiBase();
-    try {
-      let url = `${base}/delivery-zones/check?pincode=${encodeURIComponent(cleanPin)}`;
-      if (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)) {
-        url += `&lat=${lat}&lng=${lng}`;
-      }
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        return setCached(cacheKey, data, 300000);
-      }
+    let url = `${base}/delivery-zones/check?pincode=${encodeURIComponent(cleanPin)}`;
+    if (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)) {
+      url += `&lat=${lat}&lng=${lng}`;
+    }
+    const res = await fetch(url);
+    if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      if (err.message) {
-        throw new Error(err.message);
-      }
-    } catch (fetchErr: any) {
-      if (fetchErr.message && !fetchErr.message.includes('fetch') && !fetchErr.message.includes('NetworkError') && !fetchErr.message.includes('Failed to fetch')) {
-        throw fetchErr;
-      }
+      throw new Error(err.message || 'Failed to verify delivery pincode serviceability');
     }
-
-    // Client-side fallback for Sagore kitchen (5km Free Delivery, max 15km boundary)
-    if (cleanPin === '454774') {
-      const sagoreData: PincodeCheckResponse = {
-        serviceable: true,
-        pincode: '454774',
-        city: 'Sagore, Pithampur',
-        district: 'Dhar',
-        state: 'Madhya Pradesh',
-        zoneName: 'Sagore Central Zone (Within 5 km)',
-        distanceKm: 2.0,
-        deliveryFeePaise: 0,
-        isFreeDelivery: true,
-        message: '✓ Delivering to Sagore • Free Delivery (Within 5 km)',
-      };
-      return setCached(cacheKey, sagoreData, 300000);
-    }
-
-    if (cleanPin === '454775') {
-      const outerData: PincodeCheckResponse = {
-        serviceable: true,
-        pincode: '454775',
-        city: 'Pithampur Outer, Dhar',
-        district: 'Dhar',
-        state: 'Madhya Pradesh',
-        zoneName: 'Pithampur Outer (~7.5 km)',
-        distanceKm: 7.5,
-        deliveryFeePaise: 3500,
-        isFreeDelivery: false,
-        message: '✓ Serviceable: Pithampur Outer (~7.5 km) • Delivery Fee ₹35 (Beyond 5 km free zone)',
-      };
-      return setCached(cacheKey, outerData, 300000);
-    }
-
-    const unserviceableData: PincodeCheckResponse = {
-      serviceable: false,
-      pincode: cleanPin,
-      message: 'Delivery not available beyond 15 km from Sagore Kitchen.',
-    };
-    return setCached(cacheKey, unserviceableData, 60000);
+    const data: PincodeCheckResponse = await res.json();
+    return setCached(cacheKey, data, 300000);
   },
 
   // 3. Delivery Slots with 1-minute Cache
@@ -737,211 +585,143 @@ export const api = {
   async getRiderDeliveries(signal?: AbortSignal): Promise<{ deliveries: RiderDelivery[] }> {
     const base = getApiBase();
     const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
-    try {
-      const res = await fetch(`${base}/rider/deliveries`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        credentials: 'include',
-        cache: 'no-store',
-        signal,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && Array.isArray(data.deliveries)) {
-          return data;
-        }
-      }
-    } catch {
-      // Backend unavailable or request aborted
+    const res = await fetch(`${base}/rider/deliveries`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
+      cache: 'no-store',
+      signal,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to fetch rider deliveries queue');
     }
-
-    return { deliveries: [] };
+    const data = await res.json();
+    return { deliveries: Array.isArray(data?.deliveries) ? data.deliveries : (Array.isArray(data) ? data : []) };
   },
 
   // 11. Rider Mark Out for Delivery (generates customer PIN)
   async markRiderOutForDelivery(orderId: string) {
     const base = getApiBase();
     const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
-    try {
-      const res = await fetch(`${base}/rider/deliveries/${encodeURIComponent(orderId)}/out-for-delivery`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        credentials: 'include',
-      });
-      if (res.ok) {
-        return res.json();
-      }
-    } catch {
-      // Offline fallback
+    const res = await fetch(`${base}/rider/deliveries/${encodeURIComponent(orderId)}/out-for-delivery`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to transition delivery to OUT_FOR_DELIVERY');
     }
-
-    throw new Error('Unable to update delivery trip status. Please check backend connection.');
+    return res.json();
   },
 
   // 12. Rider Verify Delivery OTP PIN
   async verifyRiderDeliveryOtp(orderId: string, code: string) {
     const base = getApiBase();
     const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
-    try {
-      const res = await fetch(`${base}/rider/deliveries/${encodeURIComponent(orderId)}/verify-otp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        credentials: 'include',
-        body: JSON.stringify({ code }),
-      });
-      if (res.ok) {
-        return res.json();
-      }
+    const res = await fetch(`${base}/rider/deliveries/${encodeURIComponent(orderId)}/verify-otp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+      body: JSON.stringify({ code }),
+    });
+    if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      if (res.status === 400 && err.message) {
-        throw new Error(err.message);
-      }
-    } catch (err: any) {
-      if (err.message && !err.message.includes('fetch') && !err.message.includes('NetworkError') && !err.message.includes('Failed to fetch')) {
-        throw err;
-      }
+      throw new Error(err.message || 'Failed to verify delivery OTP');
     }
+    return res.json();
+  },
 
-    throw new Error('PIN verification failed. Please enter the valid 6-digit delivery PIN provided by the customer.');
+  // 12b. Update Rider Duty Availability Status
+  async updateRiderDutyStatus(isAvailable: boolean) {
+    const base = getApiBase();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
+    const res = await fetch(`${base}/rider/deliveries/duty-status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+      body: JSON.stringify({ isAvailable }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to update duty status');
+    }
+    return res.json();
   },
 
   // 13. Customer Phone Login / Registration
   async loginCustomer(phone: string, name?: string, address?: any): Promise<AuthSessionResponse> {
     const base = getApiBase();
-    try {
-      const res = await fetch(`${base}/auth/customer/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, name, address }),
-        credentials: 'include',
-      });
-      if (res.ok) {
-        const data: AuthSessionResponse = await res.json();
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('jr_session_token', data.sessionToken);
-          localStorage.setItem('jr_user_profile', JSON.stringify(data.user));
-          localStorage.setItem('jr_customer_phone', phone);
-          if (name) localStorage.setItem('jr_customer_name', name);
-          if (address) localStorage.setItem('jr_customer_address', JSON.stringify(address));
-        }
-        return data;
-      }
+    const res = await fetch(`${base}/auth/customer/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, name, address }),
+      credentials: 'include',
+    });
+    if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      if (err.message) throw new Error(err.message);
-    } catch (err: any) {
-      if (err.message && !err.message.includes('fetch') && !err.message.includes('NetworkError') && !err.message.includes('Failed to fetch')) {
-        throw err;
-      }
+      throw new Error(err.message || 'Failed to log in customer');
     }
-
-    // Offline / resilient fallback session so customer is never blocked
-    const fallbackUser: UserProfile = {
-      id: 'cust_' + phone,
-      name: name || 'Customer',
-      phone,
-      role: 'CUSTOMER',
-      savedAddress: address,
-    };
-    const fallbackSession: AuthSessionResponse = {
-      user: fallbackUser,
-      sessionToken: 'session_' + Date.now(),
-      expiresAt: new Date(Date.now() + 86400000).toISOString(),
-    };
+    const data: AuthSessionResponse = await res.json();
     if (typeof window !== 'undefined') {
-      localStorage.setItem('jr_session_token', fallbackSession.sessionToken);
-      localStorage.setItem('jr_user_profile', JSON.stringify(fallbackUser));
+      localStorage.setItem('jr_session_token', data.sessionToken);
+      localStorage.setItem('jr_user_profile', JSON.stringify(data.user));
       localStorage.setItem('jr_customer_phone', phone);
       if (name) localStorage.setItem('jr_customer_name', name);
       if (address) localStorage.setItem('jr_customer_address', JSON.stringify(address));
     }
-    return fallbackSession;
+    return data;
   },
 
   // 14. Rider Login
   async loginRider(phone: string, password: string): Promise<AuthSessionResponse> {
     const base = getApiBase();
-    try {
-      const res = await fetch(`${base}/rider/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, password }),
-        credentials: 'include',
-      });
-      if (res.ok) {
-        const data: AuthSessionResponse = await res.json();
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('jr_rider_token', data.sessionToken);
-          localStorage.setItem('jr_rider_profile', JSON.stringify(data.user));
-        }
-        return data;
-      }
+    const res = await fetch(`${base}/rider/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: phone.trim(), password }),
+      credentials: 'include',
+    });
+    if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      if (res.status === 401 && err.message) {
-        throw new Error(err.message);
-      }
-    } catch (fetchErr: any) {
-      if (fetchErr.message && !fetchErr.message.includes('fetch') && !fetchErr.message.includes('NetworkError') && !fetchErr.message.includes('Failed to fetch')) {
-        throw fetchErr;
-      }
+      throw new Error(err.message || 'Invalid rider credentials.');
     }
-
-    throw new Error('Invalid rider credentials or backend offline. Please verify registered rider mobile number and shift password.');
+    const data: AuthSessionResponse = await res.json();
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('jr_rider_token', data.sessionToken);
+      localStorage.setItem('jr_rider_profile', JSON.stringify(data.user));
+    }
+    return data;
   },
 
   // 14b. Admin Login
   async loginAdmin(email: string, password: string): Promise<AuthSessionResponse> {
     const base = getApiBase();
-    try {
-      const res = await fetch(`${base}/admin/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password }),
-        credentials: 'include',
-      });
-      if (res.ok) {
-        const data: AuthSessionResponse = await res.json();
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('jr_admin_token', data.sessionToken);
-          localStorage.setItem('jr_admin_profile', JSON.stringify(data.user));
-        }
-        return data;
-      }
+    const res = await fetch(`${base}/admin/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim(), password }),
+      credentials: 'include',
+    });
+    if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      if (err.message) {
-        throw new Error(err.message);
-      }
-    } catch (fetchErr: any) {
-      if (fetchErr.message && !fetchErr.message.includes('fetch') && !fetchErr.message.includes('NetworkError') && !fetchErr.message.includes('Failed to fetch')) {
-        throw fetchErr;
-      }
+      throw new Error(err.message || 'Invalid admin email or password.');
     }
-
-    // Demo admin fallback for local dev
-    if (email.toLowerCase().includes('admin')) {
-      const demoAdmin: UserProfile = {
-        id: 'admin-super-01',
-        name: 'Janki Rasoi Admin',
-        phone: '9876543210',
-        role: 'ADMIN',
-      };
-      const mockSession: AuthSessionResponse = {
-        user: demoAdmin,
-        sessionToken: 'demo_admin_session_' + Date.now(),
-        expiresAt: new Date(Date.now() + 86400000).toISOString(),
-      };
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('jr_admin_token', mockSession.sessionToken);
-        localStorage.setItem('jr_admin_profile', JSON.stringify(demoAdmin));
-      }
-      return mockSession;
+    const data: AuthSessionResponse = await res.json();
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('jr_admin_token', data.sessionToken);
+      localStorage.setItem('jr_admin_profile', JSON.stringify(data.user));
     }
-
-    throw new Error('Invalid admin email or password.');
+    return data;
   },
 
   // 15. Get Current User Profile (Customer / Rider)
@@ -949,50 +729,32 @@ export const api = {
     if (typeof window === 'undefined') return null;
     const token = localStorage.getItem('jr_session_token') || localStorage.getItem('jr_rider_token');
     const base = getApiBase();
-    try {
-      const res = await fetch(`${base}/auth/me`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        credentials: 'include',
-        cache: 'no-store',
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.authenticated && data.user) {
-          localStorage.setItem('jr_user_profile', JSON.stringify(data.user));
-          if (data.user.phone) localStorage.setItem('jr_customer_phone', data.user.phone);
-          if (data.user.name) localStorage.setItem('jr_customer_name', data.user.name);
-          if (data.user.savedAddress) localStorage.setItem('jr_customer_address', JSON.stringify(data.user.savedAddress));
-          return data.user;
+    if (token) {
+      try {
+        const res = await fetch(`${base}/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.authenticated && data.user) {
+            localStorage.setItem('jr_user_profile', JSON.stringify(data.user));
+            if (data.user.phone) localStorage.setItem('jr_customer_phone', data.user.phone);
+            if (data.user.name) localStorage.setItem('jr_customer_name', data.user.name);
+            if (data.user.savedAddress) localStorage.setItem('jr_customer_address', JSON.stringify(data.user.savedAddress));
+            return data.user;
+          }
         }
+      } catch {
+        // Fallback
       }
-    } catch {
-      // Fallback
     }
 
     const cached = localStorage.getItem('jr_user_profile');
     if (cached) {
       try { return JSON.parse(cached); } catch {}
     }
-
-    const savedPhone = localStorage.getItem('jr_customer_phone');
-    const savedName = localStorage.getItem('jr_customer_name');
-    const savedAddrRaw = localStorage.getItem('jr_customer_address') || localStorage.getItem('jr_selected_address');
-    if (savedPhone) {
-      let savedAddress: any = undefined;
-      if (savedAddrRaw) {
-        try { savedAddress = JSON.parse(savedAddrRaw); } catch {}
-      }
-      const restoredUser: UserProfile = {
-        id: 'cust_' + savedPhone,
-        name: savedName || 'Customer',
-        phone: savedPhone,
-        role: 'CUSTOMER',
-        savedAddress,
-      };
-      localStorage.setItem('jr_user_profile', JSON.stringify(restoredUser));
-      return restoredUser;
-    }
-
     return null;
   },
 

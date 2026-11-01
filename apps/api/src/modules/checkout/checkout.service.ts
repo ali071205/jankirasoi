@@ -477,25 +477,24 @@ export class CheckoutService {
 
       // If Razorpay, create order server-side
       if (dto.paymentMethod === 'RAZORPAY') {
-        if (this.razorpayClient) {
-          try {
-            const rzpOrder = await this.razorpayClient.orders.create({
-              amount: cached.totalAmountPaise, // in paise
-              currency: 'INR',
-              receipt: order.id,
-              notes: {
-                orderNumber: order.orderNumber,
-                customerPhone: order.customerPhone,
-              },
-            });
-            razorpayOrderId = rzpOrder.id;
-          } catch (err) {
-            this.logger.error(`Razorpay order creation failed: ${(err as Error).message}`);
-            // Fallback for offline dev
-            razorpayOrderId = 'order_mock_' + randomBytes(8).toString('hex');
-          }
-        } else {
-          razorpayOrderId = 'order_mock_' + randomBytes(8).toString('hex');
+        if (!this.razorpayClient) {
+          throw new BadRequestException('Razorpay payment gateway is not initialized on the server.');
+        }
+
+        try {
+          const rzpOrder = await this.razorpayClient.orders.create({
+            amount: cached.totalAmountPaise, // in paise
+            currency: 'INR',
+            receipt: order.id,
+            notes: {
+              orderNumber: order.orderNumber,
+              customerPhone: order.customerPhone,
+            },
+          });
+          razorpayOrderId = rzpOrder.id;
+        } catch (err) {
+          this.logger.error(`Razorpay order creation failed: ${(err as Error).message}`);
+          throw new BadRequestException(`Payment gateway error: ${(err as Error).message}`);
         }
 
         await tx.paymentAttempt.create({
@@ -534,7 +533,7 @@ export class CheckoutService {
           amountPaise: order.totalAmountPaise,
           currency: 'INR',
           razorpayOrderId,
-          razorpayKeyId: this.configService.get<string>('RAZORPAY_KEY_ID') || 'rzp_test_mock',
+          razorpayKeyId: this.configService.get<string>('RAZORPAY_KEY_ID') || undefined,
         },
       };
     }, {

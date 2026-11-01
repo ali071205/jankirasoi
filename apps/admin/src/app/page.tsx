@@ -53,10 +53,10 @@ function getInitials(name?: string) {
 }
 
 function formatAddress(addr: any): string {
-  if (!addr) return 'Flat 402, Malviya Nagar, New Delhi';
+  if (!addr) return 'Address not specified';
   if (typeof addr === 'string') return addr;
   const parts = [addr.flat, addr.street, addr.landmark, addr.pincode].filter(Boolean);
-  return parts.join(', ') || 'Flat 402, Malviya Nagar, New Delhi';
+  return parts.join(', ') || 'Address not specified';
 }
 
 function OrderDetailsPanel({
@@ -450,6 +450,17 @@ export default function OperationsConsolePage() {
   // Rider assignment modal state
   const [showRiderModal, setShowRiderModal] = useState(false);
 
+  // Add Rider Modal State
+  const [showAddRiderModal, setShowAddRiderModal] = useState(false);
+  const [newRiderName, setNewRiderName] = useState('');
+  const [newRiderPhone, setNewRiderPhone] = useState('');
+  const [newRiderPassword, setNewRiderPassword] = useState('200720');
+  const [newRiderVehicle, setNewRiderVehicle] = useState('MP-09-JR-2026');
+  const [addRiderLoading, setAddRiderLoading] = useState(false);
+  const [addRiderError, setAddRiderError] = useState<string | null>(null);
+  const [togglingRiderId, setTogglingRiderId] = useState<string | null>(null);
+  const [deletingRiderId, setDeletingRiderId] = useState<string | null>(null);
+
   // Customers & Riders State
   const [customers, setCustomers] = useState<AdminCustomer[]>([]);
   const [riders, setRiders] = useState<AdminRider[]>([]);
@@ -658,6 +669,13 @@ export default function OperationsConsolePage() {
     }
   }, [mainView, loadCustomers, loadRiders, loadCatalog, loadSlots]);
 
+  // Always refresh live riders when opening the rider assignment modal
+  useEffect(() => {
+    if (showRiderModal) {
+      loadRiders();
+    }
+  }, [showRiderModal, loadRiders]);
+
   // Handle Order Status Transitions
   const handleTransition = async (orderId: string, nextStatus: string) => {
     setActionLoadingId(orderId);
@@ -684,6 +702,63 @@ export default function OperationsConsolePage() {
       showToast(err.message || 'Failed to assign rider');
     } finally {
       setActionLoadingId(null);
+    }
+  };
+
+  // Handle Registering New Delivery Rider
+  const handleCreateRiderSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRiderName.trim() || !newRiderPhone.trim()) {
+      setAddRiderError('Rider name and phone number are required.');
+      return;
+    }
+    setAddRiderLoading(true);
+    setAddRiderError(null);
+    try {
+      await adminApi.createRider({
+        name: newRiderName.trim(),
+        phone: newRiderPhone.trim(),
+        password: newRiderPassword.trim() || undefined,
+        vehicleNumber: newRiderVehicle.trim() || undefined,
+      });
+      showToast('Delivery rider registered successfully');
+      setShowAddRiderModal(false);
+      setNewRiderName('');
+      setNewRiderPhone('');
+      await loadRiders();
+    } catch (err: any) {
+      setAddRiderError(err.message || 'Failed to register rider');
+    } finally {
+      setAddRiderLoading(false);
+    }
+  };
+
+  // Handle Toggle Rider Live Duty Status
+  const handleToggleRiderAvailability = async (riderId: string, currentAvailability: boolean) => {
+    setTogglingRiderId(riderId);
+    try {
+      await adminApi.toggleRiderAvailability(riderId, !currentAvailability);
+      showToast(`Rider availability set to ${!currentAvailability ? 'ON DUTY' : 'OFFLINE'}`);
+      await loadRiders();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update rider duty status');
+    } finally {
+      setTogglingRiderId(null);
+    }
+  };
+
+  // Handle Removing Rider
+  const handleDeleteRider = async (riderId: string, riderName: string) => {
+    if (!confirm(`Are you sure you want to remove rider "${riderName}"?`)) return;
+    setDeletingRiderId(riderId);
+    try {
+      await adminApi.deleteRider(riderId);
+      showToast(`Rider ${riderName} removed successfully`);
+      await loadRiders();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to remove rider');
+    } finally {
+      setDeletingRiderId(null);
     }
   };
 
@@ -2095,23 +2170,36 @@ export default function OperationsConsolePage() {
           {/* VIEW: RIDERS */}
           {mainView === 'RIDERS' && (
             <main className="p-4 lg:p-6 flex flex-col gap-5 flex-1 max-w-[1600px] w-full mx-auto">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h2 className="text-2xl font-bold font-headline text-gray-900">Riders &amp; Delivery Fleet</h2>
-                  <p className="text-xs text-gray-500">Manage delivery partners and live dispatch availability.</p>
+                  <p className="text-xs text-gray-500">Manage delivery partners and live dispatch availability in Supabase.</p>
                 </div>
-                <button
-                  onClick={loadRiders}
-                  className="px-3.5 py-2 rounded-xl bg-white hover:bg-gray-50 text-xs font-semibold text-gray-700 border border-gray-200 flex items-center gap-1.5 shadow-2xs"
-                >
-                  <span className="material-symbols-outlined text-base text-emerald-800">sync</span>
-                  <span>Reload</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setAddRiderError(null);
+                      setShowAddRiderModal(true);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-xs font-semibold text-white flex items-center gap-1.5 shadow-2xs transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-base">person_add</span>
+                    <span>+ Register Rider</span>
+                  </button>
+                  <button
+                    onClick={loadRiders}
+                    disabled={ridersLoading}
+                    className="px-3.5 py-2 rounded-xl bg-white hover:bg-gray-50 text-xs font-semibold text-gray-700 border border-gray-200 flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <span className={`material-symbols-outlined text-base text-emerald-800 ${ridersLoading ? 'animate-spin' : ''}`}>sync</span>
+                    <span>Reload</span>
+                  </button>
+                </div>
               </div>
 
               <div className="bg-white border border-gray-200/90 rounded-2xl overflow-hidden shadow-2xs">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs min-w-[640px]">
+                  <table className="w-full text-left text-xs min-w-[700px]">
                   <thead className="bg-[#f9faf8] text-gray-600 font-bold uppercase tracking-wider text-[10px] border-b border-gray-200">
                     <tr>
                       <th className="py-3 px-4">Rider</th>
@@ -2119,6 +2207,7 @@ export default function OperationsConsolePage() {
                       <th className="py-3 px-4">Vehicle Number</th>
                       <th className="py-3 px-4">Duty Status</th>
                       <th className="py-3 px-4">Account Status</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -2133,27 +2222,54 @@ export default function OperationsConsolePage() {
                         <td className="py-3 px-4 font-mono text-gray-700">+91 {r.phone}</td>
                         <td className="py-3 px-4 font-mono font-semibold text-amber-900">{r.vehicleNumber}</td>
                         <td className="py-3 px-4">
-                          <span
-                            className={`px-2 py-0.5 rounded-full font-bold text-[10px] inline-flex items-center gap-1 ${
+                          <button
+                            type="button"
+                            onClick={() => handleToggleRiderAvailability(r.id, r.isAvailable)}
+                            disabled={togglingRiderId === r.id}
+                            title="Click to toggle rider duty availability"
+                            className={`px-2.5 py-1 rounded-full font-bold text-[10px] inline-flex items-center gap-1 transition-all ${
                               r.isAvailable
-                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                                : 'bg-rose-50 text-rose-800 border border-rose-200'
-                            }`}
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                                : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
+                            } ${togglingRiderId === r.id ? 'opacity-60 cursor-wait' : ''}`}
                           >
                             <span className={`w-1.5 h-1.5 rounded-full ${r.isAvailable ? 'bg-emerald-600' : 'bg-rose-500'}`}></span>
-                            <span>{r.isAvailable ? 'ON DUTY' : 'OFFLINE'}</span>
-                          </span>
+                            <span>{togglingRiderId === r.id ? 'Updating...' : r.isAvailable ? 'ON DUTY' : 'OFFLINE'}</span>
+                          </button>
                         </td>
                         <td className="py-3 px-4">
                           <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-semibold text-[10px]">
                             {r.isActive ? 'Active' : 'Inactive'}
                           </span>
                         </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleRiderAvailability(r.id, r.isAvailable)}
+                              disabled={togglingRiderId === r.id}
+                              className="px-2 py-1 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 text-[11px] font-semibold transition-colors"
+                            >
+                              {r.isAvailable ? 'Set Offline' : 'Set On Duty'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRider(r.id, r.name)}
+                              disabled={deletingRiderId === r.id}
+                              title="Delete rider from database"
+                              className="w-7 h-7 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">
+                                {deletingRiderId === r.id ? 'hourglass_top' : 'delete'}
+                              </span>
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                     {riders.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="py-10 text-center text-gray-400">
+                        <td colSpan={6} className="py-10 text-center text-gray-400">
                           {ridersLoading ? 'Loading delivery fleet...' : 'No delivery riders registered.'}
                         </td>
                       </tr>
@@ -2595,42 +2711,218 @@ export default function OperationsConsolePage() {
           <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-2xl border border-gray-200 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div>
-                <h3 className="font-bold text-base text-gray-900">Assign Delivery Rider</h3>
+                <h3 className="font-bold text-base text-gray-900 font-headline">Assign Delivery Rider</h3>
                 <p className="text-xs text-gray-500">Select an available rider for order #{selectedOrder.orderNumber}</p>
               </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={loadRiders}
+                  disabled={ridersLoading}
+                  title="Refresh riders from database"
+                  className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition-colors"
+                >
+                  <span className={`material-symbols-outlined text-[16px] ${ridersLoading ? 'animate-spin' : ''}`}>sync</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowRiderModal(false)}
+                  className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-base">close</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 max-h-72 overflow-y-auto">
+              {ridersLoading ? (
+                <div className="py-8 flex flex-col items-center justify-center gap-2 text-gray-500 text-xs">
+                  <span className="w-5 h-5 border-2 border-emerald-700 border-t-transparent rounded-full animate-spin"></span>
+                  <span>Fetching live fleet status...</span>
+                </div>
+              ) : (
+                <>
+                  {riders.map((r) => (
+                    <div
+                      key={r.id}
+                      onClick={() => handleAssignRider(selectedOrder.id, r.id)}
+                      className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                        r.isAvailable
+                          ? 'border-gray-200 hover:border-emerald-600 hover:bg-emerald-50/50'
+                          : 'border-gray-200/80 bg-gray-50/40 hover:bg-gray-100/60'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className={`w-8 h-8 rounded-full flex items-center justify-center ${r.isAvailable ? 'bg-amber-100 text-amber-900' : 'bg-gray-200 text-gray-600'}`}>
+                          <span className="material-symbols-outlined text-[18px]">two_wheeler</span>
+                        </span>
+                        <div>
+                          <div className="font-bold text-xs text-gray-900 flex items-center gap-1.5">
+                            <span>{r.name}</span>
+                            {!r.isAvailable && (
+                              <span className="text-[10px] text-gray-400 font-normal">(Currently Offline)</span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-gray-500 font-mono">+91 {r.phone} • {r.vehicleNumber}</div>
+                        </div>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.isAvailable ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-500'}`}>
+                        {r.isAvailable ? 'ON DUTY' : 'OFFLINE'}
+                      </span>
+                    </div>
+                  ))}
+                  {riders.length === 0 && (
+                    <div className="py-8 text-center flex flex-col items-center justify-center gap-2">
+                      <span className="material-symbols-outlined text-3xl text-gray-300">no_accounts</span>
+                      <p className="text-xs text-gray-500">No registered delivery riders found in database.</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowRiderModal(false);
+                          setAddRiderError(null);
+                          setShowAddRiderModal(true);
+                        }}
+                        className="mt-1 px-3 py-1.5 rounded-xl bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800 transition-colors"
+                      >
+                        + Register First Rider
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="border-t border-gray-100 pt-3 flex items-center justify-between">
               <button
+                type="button"
+                onClick={() => {
+                  setAddRiderError(null);
+                  setShowAddRiderModal(true);
+                }}
+                className="text-xs text-emerald-800 font-bold hover:underline flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-sm">person_add</span>
+                <span>+ Register New Rider</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setShowRiderModal(false)}
-                className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200"
+                className="px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4b. REGISTER NEW RIDER MODAL */}
+      {showAddRiderModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-2xl border border-gray-200 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150 my-auto">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="font-bold text-base text-gray-900 font-headline">Register Delivery Rider</h3>
+                <p className="text-xs text-gray-500">Add a delivery partner to the live fleet database.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddRiderModal(false);
+                  setAddRiderError(null);
+                }}
+                className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition-colors"
               >
                 <span className="material-symbols-outlined text-base">close</span>
               </button>
             </div>
 
-            <div className="flex flex-col gap-2 max-h-72 overflow-y-auto">
-              {riders.map((r) => (
-                <div
-                  key={r.id}
-                  onClick={() => handleAssignRider(selectedOrder.id, r.id)}
-                  className="p-3 rounded-xl border border-gray-200 hover:border-emerald-600 hover:bg-emerald-50/50 cursor-pointer transition-all flex items-center justify-between"
+            {addRiderError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
+                <span className="material-symbols-outlined text-base text-rose-600 shrink-0">error</span>
+                <span>{addRiderError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleCreateRiderSubmit} className="flex flex-col gap-3.5">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Ramesh Kumar"
+                  value={newRiderName}
+                  onChange={(e) => setNewRiderName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs focus:outline-hidden focus:border-emerald-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Phone Number (10 digits)</label>
+                <input
+                  type="tel"
+                  required
+                  placeholder="e.g. 9876543210"
+                  value={newRiderPhone}
+                  onChange={(e) => setNewRiderPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-mono focus:outline-hidden focus:border-emerald-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Login Password</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. 200720"
+                  value={newRiderPassword}
+                  onChange={(e) => setNewRiderPassword(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-mono focus:outline-hidden focus:border-emerald-600"
+                />
+                <span className="text-[10px] text-gray-400 mt-0.5 block">Used by rider to log into the delivery mobile portal.</span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Vehicle License Plate</label>
+                <input
+                  type="text"
+                  placeholder="e.g. MP-09-JR-2026"
+                  value={newRiderVehicle}
+                  onChange={(e) => setNewRiderVehicle(e.target.value.toUpperCase())}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-mono uppercase focus:outline-hidden focus:border-emerald-600"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddRiderModal(false);
+                    setAddRiderError(null);
+                  }}
+                  className="px-3.5 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-8 h-8 rounded-full bg-amber-100 text-amber-900 flex items-center justify-center">
-                      <span className="material-symbols-outlined text-[18px]">two_wheeler</span>
-                    </span>
-                    <div>
-                      <div className="font-bold text-xs text-gray-900">{r.name}</div>
-                      <div className="text-[11px] text-gray-500 font-mono">+91 {r.phone} • {r.vehicleNumber}</div>
-                    </div>
-                  </div>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.isAvailable ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-500'}`}>
-                    {r.isAvailable ? 'ON DUTY' : 'OFFLINE'}
-                  </span>
-                </div>
-              ))}
-              {riders.length === 0 && (
-                <div className="py-6 text-center text-xs text-gray-400">No registered delivery riders available.</div>
-              )}
-            </div>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addRiderLoading}
+                  className="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-xs font-bold text-white shadow-xs flex items-center gap-1.5 transition-colors disabled:opacity-60"
+                >
+                  {addRiderLoading ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      <span>Saving Rider...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-[16px]">check</span>
+                      <span>Save &amp; Activate Rider</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
