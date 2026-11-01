@@ -210,11 +210,15 @@ export default function HomePage() {
                   className="w-full rounded-xl bg-[#EFECE4]"
                   style={{ aspectRatio: '1 / 1' }}
                 />
-                <div className="flex flex-col gap-1.5 mt-2.5">
-                  <div className="w-16 h-3 bg-[#EFECE4] rounded" />
-                  <div className="w-3/4 h-4 bg-[#EFECE4] rounded mt-1" />
-                  <div className="w-1/2 h-3 bg-[#EFECE4] rounded" />
-                  <div className="w-full h-7 bg-[#EFECE4] rounded mt-2" />
+                <div className="flex flex-col gap-1 mt-2 flex-1 justify-between">
+                  <div>
+                    <div className="w-3/4 h-3.5 bg-[#EFECE4] rounded" />
+                    <div className="w-1/2 h-3 bg-[#EFECE4] rounded mt-1" />
+                  </div>
+                  <div className="flex items-center justify-between pt-2 mt-auto">
+                    <div className="w-12 h-4 bg-[#EFECE4] rounded" />
+                    <div className="w-14 h-7 bg-[#EFECE4] rounded-lg" />
+                  </div>
                 </div>
               </div>
             ))}
@@ -229,7 +233,7 @@ export default function HomePage() {
                   onClick={() => setSelectedDishModal(dish)}
                   className="bg-white rounded-2xl p-2.5 sm:p-3 border border-[#EEE7DC] shadow-xs hover:border-[#38754A]/40 hover:shadow-md transition-all flex flex-col justify-between group cursor-pointer select-none"
                 >
-                  {/* Square Food Image */}
+                  {/* Square Food Image with Floating Overlay Badges */}
                   <div
                     className="relative w-full rounded-xl overflow-hidden bg-[#FFF9F0] border border-[#EEE7DC]/70 shadow-2xs"
                     style={{ aspectRatio: '1 / 1' }}
@@ -246,6 +250,21 @@ export default function HomePage() {
                         e.currentTarget.src = DEFAULT_FOOD_IMAGE;
                       }}
                     />
+
+                    {/* Top-Left Pure Veg Overlay Mark */}
+                    <div className="absolute top-2 left-2 z-10 w-4 h-4 rounded-xs border border-[#38754A] flex items-center justify-center p-0.5 bg-white/95 backdrop-blur-xs shadow-xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#38754A]"></span>
+                    </div>
+
+                    {/* Bottom-Right Rating Pill */}
+                    {!dish.isSoldOut && (
+                      <div className="absolute bottom-2 right-2 z-10 flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-white/95 backdrop-blur-xs text-[#292D26] font-extrabold text-[10px] shadow-xs border border-black/5">
+                        <span>4.8</span>
+                        <span className="text-amber-500 text-[10px]">★</span>
+                      </div>
+                    )}
+
+                    {/* Sold Out Overlay */}
                     {dish.isSoldOut && (
                       <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center p-2">
                         <span className="px-2.5 py-1 rounded-full bg-stone-900/90 text-stone-100 text-[10px] font-extrabold uppercase tracking-wider border border-white/20 shadow-sm text-center">
@@ -255,55 +274,34 @@ export default function HomePage() {
                     )}
                   </div>
 
-                  {/* Content below image */}
-                  <div className="flex flex-col gap-1 mt-2.5 flex-1 justify-between">
+                  {/* Clean Content Area Below Image */}
+                  <div className="flex flex-col mt-2 flex-1 justify-between">
                     <div>
-                      {/* Veg Mark + Bestseller Badge */}
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="w-3.5 h-3.5 rounded-2xs border border-[#38754A] flex items-center justify-center p-0.5 bg-white shrink-0">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#38754A]"></span>
-                        </span>
-                        {dish.isSoldOut ? (
-                          <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wide">
-                            Currently Unavailable
-                          </span>
-                        ) : (
-                          <>
-                            <span className="text-[10px] font-bold text-[#E85D04] flex items-center gap-0.5 uppercase tracking-wide">
-                              <span className="text-[11px]">&starf;</span> Bestseller
-                            </span>
-                            <span className="text-[10px] font-bold text-[#38754A] bg-[#EAF4ED] px-1.5 py-0.2 rounded border border-[#38754A]/20">
-                              ★ 4.8
-                            </span>
-                          </>
-                        )}
-                      </div>
-
                       {/* Dish Name */}
-                      <h3 className="font-bold text-xs sm:text-sm text-[#292D26] line-clamp-2 leading-snug mt-1 h-8 sm:h-9 group-hover:text-[#38754A] transition-colors">
+                      <h3 className="font-bold text-xs sm:text-sm text-[#292D26] line-clamp-1 leading-snug group-hover:text-[#38754A] transition-colors">
                         {dish.name}
                       </h3>
 
-                      {/* Subtitle / Description */}
-                      <p className="text-[11px] text-[#77786F] line-clamp-1 mt-0.5 font-medium">
+                      {/* Subheading / Description (Tight 2px spacing, zero artificial gap) */}
+                      <p className="text-[11px] text-[#77786F] line-clamp-1 mt-0.5 font-normal leading-tight">
                         {dish.description || 'Cooked fresh with pure desi ghee • Homestyle'}
                       </p>
                     </div>
 
-                    {/* Price & ADD Button */}
-                    <div className="flex items-center justify-between pt-1 mt-auto">
+                    {/* Price & Action Button */}
+                    <div className="flex items-center justify-between pt-2.5 mt-auto">
                       <span className="font-extrabold text-xs sm:text-sm text-[#292D26]">
                         ₹{(dish.basePricePaise / 100).toFixed(0)}
                       </span>
 
                       {dish.isSoldOut ? (
-                        <span className="px-3 py-1 rounded-lg bg-stone-100 text-stone-400 font-extrabold text-[11px] border border-stone-200 cursor-not-allowed">
+                        <span className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-400 font-extrabold text-[10px] border border-stone-200 cursor-not-allowed">
                           SOLD OUT
                         </span>
                       ) : qty > 0 ? (
                         <div
                           onClick={(e) => e.stopPropagation()}
-                          className="flex items-center bg-[#38754A] text-white rounded-lg px-2 py-0.5 shadow-xs gap-2 font-bold text-xs"
+                          className="flex items-center bg-[#38754A] text-white rounded-lg px-2 py-0.5 shadow-xs gap-1.5 font-bold text-xs"
                         >
                           <button
                             type="button"
@@ -344,9 +342,10 @@ export default function HomePage() {
                               imageUrl: dish.imageUrl,
                             });
                           }}
-                          className="px-4 py-1 rounded-lg border border-[#38754A] text-[#38754A] bg-white hover:bg-[#EAF4ED] font-extrabold text-xs shadow-2xs active:scale-95 transition-all cursor-pointer"
+                          className="px-3 py-1 rounded-lg border border-[#38754A] text-[#38754A] bg-white hover:bg-[#38754A] hover:text-white font-extrabold text-xs shadow-2xs active:scale-95 transition-all cursor-pointer flex items-center gap-0.5"
                         >
-                          ADD
+                          <span>+</span>
+                          <span>ADD</span>
                         </button>
                       )}
                     </div>
