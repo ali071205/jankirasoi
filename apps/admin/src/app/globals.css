@@ -49,3 +49,23 @@ body {
 html.icons-loading .material-symbols-outlined {
   visibility: hidden !important;
 }
+
+/* Custom Horizontal Sliding Bar for Order Filter Pills */
+.custom-pills-slider {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
+}
+.custom-pills-slider::-webkit-scrollbar {
+  height: 5px;
+}
+.custom-pills-slider::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 9999px;
+}
+.custom-pills-slider::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 9999px;
+}
+.custom-pills-slider::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}

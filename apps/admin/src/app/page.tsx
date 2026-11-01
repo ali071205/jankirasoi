@@ -280,6 +280,30 @@ function OrderDetailsPanel({
             </div>
           </div>
 
+          {/* Assigned Rider Info */}
+          {selectedOrder.assignedRider && (
+            <div className="p-2.5 rounded-xl bg-blue-50/60 border border-blue-200/70 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-[18px]">two_wheeler</span>
+                </div>
+                <div className="min-w-0">
+                  <span className="font-bold text-gray-900 block leading-tight truncate">{selectedOrder.assignedRider.name}</span>
+                  <a href={`tel:${selectedOrder.assignedRider.phone}`} className="text-[11px] text-blue-700 hover:underline">
+                    +91 {selectedOrder.assignedRider.phone}
+                  </a>
+                </div>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
+                selectedOrder.assignedRider.assignmentStatus === 'ACCEPTED'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-amber-100 text-amber-800'
+              }`}>
+                {selectedOrder.assignedRider.assignmentStatus === 'ACCEPTED' ? 'Accepted' : 'Assigning...'}
+              </span>
+            </div>
+          )}
+
           {/* Operational Primary & Secondary Actions */}
           <div className="flex flex-col gap-2 mt-auto pt-1">
             {selectedOrder.status === 'PLACED' && (
@@ -305,25 +329,56 @@ function OrderDetailsPanel({
             )}
 
             {selectedOrder.status === 'READY_FOR_PICKUP' && (
-              <button
-                onClick={() => setShowRiderModal(true)}
-                disabled={actionLoadingId === selectedOrder.id}
-                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
-              >
-                <span className="material-symbols-outlined text-[16px]">two_wheeler</span>
-                <span>Assign &amp; Dispatch Rider</span>
-              </button>
+              !selectedOrder.assignedRider ? (
+                <button
+                  onClick={() => setShowRiderModal(true)}
+                  disabled={actionLoadingId === selectedOrder.id}
+                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[16px]">two_wheeler</span>
+                  <span>Assign Rider</span>
+                </button>
+              ) : selectedOrder.assignedRider.assignmentStatus === 'ASSIGNED' ? (
+                <button
+                  onClick={() => setShowRiderModal(true)}
+                  disabled={actionLoadingId === selectedOrder.id}
+                  className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+                  title="Awaiting rider acceptance. Click to re-assign if needed."
+                >
+                  <span className="w-2 h-2 rounded-full bg-white animate-ping mr-1" />
+                  <span>Assigning: {selectedOrder.assignedRider.name} (Waiting for Acceptance)</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowRiderModal(true)}
+                  disabled={actionLoadingId === selectedOrder.id}
+                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+                  title="Accepted by rider. Click to change rider."
+                >
+                  <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                  <span>Assigned: {selectedOrder.assignedRider.name}</span>
+                </button>
+              )
             )}
 
             {selectedOrder.status === 'OUT_FOR_DELIVERY' && (
-              <button
-                onClick={() => handleManualOverride(selectedOrder.id)}
-                disabled={actionLoadingId === selectedOrder.id}
-                className="w-full py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
-              >
-                <span className="material-symbols-outlined text-[16px]">task_alt</span>
-                <span>Verify OTP &amp; Complete Delivery</span>
-              </button>
+              <div className="flex flex-col gap-1.5">
+                <div className="w-full py-2 px-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-xs flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[16px] text-emerald-600">two_wheeler</span>
+                    <span>Assigned: {selectedOrder.assignedRider?.name || 'Rider in transit'}</span>
+                  </span>
+                  <span className="text-[10px] uppercase font-bold text-emerald-700">En Route</span>
+                </div>
+                <button
+                  onClick={() => handleManualOverride(selectedOrder.id)}
+                  disabled={actionLoadingId === selectedOrder.id}
+                  className="w-full py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[16px]">task_alt</span>
+                  <span>Verify OTP & Complete Delivery</span>
+                </button>
+              </div>
             )}
 
             {selectedOrder.status === 'DELIVERED' && (
@@ -435,7 +490,30 @@ export default function OperationsConsolePage() {
   const [activeFilterTab, setActiveFilterTab] = useState<'ACTIVE' | 'ALL' | 'NEW' | 'PREPARING' | 'READY' | 'DISPATCH' | 'DELIVERED' | 'CANCELLED'>('ACTIVE');
   const [searchQuery, setSearchQuery] = useState('');
   const [audioEnabled, setAudioEnabled] = useState(true);
+  const [refreshIntervalSec, setRefreshIntervalSec] = useState<number>(8);
+  const [isKitchenOpen, setIsKitchenOpen] = useState<boolean>(true);
+  const [autoAcceptOrders, setAutoAcceptOrders] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Filter Pills Sliding Bar Ref & Action
+  const filterPillsRef = useRef<HTMLDivElement>(null);
+  const slidePills = (direction: 'left' | 'right') => {
+    if (filterPillsRef.current) {
+      filterPillsRef.current.scrollBy({
+        left: direction === 'left' ? -220 : 220,
+        behavior: 'smooth',
+      });
+    }
+  };
+
+  // Helper to persist console settings in localStorage
+  const updateSetting = (key: string, value: any) => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('jr_admin_settings') || '{}');
+      saved[key] = value;
+      localStorage.setItem('jr_admin_settings', JSON.stringify(saved));
+    } catch {}
+  };
 
   // View presentation state (Live Kitchen Pipeline vs Condensed Data Table)
   const [orderViewMode, setOrderViewMode] = useState<'TABLE' | 'KITCHEN'>('KITCHEN');
@@ -602,17 +680,34 @@ export default function OperationsConsolePage() {
     }
   }, []);
 
+  // Hydrate console settings from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('jr_admin_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.audioEnabled === 'boolean') setAudioEnabled(parsed.audioEnabled);
+        if (typeof parsed.refreshIntervalSec === 'number') setRefreshIntervalSec(parsed.refreshIntervalSec);
+        if (typeof parsed.isKitchenOpen === 'boolean') setIsKitchenOpen(parsed.isKitchenOpen);
+        if (typeof parsed.autoAcceptOrders === 'boolean') setAutoAcceptOrders(parsed.autoAcceptOrders);
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     loadOrders();
     loadRiders();
     loadSlots();
 
-    // 1. Resilient polling fallback every 8 seconds when active tab is visible
-    const interval = setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        loadOrders(true);
-      }
-    }, 8000);
+    // 1. Resilient polling fallback based on configured refresh interval
+    let interval: NodeJS.Timeout | null = null;
+    if (refreshIntervalSec > 0) {
+      interval = setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          loadOrders(true);
+        }
+      }, refreshIntervalSec * 1000);
+    }
 
     // 2. Instant sync when browser tab regains focus or visibility
     const handleVisibilityOrFocus = () => {
@@ -651,14 +746,14 @@ export default function OperationsConsolePage() {
     }
 
     return () => {
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       window.removeEventListener('focus', handleVisibilityOrFocus);
       if (eventSource) {
         eventSource.close();
       }
     };
-  }, [loadOrders, loadRiders, loadSlots]);
+  }, [loadOrders, loadRiders, loadSlots, refreshIntervalSec]);
 
   useEffect(() => {
     if (mainView === 'CUSTOMERS') loadCustomers();
@@ -1226,6 +1321,25 @@ export default function OperationsConsolePage() {
           </a>
         </div>
 
+        {/* Assigned Rider Pill on Kanban Card */}
+        {order.assignedRider && (
+          <div className="flex items-center justify-between text-[11px] pt-1 text-gray-600 border-t border-gray-50">
+            <span className="flex items-center gap-1 truncate font-medium">
+              <span className="material-symbols-outlined text-[13px] text-blue-600">two_wheeler</span>
+              <span className="truncate">{order.assignedRider.name}</span>
+            </span>
+            <span
+              className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md uppercase tracking-wider shrink-0 ${
+                order.assignedRider.assignmentStatus === 'ACCEPTED'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              {order.assignedRider.assignmentStatus === 'ACCEPTED' ? 'Accepted' : 'Assigning...'}
+            </span>
+          </div>
+        )}
+
         {/* Price & Single 1-Tap Action Button */}
         <div className="flex items-center justify-between pt-1.5 border-t border-gray-100 gap-2">
           <div className="flex items-baseline gap-1 shrink-0">
@@ -1261,28 +1375,71 @@ export default function OperationsConsolePage() {
             )}
 
             {isReady && (
-              <button
-                onClick={() => {
-                  setSelectedOrderId(order.id);
-                  setShowRiderModal(true);
-                }}
-                disabled={actionLoadingId === order.id}
-                className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
-              >
-                <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
-                <span>Assign</span>
-              </button>
+              !order.assignedRider ? (
+                <button
+                  onClick={() => {
+                    setSelectedOrderId(order.id);
+                    setShowRiderModal(true);
+                  }}
+                  disabled={actionLoadingId === order.id}
+                  className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
+                  <span>Assign</span>
+                </button>
+              ) : order.assignedRider.assignmentStatus === 'ASSIGNED' ? (
+                <button
+                  onClick={() => {
+                    setSelectedOrderId(order.id);
+                    setShowRiderModal(true);
+                  }}
+                  disabled={actionLoadingId === order.id}
+                  className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors"
+                  title={`Assigned to ${order.assignedRider.name} (Waiting for acceptance). Click to re-assign.`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                  <span>Assigning</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setSelectedOrderId(order.id);
+                    setShowRiderModal(true);
+                  }}
+                  disabled={actionLoadingId === order.id}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
+                  title={`Accepted by ${order.assignedRider.name}. Click to view or change.`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                  <span>Assigned</span>
+                </button>
+              )
             )}
 
             {isDispatch && (
-              <button
-                onClick={() => handleManualOverride(order.id)}
-                disabled={actionLoadingId === order.id}
-                className="px-2.5 py-1 rounded-lg bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
-              >
-                <span className="material-symbols-outlined text-[14px]">task_alt</span>
-                <span>OTP</span>
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    setSelectedOrderId(order.id);
+                    setShowRiderModal(true);
+                  }}
+                  disabled={actionLoadingId === order.id}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
+                  title={order.assignedRider ? `Assigned to ${order.assignedRider.name}` : 'Rider assigned'}
+                >
+                  <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
+                  <span>Assigned</span>
+                </button>
+                <button
+                  onClick={() => handleManualOverride(order.id)}
+                  disabled={actionLoadingId === order.id}
+                  className="px-1.5 py-1 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs flex items-center gap-0.5 shadow-2xs transition-colors"
+                  title="Emergency Manual OTP Override"
+                >
+                  <span className="material-symbols-outlined text-[12px]">dialpad</span>
+                  <span className="text-[10px]">OTP</span>
+                </button>
+              </div>
             )}
 
             {isDelivered && (
@@ -1463,46 +1620,6 @@ export default function OperationsConsolePage() {
               <span>Settings</span>
             </button>
           </nav>
-
-          {/* Bottom Sidebar: Service Status & Capacity Link (Matching Reference Image) */}
-          <div className="shrink-0 pt-3 border-t border-gray-100 flex flex-col gap-2 mt-auto">
-            {/* Lunch Service Status Card */}
-            <div className="bg-[#fcfdfa] border border-stone-200/80 p-2.5 rounded-xl flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-amber-500 text-[18px]">light_mode</span>
-                <div>
-                  <div className="font-bold text-stone-800 text-[11px] leading-tight">Lunch Service</div>
-                  <div className="text-[10px] text-stone-500">21 Oct PM – 01:30 PM</div>
-                </div>
-              </div>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                OPEN
-              </span>
-            </div>
-
-            {/* Dinner Service Status Card */}
-            <div className="bg-[#fcfdfa] border border-stone-200/80 p-2.5 rounded-xl flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-indigo-500 text-[18px]">dark_mode</span>
-                <div>
-                  <div className="font-bold text-stone-800 text-[11px] leading-tight">Dinner Service</div>
-                  <div className="text-[10px] text-stone-500">07:30 PM – 08:30 PM</div>
-                </div>
-              </div>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                OPEN
-              </span>
-            </div>
-
-            {/* View Kitchen Capacity Button */}
-            <button
-              onClick={() => setMainView('MENU')}
-              className="w-full mt-1 py-2 px-3 rounded-xl border border-gray-200 hover:bg-gray-50 text-[11px] font-semibold text-gray-700 flex items-center justify-between transition-colors shadow-2xs"
-            >
-              <span>View Kitchen Capacity</span>
-              <span className="material-symbols-outlined text-sm text-gray-400">chevron_right</span>
-            </button>
-          </div>
         </aside>
 
         {/* 3. CENTER / WORKSPACE AREA */}
@@ -1620,125 +1737,153 @@ export default function OperationsConsolePage() {
 
               {/* Consolidated Status Filter Ribbon & Operational Summary */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2 sm:p-2.5 rounded-2xl border border-gray-200/90 shadow-2xs">
-                {/* Status Pills with Live Counts and Badges (Hidden Scrollbars) */}
-                <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden py-0.5">
-                  {/* Default Live Active Flow Filter (Hides historical finished orders) */}
+                {/* Status Pills with Live Counts, Visible Sliding Bar & Arrow Controls */}
+                <div className="relative flex items-center min-w-0 flex-1 gap-1">
+                  {/* Left Slide Arrow */}
                   <button
-                    onClick={() => setActiveFilterTab('ACTIVE')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                      activeFilterTab === 'ACTIVE'
-                        ? 'bg-emerald-900 text-white shadow-xs'
-                        : 'bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900 border border-emerald-200/80'
-                    }`}
+                    type="button"
+                    onClick={() => slidePills('left')}
+                    className="shrink-0 w-7 h-7 rounded-lg bg-gray-50 hover:bg-gray-100 active:bg-gray-200 border border-gray-200/80 text-gray-600 flex items-center justify-center transition-colors shadow-2xs"
+                    title="Slide left"
+                    aria-label="Slide filter pills left"
                   >
-                    <span className="material-symbols-outlined text-[14px]">local_fire_department</span>
-                    <span>Live Active</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'ACTIVE' ? 'bg-emerald-800 text-white' : 'bg-emerald-200 text-emerald-900'}`}>
-                      {activeOrdersCount}
-                    </span>
+                    <span className="material-symbols-outlined text-[16px]">chevron_left</span>
                   </button>
 
-                  <button
-                    onClick={() => setActiveFilterTab('NEW')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                      activeFilterTab === 'NEW'
-                        ? 'bg-rose-600 text-white shadow-xs'
-                        : 'bg-rose-50/80 hover:bg-rose-100 text-rose-800 border border-rose-200/80'
-                    }`}
+                  {/* Scrollable Track with Styled Sliding Bar */}
+                  <div
+                    ref={filterPillsRef}
+                    className="custom-pills-slider flex items-center gap-1.5 overflow-x-auto scroll-smooth py-1 px-1 pb-2 min-w-0 flex-1"
                   >
-                    {newCount > 0 && <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>}
-                    <span>New</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'NEW' ? 'bg-rose-700 text-white' : 'bg-rose-200 text-rose-900'}`}>
-                      {newCount}
-                    </span>
-                  </button>
+                    {/* Default Live Active Flow Filter (Hides historical finished orders) */}
+                    <button
+                      onClick={() => setActiveFilterTab('ACTIVE')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        activeFilterTab === 'ACTIVE'
+                          ? 'bg-emerald-900 text-white shadow-xs'
+                          : 'bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900 border border-emerald-200/80'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[14px]">local_fire_department</span>
+                      <span>Live Active</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'ACTIVE' ? 'bg-emerald-800 text-white' : 'bg-emerald-200 text-emerald-900'}`}>
+                        {activeOrdersCount}
+                      </span>
+                    </button>
 
-                  <button
-                    onClick={() => setActiveFilterTab('PREPARING')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                      activeFilterTab === 'PREPARING'
-                        ? 'bg-amber-600 text-white shadow-xs'
-                        : 'bg-amber-50/80 hover:bg-amber-100 text-amber-900 border border-amber-200/80'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[14px]">skillet</span>
-                    <span>Preparing</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'PREPARING' ? 'bg-amber-700 text-white' : 'bg-amber-200 text-amber-900'}`}>
-                      {preparingCount}
-                    </span>
-                  </button>
+                    <button
+                      onClick={() => setActiveFilterTab('NEW')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        activeFilterTab === 'NEW'
+                          ? 'bg-rose-600 text-white shadow-xs'
+                          : 'bg-rose-50/80 hover:bg-rose-100 text-rose-800 border border-rose-200/80'
+                      }`}
+                    >
+                      {newCount > 0 && <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>}
+                      <span>New</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'NEW' ? 'bg-rose-700 text-white' : 'bg-rose-200 text-rose-900'}`}>
+                        {newCount}
+                      </span>
+                    </button>
 
-                  <button
-                    onClick={() => setActiveFilterTab('READY')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                      activeFilterTab === 'READY'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-blue-50/80 hover:bg-blue-100 text-blue-900 border border-blue-200/80'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                    <span>Ready</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'READY' ? 'bg-blue-700 text-white' : 'bg-blue-200 text-blue-900'}`}>
-                      {readyCount}
-                    </span>
-                  </button>
+                    <button
+                      onClick={() => setActiveFilterTab('PREPARING')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        activeFilterTab === 'PREPARING'
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-amber-50/80 hover:bg-amber-100 text-amber-900 border border-amber-200/80'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[14px]">skillet</span>
+                      <span>Preparing</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'PREPARING' ? 'bg-amber-700 text-white' : 'bg-amber-200 text-amber-900'}`}>
+                        {preparingCount}
+                      </span>
+                    </button>
 
-                  <button
-                    onClick={() => setActiveFilterTab('DISPATCH')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                      activeFilterTab === 'DISPATCH'
-                        ? 'bg-purple-600 text-white shadow-xs'
-                        : 'bg-purple-50/80 hover:bg-purple-100 text-purple-900 border border-purple-200/80'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
-                    <span>With Rider</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'DISPATCH' ? 'bg-purple-700 text-white' : 'bg-purple-200 text-purple-900'}`}>
-                      {dispatchCount}
-                    </span>
-                  </button>
+                    <button
+                      onClick={() => setActiveFilterTab('READY')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        activeFilterTab === 'READY'
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-blue-50/80 hover:bg-blue-100 text-blue-900 border border-blue-200/80'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                      <span>Ready</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'READY' ? 'bg-blue-700 text-white' : 'bg-blue-200 text-blue-900'}`}>
+                        {readyCount}
+                      </span>
+                    </button>
 
-                  <button
-                    onClick={() => setActiveFilterTab('DELIVERED')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                      activeFilterTab === 'DELIVERED'
-                        ? 'bg-emerald-700 text-white shadow-xs'
-                        : 'bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[14px]">verified</span>
-                    <span>Delivered</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'DELIVERED' ? 'bg-emerald-800 text-white' : 'bg-emerald-200 text-emerald-900'}`}>
-                      {deliveredCount}
-                    </span>
-                  </button>
+                    <button
+                      onClick={() => setActiveFilterTab('DISPATCH')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        activeFilterTab === 'DISPATCH'
+                          ? 'bg-purple-600 text-white shadow-xs'
+                          : 'bg-purple-50/80 hover:bg-purple-100 text-purple-900 border border-purple-200/80'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
+                      <span>With Rider</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'DISPATCH' ? 'bg-purple-700 text-white' : 'bg-purple-200 text-purple-900'}`}>
+                        {dispatchCount}
+                      </span>
+                    </button>
 
-                  <button
-                    onClick={() => setActiveFilterTab('CANCELLED')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                      activeFilterTab === 'CANCELLED'
-                        ? 'bg-stone-800 text-white shadow-xs'
-                        : 'bg-stone-50 hover:bg-stone-100 text-stone-600 border border-stone-200'
-                    }`}
-                  >
-                    <span>Cancelled</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeFilterTab === 'CANCELLED' ? 'bg-stone-700 text-white' : 'bg-stone-200 text-stone-700'}`}>
-                      {cancelledCount}
-                    </span>
-                  </button>
+                    <button
+                      onClick={() => setActiveFilterTab('DELIVERED')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        activeFilterTab === 'DELIVERED'
+                          ? 'bg-emerald-700 text-white shadow-xs'
+                          : 'bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[14px]">verified</span>
+                      <span>Delivered</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'DELIVERED' ? 'bg-emerald-800 text-white' : 'bg-emerald-200 text-emerald-900'}`}>
+                        {deliveredCount}
+                      </span>
+                    </button>
 
+                    <button
+                      onClick={() => setActiveFilterTab('CANCELLED')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        activeFilterTab === 'CANCELLED'
+                          ? 'bg-stone-800 text-white shadow-xs'
+                          : 'bg-stone-50 hover:bg-stone-100 text-stone-600 border border-stone-200'
+                      }`}
+                    >
+                      <span>Cancelled</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeFilterTab === 'CANCELLED' ? 'bg-stone-700 text-white' : 'bg-stone-200 text-stone-700'}`}>
+                        {cancelledCount}
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveFilterTab('ALL')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        activeFilterTab === 'ALL'
+                          ? 'bg-gray-800 text-white shadow-xs'
+                          : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200/80'
+                      }`}
+                    >
+                      <span>All History</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeFilterTab === 'ALL' ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-700'}`}>
+                        {totalOrdersCount}
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Right Slide Arrow */}
                   <button
-                    onClick={() => setActiveFilterTab('ALL')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                      activeFilterTab === 'ALL'
-                        ? 'bg-gray-800 text-white shadow-xs'
-                        : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200/80'
-                    }`}
+                    type="button"
+                    onClick={() => slidePills('right')}
+                    className="shrink-0 w-7 h-7 rounded-lg bg-gray-50 hover:bg-gray-100 active:bg-gray-200 border border-gray-200/80 text-gray-600 flex items-center justify-center transition-colors shadow-2xs"
+                    title="Slide right"
+                    aria-label="Slide filter pills right"
                   >
-                    <span>All History</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeFilterTab === 'ALL' ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-700'}`}>
-                      {totalOrdersCount}
-                    </span>
+                    <span className="material-symbols-outlined text-[16px]">chevron_right</span>
                   </button>
                 </div>
 
@@ -1933,30 +2078,72 @@ export default function OperationsConsolePage() {
                                       )}
 
                                       {isReady && (
-                                        <button
-                                          onClick={() => {
-                                            setSelectedOrderId(order.id);
-                                            setShowRiderModal(true);
-                                          }}
-                                          disabled={actionLoadingId === order.id}
-                                          className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
-                                          title="Assign Rider from Fleet"
-                                        >
-                                          <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
-                                          <span>Assign</span>
-                                        </button>
+                                        !order.assignedRider ? (
+                                          <button
+                                            onClick={() => {
+                                              setSelectedOrderId(order.id);
+                                              setShowRiderModal(true);
+                                            }}
+                                            disabled={actionLoadingId === order.id}
+                                            className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
+                                            title="Assign Rider from Fleet"
+                                          >
+                                            <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
+                                            <span>Assign</span>
+                                          </button>
+                                        ) : order.assignedRider.assignmentStatus === "ASSIGNED" ? (
+                                          <button
+                                            onClick={() => {
+                                              setSelectedOrderId(order.id);
+                                              setShowRiderModal(true);
+                                            }}
+                                            disabled={actionLoadingId === order.id}
+                                            className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors"
+                                            title={"Assigned to " + order.assignedRider.name + " (Waiting for acceptance). Click to change."}
+                                          >
+                                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                                            <span>Assigning</span>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            onClick={() => {
+                                              setSelectedOrderId(order.id);
+                                              setShowRiderModal(true);
+                                            }}
+                                            disabled={actionLoadingId === order.id}
+                                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
+                                            title={"Accepted by " + order.assignedRider.name + ". Click to view or change."}
+                                          >
+                                            <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                                            <span>Assigned</span>
+                                          </button>
+                                        )
                                       )}
 
                                       {isDispatch && (
-                                        <button
-                                          onClick={() => handleManualOverride(order.id)}
-                                          disabled={actionLoadingId === order.id}
-                                          className="px-2.5 py-1 rounded-lg bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
-                                          title="Verify PIN & Complete Delivery"
-                                        >
-                                          <span className="material-symbols-outlined text-[14px]">task_alt</span>
-                                          <span>Verify OTP</span>
-                                        </button>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            onClick={() => {
+                                              setSelectedOrderId(order.id);
+                                              setShowRiderModal(true);
+                                            }}
+                                            disabled={actionLoadingId === order.id}
+                                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
+                                            title={order.assignedRider ? "Assigned to " + order.assignedRider.name : "Rider assigned"}
+                                          >
+                                            <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
+                                            <span>Assigned</span>
+                                          </button>
+                                          <button
+                                            onClick={() => handleManualOverride(order.id)}
+                                            disabled={actionLoadingId === order.id}
+                                            className="px-2 py-1 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
+                                            title="Verify PIN & Complete Delivery"
+                                          >
+                                            <span className="material-symbols-outlined text-[14px]">task_alt</span>
+                                            <span>OTP</span>
+                                          </button>
+                                        </div>
                                       )}
 
                                       <button
@@ -2320,41 +2507,6 @@ export default function OperationsConsolePage() {
                 </div>
               </div>
 
-              {/* Delivery Windows Banner */}
-              <div className="bg-gradient-to-r from-emerald-50/80 to-stone-50 border border-emerald-200/80 rounded-2xl p-4 shadow-2xs">
-                <div className="flex items-center justify-between mb-3 border-b border-emerald-100 pb-2">
-                  <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[17px] text-emerald-700">schedule</span>
-                    <span>Active Kitchen Delivery Windows</span>
-                  </span>
-                  <span className="text-[11px] font-semibold text-emerald-800">
-                    Operating standard 2-meal daily service
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="bg-white p-3.5 rounded-xl border border-stone-200/80 flex items-center justify-between shadow-2xs">
-                    <div>
-                      <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block">LUNCH WINDOW</span>
-                      <span className="text-[11px] text-gray-500 mt-0.5 block">Delivery: 12:30 PM – 01:30 PM • Cutoff: 11:30 AM IST</span>
-                    </div>
-                    <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                      <span>OPEN</span>
-                    </span>
-                  </div>
-                  <div className="bg-white p-3.5 rounded-xl border border-stone-200/80 flex items-center justify-between shadow-2xs">
-                    <div>
-                      <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block">DINNER WINDOW</span>
-                      <span className="text-[11px] text-gray-500 mt-0.5 block">Delivery: 07:30 PM – 08:30 PM • Cutoff: 06:30 PM IST</span>
-                    </div>
-                    <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                      <span>OPEN</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-
               {/* Dishes Grid */}
               <div className="flex flex-col gap-6">
                 {catalogCategories.map((cat) => (
@@ -2490,81 +2642,212 @@ export default function OperationsConsolePage() {
 
           {/* VIEW: SETTINGS */}
           {mainView === 'SETTINGS' && (
-            <main className="p-4 lg:p-6 flex flex-col gap-5 flex-1 max-w-[1600px] w-full mx-auto">
-              <div>
-                <h2 className="text-2xl font-bold font-headline text-gray-900">Console Settings</h2>
-                <p className="text-xs text-gray-500">Configure station alerts, chime notifications, and operational parameters.</p>
+            <main className="p-4 lg:p-6 flex flex-col gap-4 flex-1 max-w-[1200px] w-full mx-auto">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-200/80 pb-3">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-bold font-headline text-gray-900">Console Settings</h2>
+                  <p className="text-xs text-gray-500">Live kitchen station operations, order dispatch preferences &amp; sound alerts</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${
+                    isKitchenOpen ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${isKitchenOpen ? 'bg-emerald-600 animate-pulse' : 'bg-rose-600'}`}></span>
+                    <span>{isKitchenOpen ? 'Kitchen Accepting Orders' : 'Kitchen Paused'}</span>
+                  </span>
+                </div>
               </div>
 
-              <div className="bg-white p-6 rounded-2xl border border-gray-200/90 shadow-2xs flex flex-col gap-4 max-w-xl">
-                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                  <div>
-                    <div className="font-bold text-sm text-gray-900">Audio Chime Notifications</div>
-                    <div className="text-xs text-gray-500">Play web chime when new incoming order is placed</div>
+              {/* Functional Settings Arranged Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 1. Kitchen Station Controls */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-200/90 shadow-2xs flex flex-col gap-3.5">
+                  <div className="flex items-center gap-2 border-b border-gray-100 pb-2.5 text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    <span className="material-symbols-outlined text-[18px] text-emerald-700">soup_kitchen</span>
+                    <span>Kitchen Operations</span>
                   </div>
-                  <button
-                    onClick={() => {
-                      setAudioEnabled(!audioEnabled);
-                      if (!audioEnabled) playKitchenOrderChime();
-                    }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
-                      audioEnabled ? 'bg-emerald-50 text-emerald-900 border-emerald-300' : 'bg-gray-100 text-gray-600 border-gray-300'
-                    }`}
-                  >
-                    {audioEnabled ? 'Chime ON' : 'Muted'}
-                  </button>
-                </div>
 
-                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                  <div>
-                    <div className="font-bold text-sm text-gray-900">Auto-Refresh Interval</div>
-                    <div className="text-xs text-gray-500">Polling kitchen queue every 5 seconds</div>
-                  </div>
-                  <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                    5s Active
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                  <div>
-                    <div className="font-bold text-sm text-gray-900">Database Connection</div>
-                    <div className="text-xs text-gray-500">Supabase PostgreSQL live instance</div>
-                  </div>
-                  <span className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>Connected</span>
-                  </span>
-                </div>
-
-                {/* Delivery Service Zones & Pincode 454774 Status */}
-                <div className="flex flex-col gap-2.5">
+                  {/* Store Status Toggle */}
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="font-bold text-sm text-gray-900">Active Delivery Zones &amp; Pincodes</div>
-                      <div className="text-xs text-gray-500">Live serviceability area for kitchen fulfillment</div>
+                      <div className="font-bold text-xs text-gray-900">Kitchen Store Status</div>
+                      <div className="text-[11px] text-gray-500">Enable or pause customer ordering on storefront</div>
                     </div>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                      LIVE SERVICE
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !isKitchenOpen;
+                        setIsKitchenOpen(next);
+                        updateSetting('isKitchenOpen', next);
+                        showToast(next ? 'Kitchen opened for storefront orders' : 'Kitchen paused. Storefront orders suspended');
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs border ${
+                        isKitchenOpen
+                          ? 'bg-emerald-700 text-white border-emerald-800'
+                          : 'bg-rose-600 text-white border-rose-700'
+                      }`}
+                    >
+                      {isKitchenOpen ? 'Open (Online)' : 'Paused'}
+                    </button>
+                  </div>
+
+                  {/* Auto-Accept Orders */}
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <div>
+                      <div className="font-bold text-xs text-gray-900">Auto-Confirm New Orders</div>
+                      <div className="text-[11px] text-gray-500">Automatically move placed orders directly to cooking queue</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !autoAcceptOrders;
+                        setAutoAcceptOrders(next);
+                        updateSetting('autoAcceptOrders', next);
+                        showToast(next ? 'Auto-confirmation enabled' : 'Manual chef confirmation enabled');
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs border ${
+                        autoAcceptOrders
+                          ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                          : 'bg-gray-100 text-gray-600 border-gray-200'
+                      }`}
+                    >
+                      {autoAcceptOrders ? 'Auto-Accept ON' : 'Manual'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Audio Chime & Alerts */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-200/90 shadow-2xs flex flex-col gap-3.5">
+                  <div className="flex items-center gap-2 border-b border-gray-100 pb-2.5 text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    <span className="material-symbols-outlined text-[18px] text-amber-600">notifications_active</span>
+                    <span>Sound Alerts &amp; Chimes</span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-xs text-gray-900">Incoming Order Chime</div>
+                      <div className="text-[11px] text-gray-500">Plays bell chime on new order arrival</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playKitchenOrderChime();
+                          showToast('Played test chime sound');
+                        }}
+                        className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs font-semibold flex items-center gap-1 transition-colors"
+                        title="Test sound"
+                      >
+                        <span className="material-symbols-outlined text-[15px]">volume_up</span>
+                        <span className="text-[10px]">Test</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = !audioEnabled;
+                          setAudioEnabled(next);
+                          updateSetting('audioEnabled', next);
+                          if (next) playKitchenOrderChime();
+                          showToast(next ? 'Order chimes turned ON' : 'Order chimes MUTED');
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs border ${
+                          audioEnabled
+                            ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                            : 'bg-gray-100 text-gray-600 border-gray-200'
+                        }`}
+                      >
+                        {audioEnabled ? 'Chime ON' : 'Muted'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Polling Interval Selection */}
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <div>
+                      <div className="font-bold text-xs text-gray-900">Auto-Refresh Interval</div>
+                      <div className="text-[11px] text-gray-500">Live order polling frequency</div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {[5, 8, 15, 30].map((sec) => (
+                        <button
+                          key={sec}
+                          type="button"
+                          onClick={() => {
+                            setRefreshIntervalSec(sec);
+                            updateSetting('refreshIntervalSec', sec);
+                            showToast(`Refresh interval set to ${sec}s`);
+                          }}
+                          className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-colors ${
+                            refreshIntervalSec === sec
+                              ? 'bg-emerald-800 text-white shadow-2xs'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {sec}s
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Delivery Zones & Pincode Status */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-200/90 shadow-2xs flex flex-col gap-3.5">
+                  <div className="flex items-center gap-2 border-b border-gray-100 pb-2.5 text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    <span className="material-symbols-outlined text-[18px] text-blue-600">local_shipping</span>
+                    <span>Delivery Zone &amp; Serviceability</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <div>
+                      <div className="font-bold text-gray-900">Central Hub Kitchen</div>
+                      <div className="text-[11px] text-gray-500">Sagore, Pithampur Industrial Area</div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                      PIN 454774
                     </span>
                   </div>
 
-                  <div className="bg-[#fcfdfa] rounded-xl border border-stone-200/80 p-3.5 flex flex-col gap-2">
-                    <div className="flex items-center justify-between pb-2 border-b border-stone-100">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-                        <span className="text-xs font-bold text-gray-900">Sagore / Pithampur Central Zone</span>
-                      </div>
-                      <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-md border border-emerald-300">
-                        PIN 454774
-                      </span>
+                  <div className="bg-[#fcfdfa] p-2.5 rounded-xl border border-stone-200/80 flex items-center justify-between text-[11px]">
+                    <span className="text-gray-600">Base Sagore Delivery Fee</span>
+                    <span className="font-bold text-emerald-800">₹0 Free</span>
+                  </div>
+                </div>
+
+                {/* 4. System Diagnostics & Cache Actions */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-200/90 shadow-2xs flex flex-col gap-3.5">
+                  <div className="flex items-center gap-2 border-b border-gray-100 pb-2.5 text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    <span className="material-symbols-outlined text-[18px] text-stone-700">database</span>
+                    <span>System &amp; Database</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <div>
+                      <div className="font-bold text-gray-900">PostgreSQL Database</div>
+                      <div className="text-[11px] text-gray-500">Supabase managed cloud DB</div>
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-gray-600">
-                      <span>Delivery Fee: ₹0 (Free Sagore Dispatch)</span>
-                      <span className="text-emerald-700 font-bold flex items-center gap-1">
-                        <span>✓</span>
-                        <span>Serviceable</span>
-                      </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                      <span>Connected</span>
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+                    <div>
+                      <div className="font-bold text-xs text-gray-900">Purge Console Cache</div>
+                      <div className="text-[11px] text-gray-500">Force re-fetch all orders &amp; riders</div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        loadOrders(false);
+                        loadRiders();
+                        showToast('Queue & riders refreshed from server');
+                      }}
+                      className="px-3 py-1.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-bold flex items-center gap-1 shadow-2xs transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-sm">cached</span>
+                      <span>Resync</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2637,46 +2920,6 @@ export default function OperationsConsolePage() {
                   </button>
                 ))}
               </nav>
-            </div>
-
-            {/* Bottom Service Status in Mobile Drawer */}
-            <div className="flex flex-col gap-2 pt-3 border-t border-gray-100">
-              <div className="bg-[#fcfdfa] border border-stone-200/80 p-2.5 rounded-xl flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-amber-500 text-[18px]">light_mode</span>
-                  <div>
-                    <div className="font-bold text-stone-800 text-[11px] leading-tight">Lunch Service</div>
-                    <div className="text-[10px] text-stone-500">12:30 PM – 01:30 PM</div>
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                  OPEN
-                </span>
-              </div>
-
-              <div className="bg-[#fcfdfa] border border-stone-200/80 p-2.5 rounded-xl flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-indigo-500 text-[18px]">dark_mode</span>
-                  <div>
-                    <div className="font-bold text-stone-800 text-[11px] leading-tight">Dinner Service</div>
-                    <div className="text-[10px] text-stone-500">07:30 PM – 08:30 PM</div>
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                  OPEN
-                </span>
-              </div>
-
-              <button
-                onClick={() => {
-                  setMainView('MENU');
-                  setMobileMenuOpen(false);
-                }}
-                className="w-full mt-1 py-2 px-3 rounded-xl border border-gray-200 hover:bg-gray-50 text-[11px] font-semibold text-gray-700 flex items-center justify-between transition-colors shadow-2xs"
-              >
-                <span>View Kitchen Capacity</span>
-                <span className="material-symbols-outlined text-sm text-gray-400">chevron_right</span>
-              </button>
             </div>
           </aside>
         </div>

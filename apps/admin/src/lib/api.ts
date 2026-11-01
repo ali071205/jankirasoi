@@ -29,8 +29,10 @@ export interface AdminOrder {
   slotLabel: string;
   totalAmountPaise: number;
   assignedRider?: {
+    id?: string;
     name: string;
     phone: string;
+    assignmentStatus?: 'ASSIGNED' | 'ACCEPTED' | string;
   } | null;
   itemsCount: number;
   items?: AdminOrderItem[];
