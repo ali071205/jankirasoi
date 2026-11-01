@@ -374,25 +374,29 @@ export default function OrdersPage() {
               return (
                 <article
                   key={ord.orderNumber}
-                  className="bg-white rounded-2xl border border-[#EEE7DC] shadow-2xs hover:shadow-xs hover:border-[#38754A]/40 transition-all p-3.5 sm:p-4 flex flex-col gap-2.5"
+                  onClick={() => setExpandedOrderId(isExpanded ? null : ord.orderNumber)}
+                  className={`bg-white rounded-2xl sm:rounded-3xl border transition-all p-3.5 sm:p-4 flex flex-col gap-2.5 cursor-pointer select-none group shadow-2xs hover:shadow-md ${
+                    isExpanded ? 'border-[#38754A] ring-1 ring-[#38754A]/20' : 'border-[#EEE7DC] hover:border-[#38754A]/40'
+                  }`}
                 >
-                  {/* Card Top Row: Monospace ID, Status Pill, Date */}
-                  <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
+                  {/* Clean, Decluttered Card Face: Food Summary & Enlarged Delivery Pill */}
+                  <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono font-bold text-xs sm:text-sm text-[#292D26]">
-                          #{ord.orderNumber}
+                      <p className="font-bold text-sm sm:text-base text-[#292D26] group-hover:text-[#38754A] transition-colors line-clamp-1 leading-snug">
+                        {ord.itemsSummary || 'Fresh Homestyle Meal'}
+                      </p>
+                      <div className="flex items-center gap-2 text-xs text-[#77786F] mt-1">
+                        <span className="font-extrabold text-[#38754A] text-sm sm:text-base">
+                          ₹{(ord.totalAmountPaise / 100).toFixed(0)}
                         </span>
-                        <span className="text-[11px] text-[#77786F]">• {dateStr}</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-[11px] text-[#77786F] truncate mt-0.5">
-                        <span className="material-symbols-outlined text-[13px] text-[#38754A] shrink-0">
-                          location_on
+                        <span>•</span>
+                        <span className="font-semibold text-slate-700">
+                          {ord.paymentMethod === 'COD' ? 'Cash on Delivery' : 'Paid Online'}
                         </span>
-                        <span className="truncate">{addressText}</span>
                       </div>
                     </div>
 
+                    {/* Enlarged Delivery Status Pill */}
                     <div className="shrink-0">
                       <DeliveryStatusPill
                         orderNumber={ord.orderNumber}
@@ -400,88 +404,102 @@ export default function OrdersPage() {
                         status={ord.status}
                         createdAt={ord.createdAt}
                         deliveryAddress={ord.deliveryAddress}
+                        size="lg"
+                        interactive={false}
                       />
                     </div>
                   </div>
 
-                  {/* Card Middle: Items Summary & Amount */}
-                  <div className="flex items-center justify-between gap-3 text-xs">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-[#292D26] line-clamp-1 leading-snug">
-                        {ord.itemsSummary || 'Fresh Homestyle Meal'}
-                      </p>
-                      <div className="flex items-center gap-2 text-[11px] text-[#77786F] mt-0.5">
-                        <span className="font-bold text-[#38754A]">
-                          ₹{(ord.totalAmountPaise / 100).toFixed(0)}
-                        </span>
-                        <span>•</span>
-                        <span className="uppercase font-semibold">
-                          {ord.paymentMethod === 'COD' ? 'Cash on Delivery' : 'Paid Online'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {ord.items && ord.items.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setExpandedOrderId(isExpanded ? null : ord.orderNumber)}
-                        className="text-[11px] text-[#77786F] hover:text-[#292D26] font-semibold flex items-center gap-0.5 shrink-0"
-                      >
-                        <span>{isExpanded ? 'Hide' : 'Details'}</span>
-                        <span className={`material-symbols-outlined text-[14px] transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
-                          expand_more
-                        </span>
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Expanded Items Breakdown (if open) */}
-                  {isExpanded && ord.items && ord.items.length > 0 && (
-                    <div className="bg-[#FFF9F0] rounded-xl p-2.5 border border-[#EEE7DC] flex flex-col gap-1.5 text-xs text-[#292D26] animate-fadeIn">
-                      <span className="text-[10px] uppercase font-bold text-[#77786F] tracking-wider mb-0.5">
-                        Meal Items Breakdown
-                      </span>
-                      {ord.items.map((it, idx) => (
-                        <div key={idx} className="flex items-center justify-between">
-                          <span className="font-medium text-slate-800">
-                            {it.quantity}x {it.name}
-                          </span>
-                          <span className="font-mono font-semibold text-slate-600">
-                            {it.pricePaise ? `₹${((it.pricePaise * it.quantity) / 100).toFixed(0)}` : 'Included'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Card Bottom: Action Buttons */}
-                  <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
-                    {/* Live Track Button */}
-                    <Link
-                      href={`/track?token=${encodeURIComponent(ord.trackingToken)}`}
-                      className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-2xs ${
-                        isActive
-                          ? 'bg-[#38754A] hover:bg-[#285C38] text-white active:scale-95'
-                          : 'bg-[#FFF9F0] hover:bg-[#F3EADF] text-[#38754A] border border-[#EEE7DC]'
+                  {/* Subtle Tap to View Details Bar */}
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px] font-semibold text-[#77786F]">
+                    <span className="flex items-center gap-1 group-hover:text-[#38754A] transition-colors">
+                      <span>{isExpanded ? 'Hide order details' : 'Tap to view details & tracking'}</span>
+                    </span>
+                    <span
+                      className={`material-symbols-outlined text-[18px] text-[#77786F] group-hover:text-[#38754A] transition-transform duration-200 ${
+                        isExpanded ? 'rotate-180' : ''
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[16px]">
-                        {isActive ? 'two_wheeler' : 'history'}
-                      </span>
-                      <span>{isActive ? 'Track Live Ride' : 'Trip Summary'}</span>
-                    </Link>
-
-                    {/* Reorder Button */}
-                    <button
-                      type="button"
-                      onClick={() => handleReorder(ord)}
-                      disabled={reorderingId === ord.orderNumber}
-                      className="px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#E25822] border border-orange-200 font-bold text-xs flex items-center gap-1 transition-colors active:scale-95 shadow-2xs"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">sync</span>
-                      <span>{reorderingId === ord.orderNumber ? 'Adding...' : 'Reorder'}</span>
-                    </button>
+                      expand_more
+                    </span>
                   </div>
+
+                  {/* Expanded Full Order Details (Shown on Card Click) */}
+                  {isExpanded && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="bg-[#FFF9F0] rounded-xl sm:rounded-2xl p-3.5 sm:p-4 border border-[#EEE7DC] flex flex-col gap-3 text-xs text-[#292D26] animate-fadeIn cursor-default"
+                    >
+                      {/* Meta Strip: Order #, Date, Delivery Address */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-[#EEE7DC]">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-xs bg-white px-2 py-1 rounded-lg border border-[#EEE7DC] text-[#292D26]">
+                            #{ord.orderNumber}
+                          </span>
+                          <span className="text-[11px] text-[#77786F] flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[13px]">schedule</span>
+                            {dateStr}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 text-[11px] text-[#77786F] max-w-[220px] sm:max-w-xs truncate">
+                          <span className="material-symbols-outlined text-[13px] text-[#38754A] shrink-0">
+                            location_on
+                          </span>
+                          <span className="truncate">{addressText}</span>
+                        </div>
+                      </div>
+
+                      {/* Items Breakdown */}
+                      {ord.items && ord.items.length > 0 && (
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] uppercase font-bold text-[#77786F] tracking-wider">
+                            Ordered Dishes ({ord.items.reduce((s, it) => s + (it.quantity || 1), 0)} items)
+                          </span>
+                          <div className="flex flex-col gap-1">
+                            {ord.items.map((it, idx) => (
+                              <div key={idx} className="flex items-center justify-between py-0.5">
+                                <span className="font-medium text-slate-800">
+                                  {it.quantity}x {it.name}
+                                </span>
+                                <span className="font-mono font-semibold text-slate-600">
+                                  {it.pricePaise ? `₹${((it.pricePaise * it.quantity) / 100).toFixed(0)}` : 'Included'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Action Buttons inside Details */}
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#EEE7DC]">
+                        {/* Live Track Button */}
+                        <Link
+                          href={`/track?token=${encodeURIComponent(ord.trackingToken)}`}
+                          className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-2xs ${
+                            isActive
+                              ? 'bg-[#38754A] hover:bg-[#285C38] text-white active:scale-95'
+                              : 'bg-white hover:bg-slate-100 text-[#38754A] border border-[#EEE7DC]'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-[16px]">
+                            {isActive ? 'two_wheeler' : 'receipt_long'}
+                          </span>
+                          <span>{isActive ? 'Track Live Ride' : 'Trip Summary'}</span>
+                        </Link>
+
+                        {/* Reorder Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleReorder(ord)}
+                          disabled={reorderingId === ord.orderNumber}
+                          className="px-3.5 py-2 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#E25822] border border-orange-200 font-bold text-xs flex items-center gap-1 transition-colors active:scale-95 shadow-2xs"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">sync</span>
+                          <span>{reorderingId === ord.orderNumber ? 'Adding...' : 'Reorder'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </article>
               );
             })

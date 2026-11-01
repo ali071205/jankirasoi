@@ -14,20 +14,12 @@ export default function MenuPage() {
     Record<string, { id: string; name: string; mod: number }>
   >({});
   const [selectedDishModal, setSelectedDishModal] = useState<MenuItem | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<'lunch' | 'dinner'>('lunch');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const { items, addItem, updateQty, totalCount, totalPricePaise } = useCart();
 
   useEffect(() => {
-    // Read query slot param if passed (e.g. /menu?slot=dinner)
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const slot = params.get('slot');
-      if (slot === 'dinner') setSelectedSlot('dinner');
-    }
-
     // Safely load cached data after hydration
     const cached = api.getCachedCatalog();
     if (cached) {
@@ -160,46 +152,11 @@ export default function MenuPage() {
       <div className="flex flex-col w-full max-w-4xl mx-auto pb-10">
 
         {/* Live Active Order Tracking Banner */}
-        <div className="px-4 pt-3">
+        <div className="px-4 pt-3 pb-1">
           <ActiveOrderBanner />
         </div>
 
-        {/* 1. Meal Slot Segmented Pill Filter matching reference UI */}
-        <div className="px-4 pt-3 pb-2">
-          <div className="w-full bg-[#EFECE4] p-1 rounded-full flex items-center border border-[#E2DBD0] shadow-2xs">
-            {/* Lunch Tab */}
-            <button
-              type="button"
-              onClick={() => setSelectedSlot('lunch')}
-              className={`flex-1 py-2 sm:py-2.5 px-2 sm:px-3 rounded-full text-center transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${
-                selectedSlot === 'lunch'
-                  ? 'bg-white text-[#E85D04] shadow-xs font-extrabold'
-                  : 'text-[#2D312E] hover:text-black font-bold'
-              }`}
-            >
-              <span className="text-[11px] sm:text-xs uppercase tracking-wide truncate">
-                LUNCH &bull; 12:00 PM &ndash; 2:30 PM
-              </span>
-            </button>
-
-            {/* Dinner Tab */}
-            <button
-              type="button"
-              onClick={() => setSelectedSlot('dinner')}
-              className={`flex-1 py-2 sm:py-2.5 px-2 sm:px-3 rounded-full text-center transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${
-                selectedSlot === 'dinner'
-                  ? 'bg-white text-[#E85D04] shadow-xs font-extrabold'
-                  : 'text-[#2D312E] hover:text-black font-bold'
-              }`}
-            >
-              <span className="text-[11px] sm:text-xs uppercase tracking-wide truncate">
-                DINNER &bull; 7:30 PM &ndash; 10:00 PM
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* 2. Category Filter Pills (Horizontal Ribbon) */}
+        {/* 1. Category Filter Pills (Horizontal Ribbon) */}
         <div className="sticky top-16 z-30 bg-[#FFF9F0]/95 backdrop-blur-md py-2 border-b border-[#EEE7DC]">
           <div className="flex items-center gap-2 overflow-x-auto px-4 no-scrollbar">
             <button
@@ -246,11 +203,11 @@ export default function MenuPage() {
           </div>
         </div>
 
-        {/* 3. Section Header */}
+        {/* 2. Section Header */}
         <div className="px-4 pt-4 pb-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-2">
           <div className="flex items-center flex-wrap gap-2">
             <h2 className="text-base sm:text-lg text-[#292D26] font-bold font-headline leading-tight">
-              {selectedSlot === 'lunch' ? "Today's Fresh Lunch Menu" : "Tonight's Homestyle Dinner Menu"}
+              Today's Fresh Daily Menu
             </h2>
             <span className="text-[11px] font-bold text-[#38754A] bg-[#EAF4ED] px-2.5 py-0.5 rounded-full border border-[#38754A]/20 whitespace-nowrap shrink-0">
               {totalFilteredCount} {totalFilteredCount === 1 ? 'Item' : 'Items'}

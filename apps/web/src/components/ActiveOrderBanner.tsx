@@ -94,11 +94,11 @@ export default function ActiveOrderBanner({ className = '' }: ActiveOrderBannerP
   const itemCount = order.items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || 1;
 
   // ETA calculation
-  let etaText = 'On Schedule';
+  let etaText = 'Delivering in ~25-30 mins';
   if (order.status === 'OUT_FOR_DELIVERY') {
     etaText = 'Arriving in 10-15 mins';
   } else if (order.deliverySlot) {
-    etaText = order.deliverySlot.includes('Lunch') ? 'Lunch (12:00 - 2:30 PM)' : 'Dinner (7:30 - 10:00 PM)';
+    etaText = order.deliverySlot;
   }
 
   return (

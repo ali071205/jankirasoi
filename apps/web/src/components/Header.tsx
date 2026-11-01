@@ -127,7 +127,7 @@ export default function Header() {
               <div className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#38754A] animate-pulse shrink-0"></span>
                 <span className="font-label-sm text-label-sm text-[#38754A] font-semibold truncate">
-                  Lunch Serving Now
+                  Kitchen Open Now
                 </span>
               </div>
             </div>

@@ -93,15 +93,11 @@ export default function Footer() {
             </span>
             <div className="flex flex-col gap-2 text-xs text-[#77786F]">
               <div>
-                <span className="font-semibold text-[#292D26] block">Lunch Batch</span>
-                <span>12:00 PM - 02:30 PM (Orders cut off at 12:30 PM)</span>
-              </div>
-              <div>
-                <span className="font-semibold text-[#292D26] block">Dinner Batch</span>
-                <span>07:30 PM - 10:00 PM (Orders cut off at 06:30 PM)</span>
+                <span className="font-semibold text-[#292D26] block">Kitchen Service</span>
+                <span>11:00 AM - 11:00 PM (Daily Fresh Batch Deliveries)</span>
               </div>
               <div className="pt-1 text-[11px]">
-                <span className="text-[#38754A] font-semibold">Service Zone:</span> South Delhi (Malviya Nagar, Saket, Hauz Khas, Greater Kailash, Outer Ring Road)
+                <span className="text-[#38754A] font-semibold">Service Zone:</span> Sagore, Pithampur Industrial Area, Sector 1-3 &amp; Nearby Localities
               </div>
             </div>
           </div>

@@ -1094,7 +1094,7 @@ export default function CartPage() {
                 <span className="material-symbols-outlined text-[22px]">location_on</span>
                 <div>
                   <h3 className="font-extrabold text-sm sm:text-base leading-tight">Change Delivery Address</h3>
-                  <p className="text-[11px] text-emerald-100">Ensure fresh lunch &amp; dinner reaches your doorstep</p>
+                  <p className="text-[11px] text-emerald-100">Ensure fresh hot meals reach your doorstep</p>
                 </div>
               </div>
               <button
