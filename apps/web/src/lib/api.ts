@@ -158,6 +158,28 @@ export interface TrackOrderResponse {
   deliveryOtp?: string; // Zero-cost in-app verbal handover PIN when OUT_FOR_DELIVERY
   riderName?: string;
   riderPhone?: string;
+  rider?: {
+    name: string;
+    phone: string;
+    vehicleNumber?: string;
+    location?: {
+      latitude: number;
+      longitude: number;
+      heading?: number;
+      speed?: number;
+      updatedAt?: string;
+    };
+  } | null;
+  coordinates?: {
+    latitude: number;
+    longitude: number;
+  };
+  kitchenCoordinates?: {
+    latitude: number;
+    longitude: number;
+    name?: string;
+    address?: string;
+  };
   customerName?: string;
   deliveryAddress?: {
     flat?: string;
@@ -654,6 +676,26 @@ export const api = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || 'Failed to update duty status');
+    }
+    return res.json();
+  },
+
+  // 12c. Rider Update Real-time GPS Location Telemetry
+  async updateRiderLocation(coords: { latitude: number; longitude: number; heading?: number; speed?: number }) {
+    const base = getApiBase();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
+    const res = await fetch(`${base}/rider/deliveries/location`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+      body: JSON.stringify(coords),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to update rider location');
     }
     return res.json();
   },

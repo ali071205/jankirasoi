@@ -16,12 +16,36 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap"
+          rel="preload"
+          href="https://fonts.gstatic.com/s/materialsymbolsoutlined/v382/kJEhBvYX7BgnkSrUwT8OhrdQw4oELdPIeeII9v6oFsI.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
         />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
+          href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap"
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  if ('fonts' in document && !document.fonts.check('24px "Material Symbols Outlined"')) {
+                    document.documentElement.classList.add('icons-loading');
+                    document.fonts.load('24px "Material Symbols Outlined"').then(function() {
+                      document.documentElement.classList.remove('icons-loading');
+                    }).catch(function() {
+                      document.documentElement.classList.remove('icons-loading');
+                    });
+                    setTimeout(function() {
+                      document.documentElement.classList.remove('icons-loading');
+                    }, 1200);
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
         />
       </head>
       <body className="bg-surface font-body text-on-surface min-h-screen flex flex-col antialiased">

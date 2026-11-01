@@ -2,7 +2,10 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { api, RiderDelivery, UserProfile } from '../../lib/api';
+
+const LiveDeliveryMap = dynamic(() => import('../../components/LiveDeliveryMap'), { ssr: false });
 
 export default function RiderPage() {
   const [deliveries, setDeliveries] = useState<RiderDelivery[]>([]);
@@ -53,29 +56,35 @@ export default function RiderPage() {
     setTimeout(() => setToastMsg(null), 3000);
   };
 
-  // Request Rider GPS silently without multiple annoying dialogs
+  // Request Rider GPS silently or with user prompt
   const requestRiderGps = useCallback((forcePrompt = false) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return;
 
     if (!forcePrompt && typeof window !== 'undefined') {
       const isAllowed = localStorage.getItem('jr_rider_gps_enabled') === 'true';
-      if (!isAllowed) return; // don't ask unless rider initiated or previously enabled
+      if (!isAllowed) return;
     }
 
     setIsGpsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setRiderGps({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const heading = pos.coords.heading ?? 0;
+        const speed = pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0;
+
+        setRiderGps({ lat, lng });
         setIsGpsLocating(false);
         try { localStorage.setItem('jr_rider_gps_enabled', 'true'); } catch {}
-        if (forcePrompt) showRiderToast('GPS active • Distances calibrated');
+        api.updateRiderLocation({ latitude: lat, longitude: lng, heading, speed }).catch(() => {});
+        if (forcePrompt) showRiderToast('GPS active • Location synced with live map');
       },
       (err) => {
         setIsGpsLocating(false);
         console.warn('Rider GPS notice:', err.message);
         if (forcePrompt) showRiderToast('Could not access GPS. Distances calculated from Sagore Kitchen.');
       },
-      { timeout: 8000, enableHighAccuracy: true, maximumAge: 60000 }
+      { timeout: 8000, enableHighAccuracy: true, maximumAge: 30000 }
     );
   }, []);
 
@@ -85,6 +94,46 @@ export default function RiderPage() {
       requestRiderGps(false);
     }
   }, [riderUser, isOnDuty, requestRiderGps]);
+
+  // Continuous Rider GPS Telemetry Watcher (Swiggy/Zomato style distance-throttled updates)
+  useEffect(() => {
+    if (!riderUser || !isOnDuty || typeof navigator === 'undefined' || !navigator.geolocation) return;
+
+    let lastSentLat = 0;
+    let lastSentLng = 0;
+    let lastSentTime = 0;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const now = Date.now();
+
+        // Distance thresholding: only send to server if moved > 15m or 10s elapsed
+        const distKm = calculateDistanceKm(lastSentLat, lastSentLng, lat, lng);
+        if (distKm > 0.015 || now - lastSentTime > 10000) {
+          lastSentLat = lat;
+          lastSentLng = lng;
+          lastSentTime = now;
+          setRiderGps({ lat, lng });
+          api.updateRiderLocation({
+            latitude: lat,
+            longitude: lng,
+            heading: pos.coords.heading ?? 0,
+            speed: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0,
+          }).catch(() => {});
+        }
+      },
+      (err) => {
+        console.warn('GPS watcher notice:', err.message);
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+    );
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
+  }, [riderUser, isOnDuty, calculateDistanceKm]);
 
   // Initial Auth Check
   useEffect(() => {
@@ -866,32 +915,32 @@ export default function RiderPage() {
                   </button>
                 </div>
 
-                {/* Embedded Map Canvas */}
-                <div className="relative w-full h-56 rounded-2xl bg-slate-100 overflow-hidden border border-[#EEE7DC] shrink-0">
-                  <iframe
-                    title="Customer Delivery Destination Map"
-                    src={`https://maps.google.com/maps?q=${encodeURIComponent(
-                      (activeMapDelivery.coordinates
-                        ? `${activeMapDelivery.coordinates.latitude},${activeMapDelivery.coordinates.longitude}`
-                        : activeMapDelivery.deliveryAddress) + ', Sagore, Pithampur'
-                    )}&hl=en&z=15&output=embed`}
-                    className="w-full h-full border-0 pointer-events-auto"
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
+                {/* Real-time Interactive Route & Live Driver Map (Swiggy/Zomato style) */}
+                <div className="w-full shrink-0">
+                  <LiveDeliveryMap
+                    driverLocation={riderGps ? { latitude: riderGps.lat, longitude: riderGps.lng } : null}
+                    customerLocation={{
+                      latitude: activeMapDelivery.coordinates?.latitude || 22.6312,
+                      longitude: activeMapDelivery.coordinates?.longitude || 75.5715,
+                      address: activeMapDelivery.deliveryAddress,
+                      name: activeMapDelivery.customerName,
+                    }}
+                    kitchenLocation={{
+                      latitude: SAGORE_KITCHEN_COORDS.lat,
+                      longitude: SAGORE_KITCHEN_COORDS.lng,
+                      name: 'Janki Rasoi Cloud Kitchen',
+                    }}
+                    orderNumber={activeMapDelivery.orderNumber}
+                    status={activeMapDelivery.status}
+                    riderName={riderUser?.name || 'You'}
+                    riderVehicle={riderUser?.riderProfile?.vehicleNumber || 'MP-09-JR-2026'}
+                    height="280px"
+                    isRiderView={true}
+                    onLocationUpdate={(loc) => {
+                      setRiderGps({ lat: loc.latitude, lng: loc.longitude });
+                      api.updateRiderLocation(loc).catch(() => {});
+                    }}
                   />
-                  <div className="absolute top-2.5 left-2.5 z-10 px-2.5 py-1 rounded-full bg-white/95 text-[#292D26] text-[10px] font-bold shadow-md flex items-center gap-1 backdrop-blur-xs border border-slate-200">
-                    <span className="material-symbols-outlined text-[13px] text-[#38754A]">near_me</span>
-                    <span>
-                      ~{activeMapDelivery.coordinates
-                        ? calculateDistanceKm(
-                            riderGps ? riderGps.lat : SAGORE_KITCHEN_COORDS.lat,
-                            riderGps ? riderGps.lng : SAGORE_KITCHEN_COORDS.lng,
-                            activeMapDelivery.coordinates.latitude,
-                            activeMapDelivery.coordinates.longitude
-                          )
-                        : 2.5} km {riderGps ? '(from you)' : '(from kitchen)'}
-                    </span>
-                  </div>
                 </div>
 
                 {/* Route Breakdown: Pickup -> Drop-off */}

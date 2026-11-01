@@ -9,7 +9,10 @@ import React, {
 } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { api, TrackOrderResponse, CatalogResponse, DEFAULT_FOOD_IMAGE } from '../../lib/api';
+
+const LiveDeliveryMap = dynamic(() => import('../../components/LiveDeliveryMap'), { ssr: false });
 
 // ── Delivery timeline steps ─────────────────────────────────────────────────
 const TIMELINE_STEPS = [
@@ -693,8 +696,35 @@ function TrackingView({
           </div>
         )}
 
-        {/* Map area */}
-        <MapPlaceholder status={order.status} />
+        {/* Live Swiggy/Zomato Interactive Delivery Map */}
+        <div className="w-full">
+          <LiveDeliveryMap
+            driverLocation={order.rider?.location ? {
+              latitude: order.rider.location.latitude,
+              longitude: order.rider.location.longitude,
+              heading: order.rider.location.heading,
+            } : null}
+            customerLocation={{
+              latitude: order.coordinates?.latitude || 22.6312,
+              longitude: order.coordinates?.longitude || 75.5715,
+              address: typeof order.deliveryAddress === 'string'
+                ? order.deliveryAddress
+                : [order.deliveryAddress?.flat, order.deliveryAddress?.street, order.deliveryAddress?.landmark].filter(Boolean).join(', '),
+              name: order.customerName,
+            }}
+            kitchenLocation={{
+              latitude: order.kitchenCoordinates?.latitude || 22.6288,
+              longitude: order.kitchenCoordinates?.longitude || 75.5684,
+              name: order.kitchenCoordinates?.name || 'Janki Rasoi Cloud Kitchen',
+            }}
+            orderNumber={order.orderNumber}
+            status={order.status}
+            riderName={order.rider?.name || order.riderName || 'Delivery Partner'}
+            riderVehicle={order.rider?.vehicleNumber || 'MP-09-JR-2026'}
+            height="260px"
+            isRiderView={false}
+          />
+        </div>
 
         {/* Rider card */}
         <RiderCard order={order} />

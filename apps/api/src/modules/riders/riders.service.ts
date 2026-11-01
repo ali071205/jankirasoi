@@ -295,4 +295,52 @@ export class RidersService {
       message: profile.isAvailable ? 'Rider marked ON DUTY' : 'Rider marked OFFLINE',
     };
   }
+
+  // In-Memory Ephemeral Geospatial Cache (Zero SQL Disk Thrashing - Swiggy/Zomato style)
+  private static riderLocations = new Map<string, {
+    latitude: number;
+    longitude: number;
+    heading?: number;
+    speed?: number;
+    updatedAt: string;
+  }>();
+
+  async updateLocation(riderUserId: string, dto: { latitude: number; longitude: number; heading?: number; speed?: number }) {
+    const lat = Number(dto.latitude);
+    const lng = Number(dto.longitude);
+    if (isNaN(lat) || isNaN(lng)) {
+      throw new BadRequestException('Invalid GPS coordinates');
+    }
+
+    const payload = {
+      latitude: lat,
+      longitude: lng,
+      heading: dto.heading ?? 0,
+      speed: dto.speed ?? 0,
+      updatedAt: new Date().toISOString(),
+    };
+
+    RidersService.riderLocations.set(riderUserId, payload);
+
+    try {
+      const profile = await this.prisma.riderProfile.findFirst({
+        where: { OR: [{ userId: riderUserId }, { id: riderUserId }] },
+        select: { id: true, userId: true },
+      });
+      if (profile) {
+        RidersService.riderLocations.set(profile.id, payload);
+        RidersService.riderLocations.set(profile.userId, payload);
+      }
+    } catch {}
+
+    return {
+      success: true,
+      location: payload,
+    };
+  }
+
+  static getRiderLocation(riderIdOrUserId?: string) {
+    if (!riderIdOrUserId) return null;
+    return RidersService.riderLocations.get(riderIdOrUserId) || null;
+  }
 }

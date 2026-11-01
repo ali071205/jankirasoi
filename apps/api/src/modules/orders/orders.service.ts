@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { OrderStatus } from '@prisma/client';
 import { randomInt, createHmac } from 'crypto';
 import { OrdersEventsService } from '../events/orders-events.service';
+import { RidersService } from '../riders/riders.service';
 
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   AWAITING_PAYMENT: ['PLACED', 'CANCELLED'],
@@ -54,6 +55,14 @@ export class OrdersService {
       orderBy: { createdAt: 'desc' },
       include: {
         deliverySlot: true,
+        riderAssignments: {
+          where: { status: 'ASSIGNED' },
+          include: {
+            rider: {
+              include: { user: { select: { id: true, name: true, phone: true } } },
+            },
+          },
+        },
         items: {
           include: { addons: true },
         },
@@ -108,9 +117,43 @@ export class OrdersService {
         }
         otpExpiresAt = activeOtp.expiresAt.toISOString();
       }
+    }
 
-      // If no existing active OTP (e.g. first tracking load before rider dispatched),
-      // we do NOT auto-generate one here — OTP creation is triggered only by rider dispatch.
+    // Parse destination coordinates (from address JSON)
+    const addr = (order.deliveryAddress as any) || {};
+    const rawLat = Number(addr.latitude);
+    const rawLng = Number(addr.longitude);
+    const hasValidLocalCoords =
+      !isNaN(rawLat) &&
+      !isNaN(rawLng) &&
+      rawLat >= 22.0 &&
+      rawLat <= 23.5 &&
+      rawLng >= 75.0 &&
+      rawLng <= 76.5;
+
+    const destLat = hasValidLocalCoords ? rawLat : 22.6312;
+    const destLng = hasValidLocalCoords ? rawLng : 75.5715;
+
+    // Attach assigned rider and live in-memory telemetry
+    const assigned = (order as any).riderAssignments?.[0]?.rider;
+    let riderData: any = null;
+    if (assigned) {
+      const liveLoc =
+        RidersService.getRiderLocation(assigned.id) ||
+        RidersService.getRiderLocation(assigned.userId);
+
+      riderData = {
+        name: assigned.user?.name || 'Assigned Delivery Partner',
+        phone: assigned.user?.phone || '',
+        vehicleNumber: assigned.vehicleNumber || 'MP-09-JR-2026',
+        location: liveLoc || {
+          latitude: 22.6288,
+          longitude: 75.5684,
+          heading: 0,
+          speed: 0,
+          updatedAt: new Date().toISOString(),
+        },
+      };
     }
 
     return {
@@ -128,6 +171,14 @@ export class OrdersService {
       totalAmountPaise: order.totalAmountPaise,
       deliveryOtp,
       otpExpiresAt,
+      rider: riderData,
+      coordinates: { latitude: destLat, longitude: destLng },
+      kitchenCoordinates: {
+        latitude: 22.6288,
+        longitude: 75.5684,
+        name: 'Janki Rasoi Cloud Kitchen',
+        address: 'Main Bazar, Sagore, Pithampur',
+      },
       items: order.items.map((i) => ({
         name: i.productName,
         variant: i.variantName,
