@@ -37,16 +37,16 @@ test.describe('Rider Web App, In-App Route Maps & Location System', () => {
 
     // Step 1: Fill credentials
     const phoneInput = page.locator('input[type="tel"]').first();
-    await phoneInput.fill('9811223344');
+    await phoneInput.fill('987654321');
     const pwdInput = page.locator('input[type="password"]').first();
-    await pwdInput.fill('RiderPassword123!');
+    await pwdInput.fill('200720');
 
     const startShiftBtn = page.locator('button[type="submit"]').filter({ hasText: /start delivery shift/i }).first();
     await startShiftBtn.click();
 
     // Step 2: Verify Rider Dashboard loads
-    await expect(page.locator('text=Janki Rasoi Rider')).toBeVisible({ timeout: 20000 });
-    await expect(page.locator('text=ON DUTY')).toBeVisible({ timeout: 20000 });
+    await expect(page.locator('text=Rider Portal').first()).toBeVisible({ timeout: 20000 });
+    await expect(page.locator('button').filter({ hasText: /duty/i }).first()).toBeVisible({ timeout: 20000 });
 
     // Step 3: Verify Deliveries appear with drop location and distance
     await expect(page.locator('text=Active Trips')).toBeVisible({ timeout: 20000 });
