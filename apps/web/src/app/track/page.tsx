@@ -482,12 +482,16 @@ function OrderTrackingContent() {
   if (loading && orders.length === 0) {
     return (
       <main className="flex flex-col relative w-full pt-16 min-h-screen bg-[#FFF9F0]">
-        <div className="w-full max-w-lg mx-auto px-4 pt-4 flex flex-col gap-4">
+        <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 flex flex-col gap-4">
           {/* Skeleton header */}
           <div className="h-32 rounded-2xl bg-gradient-to-br from-[#EAF4ED] to-[#D4EBD9] animate-pulse" />
-          <div className="h-52 rounded-2xl bg-white border border-[#EEE7DC] animate-pulse" />
-          <div className="h-20 rounded-2xl bg-white border border-[#EEE7DC] animate-pulse" />
-          <div className="h-64 rounded-2xl bg-white border border-[#EEE7DC] animate-pulse" />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-2">
+            <div className="lg:col-span-7 h-80 rounded-2xl bg-white border border-[#EEE7DC] animate-pulse" />
+            <div className="lg:col-span-5 flex flex-col gap-4">
+              <div className="h-20 rounded-2xl bg-white border border-[#EEE7DC] animate-pulse" />
+              <div className="h-56 rounded-2xl bg-white border border-[#EEE7DC] animate-pulse" />
+            </div>
+          </div>
         </div>
       </main>
     );
@@ -582,8 +586,8 @@ function TrackingView({
   return (
     <main className="flex flex-col relative w-full min-h-screen bg-[#FFF9F0]">
       {/* ── Green ETA Header ─────────────────────────────────────────────── */}
-      <div className={`w-full pt-16 pb-6 px-4 ${isDelivered ? 'bg-[#38754A]' : 'bg-gradient-to-br from-[#38754A] via-[#2F6340] to-[#235030]'}`}>
-        <div className="max-w-lg mx-auto">
+      <div className={`w-full pt-16 pb-6 px-4 sm:px-6 lg:px-8 ${isDelivered ? 'bg-[#38754A]' : 'bg-gradient-to-br from-[#38754A] via-[#2F6340] to-[#235030]'}`}>
+        <div className="max-w-6xl mx-auto">
           {/* Top bar: back + order switcher + search */}
           <div className="flex items-center justify-between mb-5">
             <Link
@@ -592,7 +596,7 @@ function TrackingView({
               aria-label="Back to Home"
             >
               <span className="material-symbols-outlined text-[22px]">arrow_back</span>
-              <span className="text-xs font-bold">Home</span>
+              <span className="text-xs sm:text-sm font-bold">Home</span>
             </Link>
 
             <div className="flex items-center gap-2">
@@ -613,7 +617,7 @@ function TrackingView({
           {showSearch && (
             <form
               onSubmit={handleSearchSubmit}
-              className="mb-4 bg-white/15 backdrop-blur p-2.5 rounded-2xl border border-white/20 flex gap-2"
+              className="mb-4 bg-white/15 backdrop-blur p-2.5 rounded-2xl border border-white/20 flex gap-2 max-w-md"
             >
               <input
                 type="text"
@@ -650,38 +654,42 @@ function TrackingView({
             </div>
           )}
 
-          {/* Headline */}
-          <h1 className="text-xl sm:text-2xl font-extrabold text-white leading-tight mb-1">
-            {headline}
-          </h1>
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div>
+              {/* Headline */}
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-white leading-tight mb-2">
+                {headline}
+              </h1>
 
-          {/* ETA pill */}
-          <div className="flex items-center gap-2 mt-2">
-            <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20">
-              <span className="material-symbols-outlined text-white text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                {isDelivered ? 'task_alt' : 'schedule'}
-              </span>
-              <span className="text-white font-extrabold text-sm">{etaLabel}</span>
+              {/* ETA pill */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20">
+                  <span className="material-symbols-outlined text-white text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    {isDelivered ? 'task_alt' : 'schedule'}
+                  </span>
+                  <span className="text-white font-extrabold text-sm sm:text-base">{etaLabel}</span>
+                </div>
+              </div>
             </div>
-          </div>
 
-          {/* Food item row */}
-          <div className="mt-4 flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-white/30 shrink-0">
-              <img
-                src={foodImage}
-                alt={firstItem}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.currentTarget.onerror = null;
-                  e.currentTarget.src = DEFAULT_FOOD_IMAGE;
-                }}
-              />
-            </div>
-            <div className="min-w-0">
-              <div className="text-white font-bold text-sm truncate">{firstItem}</div>
-              <div className="text-white/70 text-[11px]">
-                {totalItems} {totalItems === 1 ? 'item' : 'items'} &bull; {order.deliverySlot}
+            {/* Food item row */}
+            <div className="flex items-center gap-3 bg-black/15 backdrop-blur-xs p-2.5 rounded-2xl border border-white/10 sm:max-w-xs">
+              <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-white/30 shrink-0">
+                <img
+                  src={foodImage}
+                  alt={firstItem}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = DEFAULT_FOOD_IMAGE;
+                  }}
+                />
+              </div>
+              <div className="min-w-0">
+                <div className="text-white font-bold text-xs sm:text-sm truncate">{firstItem}</div>
+                <div className="text-white/70 text-[11px]">
+                  {totalItems} {totalItems === 1 ? 'item' : 'items'} &bull; {order.deliverySlot}
+                </div>
               </div>
             </div>
           </div>
@@ -689,74 +697,82 @@ function TrackingView({
       </div>
 
       {/* ── Scrollable content below header ─────────────────────────────── */}
-      <div className="flex-1 w-full max-w-lg mx-auto px-4 py-4 pb-28 flex flex-col gap-4">
+      <div className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-28">
         {error && (
-          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium text-center">
+          <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium text-center">
             {error}
           </div>
         )}
 
-        {/* Live Swiggy/Zomato Interactive Delivery Map */}
-        <div className="w-full">
-          <LiveDeliveryMap
-            driverLocation={order.rider?.location ? {
-              latitude: order.rider.location.latitude,
-              longitude: order.rider.location.longitude,
-              heading: order.rider.location.heading,
-            } : null}
-            customerLocation={{
-              latitude: order.coordinates?.latitude || 22.6312,
-              longitude: order.coordinates?.longitude || 75.5715,
-              address: typeof order.deliveryAddress === 'string'
-                ? order.deliveryAddress
-                : [order.deliveryAddress?.flat, order.deliveryAddress?.street, order.deliveryAddress?.landmark].filter(Boolean).join(', '),
-              name: order.customerName,
-            }}
-            kitchenLocation={{
-              latitude: order.kitchenCoordinates?.latitude || 22.6288,
-              longitude: order.kitchenCoordinates?.longitude || 75.5684,
-              name: order.kitchenCoordinates?.name || 'Janki Rasoi Cloud Kitchen',
-            }}
-            orderNumber={order.orderNumber}
-            status={order.status}
-            riderName={order.rider?.name || order.riderName || 'Delivery Partner'}
-            riderVehicle={order.rider?.vehicleNumber || 'MP-09-JR-2026'}
-            height="260px"
-            isRiderView={false}
-          />
-        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left Column (lg: 7 cols): Live Map & Quick Actions */}
+          <div className="lg:col-span-7 flex flex-col gap-4 lg:sticky lg:top-20">
+            {/* Live Interactive Map */}
+            <div className="w-full rounded-2xl overflow-hidden border border-[#EEE7DC] shadow-xs bg-white">
+              <LiveDeliveryMap
+                driverLocation={order.rider?.location ? {
+                  latitude: order.rider.location.latitude,
+                  longitude: order.rider.location.longitude,
+                  heading: order.rider.location.heading,
+                } : null}
+                customerLocation={{
+                  latitude: order.coordinates?.latitude || 22.6312,
+                  longitude: order.coordinates?.longitude || 75.5715,
+                  address: typeof order.deliveryAddress === 'string'
+                    ? order.deliveryAddress
+                    : [order.deliveryAddress?.flat, order.deliveryAddress?.street, order.deliveryAddress?.landmark].filter(Boolean).join(', '),
+                  name: order.customerName,
+                }}
+                kitchenLocation={{
+                  latitude: order.kitchenCoordinates?.latitude || 22.6288,
+                  longitude: order.kitchenCoordinates?.longitude || 75.5684,
+                  name: order.kitchenCoordinates?.name || 'Janki Rasoi Cloud Kitchen',
+                }}
+                orderNumber={order.orderNumber}
+                status={order.status}
+                riderName={order.rider?.name || order.riderName || 'Delivery Partner'}
+                riderVehicle={order.rider?.vehicleNumber || 'MP-09-JR-2026'}
+                height="340px"
+                isRiderView={false}
+              />
+            </div>
 
-        {/* Rider card */}
-        <RiderCard order={order} />
+            {/* Support / share */}
+            <div className="grid grid-cols-2 gap-3">
+              <a
+                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                  `Tracking Janki Rasoi order #${order.orderNumber}. PIN: ${order.deliveryOtp || 'On dispatch'}. Track: https://jankirasoi.in/track?token=${order.orderNumber}`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-3 px-3 rounded-xl bg-white text-[#38754A] font-bold text-xs flex items-center justify-center gap-1.5 border border-[#38754A]/20 hover:bg-[#EAF4ED] transition-colors shadow-xs"
+              >
+                <span className="material-symbols-outlined text-[16px]">share</span>
+                <span>Share on WhatsApp</span>
+              </a>
+              <a
+                href="https://wa.me/919812345678?text=Hi%20Janki%20Rasoi%2C%20I%20need%20help%20with%20my%20order."
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-3 px-3 rounded-xl bg-white text-[#292D26] font-bold text-xs flex items-center justify-center gap-1.5 border border-[#EEE7DC] hover:bg-[#FFF9F0] transition-colors shadow-xs"
+              >
+                <span className="material-symbols-outlined text-[16px] text-[#38754A]">chat</span>
+                <span>Kitchen Support</span>
+              </a>
+            </div>
+          </div>
 
-        {/* Order details */}
-        <OrderDetailsCard order={order} />
+          {/* Right Column (lg: 5 cols): Rider details, Order ID & OTP, Timeline, Items */}
+          <div className="lg:col-span-5 flex flex-col gap-4">
+            {/* Rider card */}
+            <RiderCard order={order} />
 
-        {/* Delivery timeline */}
-        <DeliveryTimeline status={order.status} />
+            {/* Order details */}
+            <OrderDetailsCard order={order} />
 
-        {/* Support / share */}
-        <div className="grid grid-cols-2 gap-2">
-          <a
-            href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-              `Tracking Janki Rasoi order #${order.orderNumber}. PIN: ${order.deliveryOtp || 'On dispatch'}. Track: https://jankirasoi.in/track?token=${order.orderNumber}`
-            )}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="py-2.5 px-3 rounded-xl bg-white text-[#38754A] font-bold text-[11px] flex items-center justify-center gap-1.5 border border-[#38754A]/20 hover:bg-[#EAF4ED] transition-colors shadow-xs"
-          >
-            <span className="material-symbols-outlined text-[15px]">share</span>
-            <span>Share on WhatsApp</span>
-          </a>
-          <a
-            href="https://wa.me/919812345678?text=Hi%20Janki%20Rasoi%2C%20I%20need%20help%20with%20my%20order."
-            target="_blank"
-            rel="noopener noreferrer"
-            className="py-2.5 px-3 rounded-xl bg-white text-[#292D26] font-bold text-[11px] flex items-center justify-center gap-1.5 border border-[#EEE7DC] hover:bg-[#FFF9F0] transition-colors shadow-xs"
-          >
-            <span className="material-symbols-outlined text-[15px] text-[#38754A]">chat</span>
-            <span>Kitchen Support</span>
-          </a>
+            {/* Delivery timeline */}
+            <DeliveryTimeline status={order.status} />
+          </div>
         </div>
       </div>
     </main>

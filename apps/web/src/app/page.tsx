@@ -103,7 +103,7 @@ export default function HomePage() {
 
   return (
     <main className="flex flex-col relative w-full pt-16 pb-28 bg-[#FFF9F0] min-h-screen">
-      <div className="flex flex-col w-full max-w-4xl mx-auto px-4 pb-8">
+      <div className="flex flex-col w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-10">
         {/* 1. Delivery Notice Banner */}
         <div className="mt-3 bg-[#FFF1DC] border border-[#E99A32]/30 rounded-xl px-4 py-2.5 flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-2 min-w-0">
@@ -123,8 +123,8 @@ export default function HomePage() {
         </div>
 
         {/* 2. Hero Visual & Headline Card */}
-        <div className="mt-4 rounded-2xl bg-white border border-[#EEE7DC] overflow-hidden shadow-sm">
-          <div className="relative h-60 sm:h-72 w-full">
+        <div className="mt-4 rounded-2xl sm:rounded-3xl bg-white border border-[#EEE7DC] overflow-hidden shadow-sm">
+          <div className="relative h-60 sm:h-72 md:h-80 lg:h-96 w-full">
             <img
               className="w-full h-full object-cover"
               alt="Indian royal vegetarian thali overhead view"
@@ -135,29 +135,28 @@ export default function HomePage() {
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent"></div>
 
             {/* Top Badges Overlay */}
-            <div className="absolute top-3 left-3 flex items-center gap-1.5">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/95 backdrop-blur-md text-xs text-[#38754A] font-bold shadow-xs">
+            <div className="absolute top-3 left-3 sm:top-4 sm:left-4 flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-white/95 backdrop-blur-md text-xs sm:text-sm text-[#38754A] font-bold shadow-xs">
                 <span className="w-2 h-2 rounded-full bg-[#38754A] animate-pulse"></span>
                 Fresh Batch Ready
               </span>
             </div>
 
             {/* Hero Bottom Content */}
-            <div className="absolute bottom-4 inset-x-4 text-white">
-              <div className="flex items-center gap-2 mb-1.5">
+            <div className="absolute bottom-4 inset-x-4 sm:bottom-6 sm:inset-x-6 text-white">
+              <div className="flex items-center gap-2 mb-1.5 sm:mb-2">
                 <span className="w-4 h-4 rounded-[3px] bg-white flex items-center justify-center p-0.5 shrink-0">
                   <span className="w-2 h-2 rounded-full bg-[#38754A]"></span>
                 </span>
-                <span className="text-[11px] text-[#EAF4ED] tracking-wide uppercase font-bold">
+                <span className="text-[11px] sm:text-xs text-[#EAF4ED] tracking-wide uppercase font-bold">
                   Home-Style Vegetarian Kitchen
                 </span>
               </div>
-              <h1 className="text-2xl sm:text-4xl font-extrabold text-white leading-tight drop-shadow-sm font-headline">
+              <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black text-white leading-tight drop-shadow-sm font-headline">
                 Ghar Jaisa Khana, Har Din!
               </h1>
             </div>
           </div>
-
         </div>
 
         {/* Active Order Tracking Banner (Home-only, hidden when no order) */}
@@ -201,8 +200,8 @@ export default function HomePage() {
 
         {/* 6. Food Card Grid (Zero mock data, 100% database items) */}
         {loading && allDishes.length === 0 ? (
-          <div className="mt-3 grid grid-cols-2 gap-3 sm:gap-4">
-            {[1, 2, 3, 4, 5, 6].map((idx) => (
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((idx) => (
               <div
                 key={idx}
                 className="bg-white rounded-2xl p-2.5 sm:p-3 border border-[#EEE7DC] shadow-xs flex flex-col justify-between animate-pulse"
@@ -221,7 +220,7 @@ export default function HomePage() {
             ))}
           </div>
         ) : (
-          <div className="mt-3 grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
             {allDishes.map((dish) => {
               const qty = getItemQuantity(dish.id);
               return (

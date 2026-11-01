@@ -149,7 +149,7 @@ export default function MenuPage() {
 
   return (
     <main className="flex flex-col relative w-full pt-16 pb-28 bg-[#FFF9F0] min-h-screen">
-      <div className="flex flex-col w-full max-w-4xl mx-auto pb-10">
+      <div className="flex flex-col w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
 
         {/* Live Active Order Tracking Banner */}
         <div className="px-4 pt-3 pb-1">
@@ -246,7 +246,7 @@ export default function MenuPage() {
                   <h3 className="font-title-md text-title-md font-bold text-on-surface">{cat.name}</h3>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 lg:gap-6">
                   {cat.items.map((dish) => {
                     const variantInfo = selectedVariants[dish.id];
                     const currentPrice =

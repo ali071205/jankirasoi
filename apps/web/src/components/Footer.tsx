@@ -14,7 +14,7 @@ export default function Footer() {
 
   return (
     <footer className="bg-white border-t border-[#EEE7DC] text-[#292D26] pb-24 md:pb-12 mt-auto">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-10 pb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
           {/* 1. Brand & Kitchen Assurance */}
           <div className="flex flex-col gap-3">

@@ -211,7 +211,7 @@ export default function OrdersPage() {
         </div>
       )}
 
-      <main className="max-w-2xl mx-auto w-full px-4 pt-20 sm:pt-24 flex-1">
+      <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24 flex-1">
         {/* Breadcrumb & Navigation */}
         <div className="flex items-center justify-between py-2 mb-2">
           <Link
@@ -314,17 +314,18 @@ export default function OrdersPage() {
           </div>
         </div>
 
-        {/* Orders Feed / Small Cards */}
-        <section className="pt-3 flex flex-col gap-3">
+        {/* Orders Feed / Responsive Cards Grid */}
+        <section className="pt-3 grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4 items-start">
           {loading ? (
-            <div className="flex flex-col gap-3">
+            <>
               <div className="h-32 bg-white rounded-2xl border border-[#EEE7DC] animate-pulse"></div>
               <div className="h-32 bg-white rounded-2xl border border-[#EEE7DC] animate-pulse"></div>
               <div className="h-32 bg-white rounded-2xl border border-[#EEE7DC] animate-pulse"></div>
-            </div>
+              <div className="h-32 bg-white rounded-2xl border border-[#EEE7DC] animate-pulse"></div>
+            </>
           ) : displayedOrders.length === 0 ? (
             /* Empty State */
-            <div className="bg-white rounded-2xl border border-[#EEE7DC] p-8 text-center flex flex-col items-center gap-3 my-4 shadow-xs">
+            <div className="col-span-full bg-white rounded-2xl border border-[#EEE7DC] p-8 text-center flex flex-col items-center gap-3 my-4 shadow-xs">
               <div className="w-14 h-14 rounded-full bg-[#EAF4ED] text-[#38754A] flex items-center justify-center">
                 <span className="material-symbols-outlined text-[32px]">receipt_long</span>
               </div>

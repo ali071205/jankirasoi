@@ -556,8 +556,8 @@ export default function CartPage() {
         </div>
       )}
       {/* 1. Top Header Bar with Back Button, Delivery Address, and Profile Action */}
-      <header className="sticky top-0 z-40 bg-white border-b border-slate-200/80 px-3 sm:px-4 py-2.5 shadow-2xs">
-        <div className="max-w-xl mx-auto flex items-center justify-between gap-2">
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-2.5 shadow-2xs">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 sm:gap-4">
           {/* Back button & Address */}
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <button
@@ -630,32 +630,33 @@ export default function CartPage() {
         </div>
       </header>
 
-      <div className="flex flex-col w-full max-w-xl mx-auto pb-4">
-        {/* 3. Minimalistic Items Summary Bar */}
-        <div className="px-3 pt-3 flex items-center justify-between gap-2">
-          {/* Minimalist Items Count & Subtotal */}
-          <div className="flex items-center gap-1.5 text-xs">
-            <span className="font-bold text-slate-800">
-              {items.reduce((a, b) => a + b.quantity, 0)} {items.reduce((a, b) => a + b.quantity, 0) === 1 ? 'item' : 'items'}
-            </span>
-            <span className="text-slate-300">•</span>
-            <span className="font-extrabold text-slate-900">
-              ₹{(itemsTotalPaise / 100).toFixed(0)}
-            </span>
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-12 flex flex-col lg:flex-row items-start gap-6 lg:gap-8">
+        {/* Left Column: Cart Items, Meal Add-ons, Instructions */}
+        <div className="w-full lg:flex-1 flex flex-col gap-4 min-w-0">
+          {/* 3. Minimalistic Items Summary Bar */}
+          <div className="px-1 flex items-center justify-between gap-2">
+            {/* Minimalist Items Count & Subtotal */}
+            <div className="flex items-center gap-1.5 text-xs sm:text-sm">
+              <span className="font-bold text-slate-800">
+                {items.reduce((a, b) => a + b.quantity, 0)} {items.reduce((a, b) => a + b.quantity, 0) === 1 ? 'item' : 'items'}
+              </span>
+              <span className="text-slate-300">•</span>
+              <span className="font-extrabold text-slate-900">
+                ₹{(itemsTotalPaise / 100).toFixed(0)}
+              </span>
+            </div>
           </div>
-        </div>
 
-        {/* 4. Restaurant Items Card */}
-        <div className="px-3 pt-3">
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 flex flex-col gap-3">
+          {/* 4. Restaurant Items Card */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col gap-3">
             {/* Items Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">
+              <span className="text-[11px] sm:text-xs font-bold text-emerald-700 uppercase tracking-wide">
                 TRYNEW eligible items
               </span>
               <Link
                 href="/menu"
-                className="text-xs font-bold text-[#008848] hover:underline flex items-center gap-1"
+                className="text-xs sm:text-sm font-bold text-[#008848] hover:underline flex items-center gap-1"
               >
                 <span className="text-sm font-extrabold">+</span>
                 <span>Add more</span>
@@ -667,23 +668,23 @@ export default function CartPage() {
               {items.map((item, idx) => (
                 <div
                   key={`${item.productId}-${item.variantId || 'base'}`}
-                  className="py-2.5 flex items-center justify-between gap-3"
+                  className="py-3 flex items-center justify-between gap-3"
                 >
-                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                  <div className="flex items-start gap-2.5 min-w-0 flex-1">
                     <span className="w-3.5 h-3.5 rounded-xs border border-emerald-600 flex items-center justify-center p-0.5 mt-0.5 shrink-0 bg-white">
                       <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
                     </span>
                     <div className="min-w-0">
-                      <p className="font-bold text-xs sm:text-sm text-slate-900 truncate">{item.name}</p>
+                      <p className="font-bold text-xs sm:text-sm md:text-base text-slate-900 truncate">{item.name}</p>
                       {item.variantName && (
-                        <p className="text-[11px] text-slate-500">{item.variantName}</p>
+                        <p className="text-[11px] sm:text-xs text-slate-500">{item.variantName}</p>
                       )}
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3 shrink-0">
                     {/* Stepper */}
-                    <div className="flex items-center bg-white rounded-lg border border-slate-300 shadow-2xs h-7 px-1">
+                    <div className="flex items-center bg-white rounded-lg border border-slate-300 shadow-2xs h-8 px-1.5">
                       <button
                         type="button"
                         onClick={() => updateQty(idx, -1)}
@@ -691,7 +692,7 @@ export default function CartPage() {
                       >
                         -
                       </button>
-                      <span className="px-2 font-extrabold text-xs text-emerald-700">{item.quantity}</span>
+                      <span className="px-2 font-extrabold text-xs sm:text-sm text-emerald-700">{item.quantity}</span>
                       <button
                         type="button"
                         onClick={() => updateQty(idx, 1)}
@@ -702,11 +703,11 @@ export default function CartPage() {
                     </div>
 
                     {/* Price with strikethrough */}
-                    <div className="text-right min-w-[54px]">
-                      <span className="text-[10px] text-slate-400 line-through block leading-none">
+                    <div className="text-right min-w-[54px] sm:min-w-[64px]">
+                      <span className="text-[10px] sm:text-xs text-slate-400 line-through block leading-none">
                         ₹{(((item.pricePaise * item.quantity) / 100) + 40).toFixed(0)}
                       </span>
-                      <span className="text-xs sm:text-sm font-extrabold text-slate-900">
+                      <span className="text-xs sm:text-sm md:text-base font-extrabold text-slate-900">
                         ₹{((item.pricePaise * item.quantity) / 100).toFixed(0)}
                       </span>
                     </div>
@@ -715,18 +716,16 @@ export default function CartPage() {
               ))}
             </div>
           </div>
-        </div>
 
-        {/* 5. Complete Your Meal Addons Horizontal Carousel */}
-        <div className="px-3 pt-3">
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5">
-            <h3 className="text-[11px] uppercase font-extrabold tracking-wider text-slate-500 mb-2.5">
+          {/* 5. Complete Your Meal Addons Horizontal Carousel */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4">
+            <h3 className="text-[11px] sm:text-xs uppercase font-extrabold tracking-wider text-slate-500 mb-3">
               COMPLETE YOUR MEAL
             </h3>
             <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
               {COMPLETE_MEAL_ADDONS.map((addon) => (
-                <div key={addon.id} className="w-28 shrink-0 flex flex-col gap-1">
-                  <div className="relative w-28 h-20 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
+                <div key={addon.id} className="w-28 sm:w-32 shrink-0 flex flex-col gap-1">
+                  <div className="relative w-28 sm:w-32 h-20 sm:h-24 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
                     <img src={addon.imageUrl} alt={addon.name} className="w-full h-full object-cover" />
                     <button
                       type="button"
@@ -749,21 +748,18 @@ export default function CartPage() {
                     <span className="w-2.5 h-2.5 rounded-2xs border border-emerald-600 flex items-center justify-center p-0.5 shrink-0 bg-white">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
                     </span>
-                    <p className="text-[11px] font-bold text-slate-800 truncate leading-tight">{addon.name}</p>
+                    <p className="text-[11px] sm:text-xs font-bold text-slate-800 truncate leading-tight">{addon.name}</p>
                   </div>
-                  <span className="text-xs font-extrabold text-slate-900">
+                  <span className="text-xs sm:text-sm font-extrabold text-slate-900">
                     ₹{(addon.pricePaise / 100).toFixed(0)}
                   </span>
                 </div>
               ))}
             </div>
           </div>
-        </div>
 
-
-        {/* 7. Rider Delivery Instructions (Exact 1:1 with Reference Image 2) */}
-        <div className="px-3 pt-3">
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 flex flex-col gap-2.5">
+          {/* 7. Rider Delivery Instructions (Exact 1:1 with Reference Image 2) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 flex flex-col gap-3">
             {/* Top Tabs */}
             <div className="flex items-center gap-2">
               <button
@@ -991,19 +987,40 @@ export default function CartPage() {
           </div>
         </div>
 
+        {/* Right Column: Delivery Details, Bill Summary & Desktop Order CTA */}
+        <div className="w-full lg:w-[380px] xl:w-[420px] flex flex-col gap-4 lg:sticky lg:top-20 shrink-0">
+          {/* Delivery Address Overview Card */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[20px] text-emerald-700">location_on</span>
+                <span className="text-xs font-bold text-slate-900">Delivery Address</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditingAddress(true)}
+                className="text-xs font-bold text-emerald-700 hover:underline"
+              >
+                Change
+              </button>
+            </div>
+            <div className="text-xs text-slate-600 leading-relaxed">
+              <p className="font-bold text-slate-900">{customerName || 'Customer'} • {customerPhone || 'Phone pending'}</p>
+              <p className="text-slate-500 mt-0.5">{flat ? `${flat}${street ? `, ${street}` : ''}` : 'No flat/street entered'}</p>
+              <p className="text-slate-500">{landmark ? `Near: ${landmark} • ` : ''}PIN: {pincode}</p>
+            </div>
+          </div>
 
-
-        {/* 9. Bill Details Breakdown */}
-        <div className="px-3 pt-3">
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 flex flex-col gap-2">
+          {/* 9. Bill Details Breakdown */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col gap-2.5">
             <h3 className="text-xs uppercase font-extrabold tracking-wider text-slate-500 mb-1">
               Bill Details
             </h3>
-            <div className="flex justify-between text-xs text-slate-600">
+            <div className="flex justify-between text-xs sm:text-sm text-slate-600">
               <span>Item Total</span>
               <span className="font-semibold text-slate-900">₹{(itemsTotalPaise / 100).toFixed(0)}</span>
             </div>
-            <div className="flex justify-between text-xs text-slate-600">
+            <div className="flex justify-between text-xs sm:text-sm text-slate-600">
               <span className="flex items-center gap-1">
                 <span>Delivery Partner Fee</span>
                 {deliveryFeePaise === 0 ? (
@@ -1020,26 +1037,63 @@ export default function CartPage() {
                 {deliveryFeePaise === 0 ? 'FREE' : `₹${(deliveryFeePaise / 100).toFixed(0)}`}
               </span>
             </div>
-            <div className="flex justify-between text-xs text-slate-600">
+            <div className="flex justify-between text-xs sm:text-sm text-slate-600">
               <span>Platform &amp; Packaging Fee</span>
               <span className="font-semibold text-slate-900">₹15</span>
             </div>
             {tipPaise > 0 && (
-              <div className="flex justify-between text-xs text-emerald-700 font-bold">
+              <div className="flex justify-between text-xs sm:text-sm text-emerald-700 font-bold">
                 <span>Delivery Partner Tip</span>
                 <span>₹{(tipPaise / 100).toFixed(0)}</span>
               </div>
             )}
-            <div className="pt-2 border-t border-slate-100 flex justify-between text-sm font-extrabold text-slate-900">
+            <div className="pt-3 border-t border-slate-100 flex justify-between text-sm sm:text-base font-extrabold text-slate-900">
               <span>To Pay</span>
               <span>₹{(finalTotalPaise / 100).toFixed(0)}</span>
+            </div>
+
+            {/* Desktop Pay Button & Payment Method Selector */}
+            <div className="hidden lg:flex flex-col gap-3 pt-3 mt-1 border-t border-slate-100">
+              <div
+                onClick={() => setIsPaymentModalOpen(true)}
+                className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 cursor-pointer transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px] text-slate-700">account_balance_wallet</span>
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-slate-500">Payment Method</p>
+                    <p className="text-xs font-extrabold text-slate-900">
+                      {paymentMethod === 'COD' ? 'Pay on Delivery (Cash/UPI)' : 'Online UPI / Cards'}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[11px] font-bold text-emerald-700">Change</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handlePlaceOrder}
+                disabled={placingOrder || quoteLoading || pinStatusMsg?.isError}
+                className="w-full bg-[#008848] hover:bg-[#00703c] active:scale-98 text-white font-extrabold text-base py-3.5 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <span>
+                  {placingOrder
+                    ? 'Processing Order...'
+                    : pinStatusMsg?.isError
+                    ? 'Delivery Unavailable'
+                    : `Place Order • ₹${(finalTotalPaise / 100).toFixed(0)}`}
+                </span>
+                {placingOrder && (
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0 inline-block" />
+                )}
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 10. Sticky Bottom Payment Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 px-4 py-2.5 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
+      {/* 10. Sticky Bottom Payment Bar (Mobile & Tablet Portrait Only) */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 px-4 py-2.5 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
         <div className="max-w-xl mx-auto flex items-center justify-between gap-3">
           {/* Left: Payment Method Info */}
           <div

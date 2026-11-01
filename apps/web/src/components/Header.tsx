@@ -108,38 +108,58 @@ export default function Header() {
 
   return (
     <>
-      <header className="fixed top-0 inset-x-0 z-50 bg-surface/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-surface-container-high/60">
-        <div className="max-w-4xl mx-auto h-16 px-margin flex items-center justify-between gap-space-sm">
+      <header className="fixed top-0 inset-x-0 z-50 bg-white/95 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-[#EEE7DC]">
+        <div className="max-w-7xl mx-auto h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3 sm:gap-6">
           {/* Brand Logo & Live Status */}
-          <Link href="/" className="flex items-center gap-space-sm min-w-0 flex-1">
-            <div className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
+          <Link href="/" className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
               JR
             </div>
             <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-space-xs">
-                <span className="font-title-md text-title-md text-on-surface truncate font-bold font-headline">
+              <div className="flex items-center gap-1.5">
+                <span className="font-title-md text-base sm:text-lg text-[#292D26] truncate font-black font-headline">
                   Janki Rasoi
                 </span>
-                <span className="hidden xs:inline-block font-label-sm text-label-sm px-1.5 py-0.5 rounded-full bg-[#EAF4ED] text-[#38754A] uppercase shrink-0 font-bold border border-[#38754A]/20">
+                <span className="hidden xs:inline-block text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-[#EAF4ED] text-[#38754A] uppercase shrink-0 font-bold border border-[#38754A]/20">
                   Ghar Ka Swad
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#38754A] animate-pulse shrink-0"></span>
-                <span className="font-label-sm text-label-sm text-[#38754A] font-semibold truncate">
+                <span className="text-[11px] sm:text-xs text-[#38754A] font-semibold truncate">
                   Kitchen Open Now
                 </span>
               </div>
             </div>
           </Link>
 
-
+          {/* Desktop/Tablet Navigation Links */}
+          <nav className="hidden md:flex items-center gap-6 text-xs sm:text-sm font-bold text-[#292D26]">
+            <Link
+              href="/"
+              className={`hover:text-[#38754A] transition-colors ${pathname === '/' ? 'text-[#38754A]' : 'text-[#77786F]'}`}
+            >
+              Home
+            </Link>
+            <Link
+              href="/menu"
+              className={`hover:text-[#38754A] transition-colors ${pathname === '/menu' ? 'text-[#38754A]' : 'text-[#77786F]'}`}
+            >
+              Today's Menu
+            </Link>
+            <Link
+              href="/orders"
+              className={`hover:text-[#38754A] transition-colors ${pathname === '/orders' ? 'text-[#38754A]' : 'text-[#77786F]'}`}
+            >
+              My Orders
+            </Link>
+          </nav>
 
           {/* Delivery Location Selector Pill */}
           <button
             type="button"
             onClick={() => setIsLocationModalOpen(true)}
-            className="flex items-center gap-1.5 py-1 px-2.5 sm:px-3 rounded-full bg-[#FFF9F0] hover:bg-[#F5ECE0] border border-[#EEE7DC] text-left transition-all shrink-0 max-w-[150px] xs:max-w-[210px] sm:max-w-[260px] group"
+            className="flex items-center gap-1.5 py-1 px-2.5 sm:px-3 rounded-full bg-[#FFF9F0] hover:bg-[#F5ECE0] border border-[#EEE7DC] text-left transition-all shrink-0 max-w-[140px] xs:max-w-[200px] sm:max-w-[280px] md:max-w-[340px] lg:max-w-[380px] group"
             title="Change delivery location"
           >
             <span className="material-symbols-outlined text-[#E25822] text-[18px] shrink-0 group-hover:scale-110 transition-transform">
@@ -161,15 +181,15 @@ export default function Header() {
           </button>
 
           {/* Cart Icon & Profile Container */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link
               href="/cart"
               aria-label="View Cart"
-              className="relative w-10 h-10 flex items-center justify-center rounded-full text-on-surface hover:bg-surface-container-high transition-colors"
+              className="relative w-10 h-10 flex items-center justify-center rounded-full text-on-surface hover:bg-stone-100 transition-colors"
             >
               <span className="material-symbols-outlined text-[24px]">shopping_bag</span>
               {totalCount > 0 && (
-                <span className="absolute top-0.5 right-0.5 min-w-[18px] h-[18px] px-1 bg-secondary text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-xs">
+                <span className="absolute top-0.5 right-0.5 min-w-[18px] h-[18px] px-1 bg-[#38754A] text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-xs">
                   {totalCount}
                 </span>
               )}
