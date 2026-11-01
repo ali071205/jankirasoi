@@ -67,8 +67,12 @@ export class RidersService {
 
     const assignments = await this.prisma.riderAssignment.findMany({
       where: {
-        status: 'ASSIGNED',
         ...(riderProfileId ? { riderId: riderProfileId } : {}),
+        OR: [
+          { status: 'ASSIGNED' },
+          { status: 'COMPLETED' },
+          { order: { status: 'DELIVERED' } },
+        ],
       },
       include: {
         order: {
@@ -79,9 +83,18 @@ export class RidersService {
         },
       },
       orderBy: { assignedAt: 'desc' },
+      take: 50,
     });
 
-    const ordersToDisplay = assignments.map((a) => a.order);
+    // Deduplicate orders by ID to prevent duplicate deliveries from reassigned/multi-attempt records
+    const seenOrderIds = new Set<string>();
+    const ordersToDisplay: (typeof assignments)[0]['order'][] = [];
+    for (const a of assignments) {
+      if (a.order && !seenOrderIds.has(a.order.id)) {
+        seenOrderIds.add(a.order.id);
+        ordersToDisplay.push(a.order);
+      }
+    }
 
     return {
       deliveries: ordersToDisplay.map((o) => {

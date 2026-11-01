@@ -420,6 +420,11 @@ export class OrdersService {
         data: { status: 'DELIVERED' },
       });
 
+      await tx.riderAssignment.updateMany({
+        where: { orderId, status: 'ASSIGNED' },
+        data: { status: 'COMPLETED' },
+      });
+
       await tx.orderStatusEvent.create({
         data: {
           orderId,

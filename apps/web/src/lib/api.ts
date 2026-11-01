@@ -725,9 +725,12 @@ export const api = {
   },
 
   // 15. Get Current User Profile (Customer / Rider)
-  async getCurrentUser(): Promise<UserProfile | null> {
+  async getCurrentUser(role: 'CUSTOMER' | 'RIDER' = 'CUSTOMER'): Promise<UserProfile | null> {
     if (typeof window === 'undefined') return null;
-    const token = localStorage.getItem('jr_session_token') || localStorage.getItem('jr_rider_token');
+    const token = role === 'CUSTOMER'
+      ? localStorage.getItem('jr_session_token')
+      : localStorage.getItem('jr_rider_token');
+
     const base = getApiBase();
     if (token) {
       try {
@@ -739,29 +742,54 @@ export const api = {
         if (res.ok) {
           const data = await res.json();
           if (data.authenticated && data.user) {
-            localStorage.setItem('jr_user_profile', JSON.stringify(data.user));
-            if (data.user.phone) localStorage.setItem('jr_customer_phone', data.user.phone);
-            if (data.user.name) localStorage.setItem('jr_customer_name', data.user.name);
-            if (data.user.savedAddress) localStorage.setItem('jr_customer_address', JSON.stringify(data.user.savedAddress));
-            return data.user;
+            // Verify role matches requested context to avoid cross-role profile bleed
+            if (role === 'CUSTOMER' && data.user.role === 'CUSTOMER') {
+              localStorage.setItem('jr_user_profile', JSON.stringify(data.user));
+              if (data.user.phone) localStorage.setItem('jr_customer_phone', data.user.phone);
+              if (data.user.name) localStorage.setItem('jr_customer_name', data.user.name);
+              if (data.user.savedAddress) localStorage.setItem('jr_customer_address', JSON.stringify(data.user.savedAddress));
+              return data.user;
+            } else if (role === 'RIDER' && data.user.role === 'RIDER') {
+              localStorage.setItem('jr_rider_profile', JSON.stringify(data.user));
+              return data.user;
+            }
           }
         }
       } catch {
-        // Fallback
+        // Fallback to cache
       }
     }
 
-    const cached = localStorage.getItem('jr_user_profile');
-    if (cached) {
-      try { return JSON.parse(cached); } catch {}
+    if (role === 'CUSTOMER') {
+      const cached = localStorage.getItem('jr_user_profile');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed?.role === 'CUSTOMER') return parsed;
+        } catch {}
+      }
+    } else if (role === 'RIDER') {
+      const cached = localStorage.getItem('jr_rider_profile');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed?.role === 'RIDER') return parsed;
+        } catch {}
+      }
     }
     return null;
   },
 
-  // 16. Logout
-  async logout(): Promise<void> {
+  // 16. Logout (Role-isolated to prevent customer session clearing on rider actions)
+  async logout(role: 'CUSTOMER' | 'RIDER' | 'ALL' = 'CUSTOMER'): Promise<void> {
     const base = getApiBase();
-    const token = typeof window !== 'undefined' ? (localStorage.getItem('jr_session_token') || localStorage.getItem('jr_rider_token')) : null;
+    let token: string | null = null;
+    if (typeof window !== 'undefined') {
+      if (role === 'CUSTOMER') token = localStorage.getItem('jr_session_token');
+      else if (role === 'RIDER') token = localStorage.getItem('jr_rider_token');
+      else token = localStorage.getItem('jr_session_token') || localStorage.getItem('jr_rider_token');
+    }
+
     try {
       await fetch(`${base}/auth/logout`, {
         method: 'POST',
@@ -771,11 +799,16 @@ export const api = {
     } catch {
       // ignore
     }
+
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('jr_session_token');
-      localStorage.removeItem('jr_user_profile');
-      localStorage.removeItem('jr_rider_token');
-      localStorage.removeItem('jr_rider_profile');
+      if (role === 'CUSTOMER' || role === 'ALL') {
+        localStorage.removeItem('jr_session_token');
+        localStorage.removeItem('jr_user_profile');
+      }
+      if (role === 'RIDER' || role === 'ALL') {
+        localStorage.removeItem('jr_rider_token');
+        localStorage.removeItem('jr_rider_profile');
+      }
     }
   },
 };

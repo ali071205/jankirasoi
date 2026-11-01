@@ -91,7 +91,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setIsToastError(isError);
     toastTimeoutRef.current = setTimeout(() => {
       setToastMessage(null);
-    }, 3000);
+    }, 1500);
   }, []);
 
   useEffect(() => {
@@ -182,25 +182,25 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
-      {/* Toast Notification */}
+      {/* Small Toast Notification Pill Centered on Screen */}
       {toastMessage && (
         <div
           role="status"
           aria-live="polite"
           style={{
-            backgroundColor: isToastError ? '#B91C1C' : '#0F172A',
+            backgroundColor: isToastError ? 'rgba(153, 27, 27, 0.95)' : 'rgba(28, 46, 32, 0.95)',
             color: '#FFFFFF',
           }}
-          className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-2xl transition-all flex items-center gap-2 max-w-[90vw] border border-white/20 backdrop-blur-md pointer-events-none animate-in fade-in slide-in-from-bottom-3 duration-200`}
+          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[100] px-4 py-2 rounded-full text-xs font-semibold shadow-2xl transition-all flex items-center gap-2 max-w-[85vw] border border-white/15 backdrop-blur-md pointer-events-none animate-in fade-in zoom-in-95 duration-150"
         >
           <span
-            className={`material-symbols-outlined text-[18px] shrink-0 ${
-              isToastError ? 'text-red-300' : 'text-emerald-400'
+            className={`material-symbols-outlined text-[16px] shrink-0 ${
+              isToastError ? 'text-red-300' : 'text-[#4ADE80]'
             }`}
           >
             {isToastError ? 'error' : 'check_circle'}
           </span>
-          <span className="text-white font-bold tracking-tight truncate">{toastMessage}</span>
+          <span className="text-white font-medium tracking-tight truncate">{toastMessage}</span>
         </div>
       )}
     </CartContext.Provider>

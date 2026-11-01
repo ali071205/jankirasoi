@@ -17,6 +17,13 @@ export class AuthController {
   ) {
     const result = await this.authService.loginCustomer(dto);
 
+    res.cookie('customer_session_token', result.sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
     res.cookie('session_token', result.sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -31,9 +38,9 @@ export class AuthController {
   @Get('auth/me')
   @ApiOperation({ summary: 'Get current user session profile and saved addresses' })
   async getMe(@Req() req: Request) {
-    const cookieToken = req.cookies?.session_token;
     const headerToken = req.headers.authorization?.replace('Bearer ', '');
-    const token = cookieToken || headerToken;
+    const cookieToken = req.cookies?.customer_session_token || req.cookies?.session_token;
+    const token = headerToken || cookieToken;
 
     if (!token) {
       return { authenticated: false, user: null };
@@ -108,7 +115,7 @@ export class AuthController {
   ) {
     const result = await this.authService.loginRider(dto);
 
-    res.cookie('session_token', result.sessionToken, {
+    res.cookie('rider_session_token', result.sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -125,15 +132,17 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const cookieToken = req.cookies?.session_token;
     const headerToken = req.headers.authorization?.replace('Bearer ', '');
-    const token = cookieToken || headerToken;
+    const cookieToken = req.cookies?.customer_session_token || req.cookies?.session_token;
+    const token = headerToken || cookieToken;
 
     if (token) {
       await this.authService.logout(token);
     }
 
     res.clearCookie('session_token', { path: '/' });
+    res.clearCookie('customer_session_token', { path: '/' });
+    res.clearCookie('rider_session_token', { path: '/' });
     return { success: true, message: 'Logged out successfully.' };
   }
 }

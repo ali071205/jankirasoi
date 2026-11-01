@@ -91,7 +91,7 @@ export default function RiderPage() {
     async function checkRiderAuth() {
         if (typeof window !== 'undefined') localStorage.removeItem('jr_demo_rider_deliveries');
       try {
-        const user = await api.getCurrentUser();
+        const user = await api.getCurrentUser('RIDER');
         if (user && user.role === 'RIDER') {
           setRiderUser(user);
           if (user.riderProfile?.isAvailable !== undefined) {
@@ -163,7 +163,7 @@ export default function RiderPage() {
   };
 
   const handleRiderLogout = async () => {
-    await api.logout();
+    await api.logout('RIDER');
     setRiderUser(null);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('jr_rider_token');
@@ -297,65 +297,79 @@ export default function RiderPage() {
     }
   };
 
-  const activeDeliveries = deliveries.filter((d) => d.status !== 'DELIVERED');
-  const completedDeliveries = deliveries.filter((d) => d.status === 'DELIVERED');
+  // Deduplicate deliveries by orderId to guarantee no duplicate cards
+  const uniqueDeliveries = Array.from(
+    new Map(deliveries.map((d) => [d.orderId, d])).values()
+  );
+
+  const activeDeliveries = uniqueDeliveries.filter(
+    (d) => d.status !== 'DELIVERED' && d.status !== 'CANCELLED'
+  );
+  const completedDeliveries = uniqueDeliveries.filter(
+    (d) => d.status === 'DELIVERED'
+  );
   const displayList = activeTab === 'ACTIVE' ? activeDeliveries : completedDeliveries;
 
   return (
     <div className="min-h-screen bg-[#FFF9F0] text-[#292D26] flex flex-col font-body pb-16 selection:bg-[#38754A] selection:text-white">
-      {/* Top Rider Header */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#EEE7DC] px-4 py-3 shadow-2xs">
-        <div className="max-w-md mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className="w-9 h-9 rounded-full bg-[#38754A] text-white font-bold flex items-center justify-center text-sm shadow-xs">
+      {/* Top Rider Header (Optimized for Mobile with Zero Overlap) */}
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#EEE7DC] px-3 sm:px-4 py-2.5 shadow-2xs">
+        <div className="max-w-md mx-auto flex items-center justify-between gap-2">
+          {/* Left Brand & Profile Info */}
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <span className="w-8 h-8 rounded-full bg-[#38754A] text-white font-bold flex items-center justify-center text-xs shadow-xs shrink-0">
               JR
             </span>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h1 className="font-headline font-bold text-base text-[#292D26] leading-tight">Janki Rasoi Rider</h1>
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#EAF4ED] text-[#38754A] border border-[#38754A]/30">
-                  PARTNER PWA
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h1 className="font-headline font-bold text-xs sm:text-sm text-[#292D26] leading-tight truncate">
+                  Rider Portal
+                </h1>
+                <span className="hidden sm:inline-block px-1.5 py-0.2 rounded text-[9px] font-bold bg-[#EAF4ED] text-[#38754A] border border-[#38754A]/30 shrink-0">
+                  PARTNER
                 </span>
               </div>
-              <p className="text-[11px] text-[#77786F]">
+              <p className="text-[10px] text-[#77786F] truncate">
                 {riderUser
                   ? `${riderUser.name} • ${riderUser.riderProfile?.vehicleNumber || 'DL-01-AB-1234'}`
-                  : 'Delivery Partner Portal'}
+                  : 'Delivery Partner'}
               </p>
             </div>
           </div>
 
+          {/* Right Action Controls */}
           {riderUser ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
               {/* Rider GPS toggle button */}
               <button
                 type="button"
                 onClick={() => requestRiderGps(true)}
                 disabled={isGpsLocating}
                 title={riderGps ? 'GPS Active • Distances Calibrated' : 'Calibrate GPS Location'}
-                className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors shadow-2xs ${
+                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border flex items-center justify-center transition-colors shadow-2xs shrink-0 ${
                   riderGps
                     ? 'bg-[#EAF4ED] text-[#38754A] border-[#38754A]/30'
                     : 'bg-white text-[#77786F] border-[#EEE7DC] hover:text-[#292D26]'
                 }`}
               >
-                <span className={`material-symbols-outlined text-[18px] ${isGpsLocating ? 'animate-spin' : ''}`}>
+                <span className={`material-symbols-outlined text-[16px] sm:text-[18px] ${isGpsLocating ? 'animate-spin' : ''}`}>
                   {isGpsLocating ? 'sync' : riderGps ? 'my_location' : 'location_searching'}
                 </span>
               </button>
 
-              {/* Duty Status Toggle */}
+              {/* Duty Status Toggle (Compact pill) */}
               <button
                 onClick={handleToggleDuty}
                 disabled={isTogglingDuty}
-                className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 transition-colors border shadow-2xs ${
+                title={isOnDuty ? 'Tap to go offline' : 'Tap to go on duty'}
+                className={`px-2 py-1 rounded-full text-[10px] sm:text-xs font-bold flex items-center gap-1 transition-colors border shadow-2xs shrink-0 ${
                   isOnDuty
                     ? 'bg-[#EAF4ED] text-[#38754A] border-[#38754A]/30'
                     : 'bg-rose-50 text-rose-700 border-rose-200'
                 } ${isTogglingDuty ? 'opacity-70 cursor-wait' : ''}`}
               >
-                <span className={`w-2 h-2 rounded-full ${isOnDuty ? 'bg-[#38754A] animate-pulse' : 'bg-rose-500'}`}></span>
-                {isTogglingDuty ? 'SYNCING...' : isOnDuty ? 'ON DUTY' : 'OFFLINE'}
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isOnDuty ? 'bg-[#38754A] animate-pulse' : 'bg-rose-500'}`}></span>
+                <span>{isTogglingDuty ? '...' : isOnDuty ? 'DUTY' : 'OFF'}</span>
               </button>
 
               {/* Quick Refresh */}
@@ -363,9 +377,10 @@ export default function RiderPage() {
                 onClick={() => loadDeliveries()}
                 disabled={isRefreshing}
                 aria-label="Refresh deliveries"
-                className="w-8 h-8 rounded-full bg-white border border-[#EEE7DC] flex items-center justify-center text-[#77786F] hover:text-[#292D26] shadow-2xs active:scale-95 transition-all"
+                title="Refresh deliveries"
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white border border-[#EEE7DC] flex items-center justify-center text-[#77786F] hover:text-[#292D26] shadow-2xs active:scale-95 transition-all shrink-0"
               >
-                <span className={`material-symbols-outlined text-[18px] ${isRefreshing ? 'animate-spin' : ''}`}>
+                <span className={`material-symbols-outlined text-[16px] sm:text-[18px] ${isRefreshing ? 'animate-spin' : ''}`}>
                   refresh
                 </span>
               </button>
@@ -374,17 +389,17 @@ export default function RiderPage() {
               <button
                 onClick={handleRiderLogout}
                 title="End Shift / Logout"
-                className="w-8 h-8 rounded-full bg-white border border-[#EEE7DC] hover:bg-rose-50 text-[#77786F] hover:text-rose-600 flex items-center justify-center transition-colors shadow-2xs"
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white border border-[#EEE7DC] hover:bg-rose-50 text-[#77786F] hover:text-rose-600 flex items-center justify-center transition-colors shadow-2xs shrink-0"
               >
-                <span className="material-symbols-outlined text-[18px]">logout</span>
+                <span className="material-symbols-outlined text-[16px] sm:text-[18px]">logout</span>
               </button>
             </div>
           ) : (
             <Link
               href="/"
-              className="text-xs text-[#38754A] hover:text-[#285C38] flex items-center gap-1 font-bold bg-[#EAF4ED] px-3 py-1.5 rounded-full border border-[#38754A]/20 transition-colors shadow-2xs"
+              className="text-xs text-[#38754A] hover:text-[#285C38] flex items-center gap-1 font-bold bg-[#EAF4ED] px-2.5 py-1 rounded-full border border-[#38754A]/20 transition-colors shadow-2xs shrink-0"
             >
-              <span>Storefront</span>
+              <span>Store</span>
               <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
             </Link>
           )}

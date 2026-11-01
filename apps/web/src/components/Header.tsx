@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { api, UserProfile } from '../lib/api';
 import CustomerAuthModal from './CustomerAuthModal';
 import { useCart } from '../context/CartContext';
@@ -11,6 +11,7 @@ import LocationMapModal, { LocationData } from './LocationMapModal';
 
 export default function Header() {
   const pathname = usePathname();
+  const router = useRouter();
   const { totalCount } = useCart();
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -98,20 +99,23 @@ export default function Header() {
     if (currentUser) {
       setIsDropdownOpen((prev) => !prev);
     } else {
-      setAuthModalTab('PROFILE');
-      setIsAuthOpen(true);
+      router.push('/login');
     }
   };
 
   const openProfileModal = (tab: 'PROFILE' | 'ORDERS' | 'EDIT') => {
     setIsDropdownOpen(false);
+    if (tab === 'ORDERS') {
+      router.push('/orders');
+      return;
+    }
     setAuthModalTab(tab);
     setIsAuthOpen(true);
   };
 
   const handleLogout = async () => {
     setIsDropdownOpen(false);
-    await api.logout();
+    await api.logout('CUSTOMER');
     setCurrentUser(null);
     window.dispatchEvent(new Event('storage'));
   };
@@ -264,9 +268,9 @@ export default function Header() {
 
                 {/* 3. Action Menu Items */}
                 <div className="p-2 flex flex-col gap-1 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => openProfileModal('ORDERS')}
+                  <Link
+                    href="/orders"
+                    onClick={() => setIsDropdownOpen(false)}
                     className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-stone-100/80 transition-colors text-stone-800 font-semibold text-left"
                   >
                     <span className="w-8 h-8 rounded-xl bg-emerald-50 text-primary flex items-center justify-center shrink-0">
@@ -277,7 +281,7 @@ export default function Header() {
                       <div className="text-[11px] text-stone-500 font-normal">Check status of today's tiffins</div>
                     </div>
                     <span className="material-symbols-outlined text-sm text-stone-400">chevron_right</span>
-                  </button>
+                  </Link>
 
                   {/* Saved Address & Profile Edit */}
                   <button

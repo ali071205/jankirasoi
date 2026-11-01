@@ -146,6 +146,12 @@ export class DeliveryOtpService {
         data: { status: 'DELIVERED' },
       });
 
+      // Mark assigned rider delivery completed
+      await tx.riderAssignment.updateMany({
+        where: { orderId, status: 'ASSIGNED' },
+        data: { status: 'COMPLETED' },
+      });
+
       await tx.orderStatusEvent.create({
         data: {
           orderId,
