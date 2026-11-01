@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { api, UserProfile } from '../lib/api';
-import CustomerAuthModal from './CustomerAuthModal';
 import { useCart } from '../context/CartContext';
 import DeliveryStatusPill from './DeliveryStatusPill';
 import LocationMapModal, { LocationData } from './LocationMapModal';
@@ -14,8 +13,6 @@ export default function Header() {
   const router = useRouter();
   const { totalCount } = useCart();
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [authModalTab, setAuthModalTab] = useState<'PROFILE' | 'ORDERS' | 'EDIT'>('PROFILE');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [locationName, setLocationName] = useState('Sagore, Pithampur');
@@ -94,24 +91,6 @@ export default function Header() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isDropdownOpen]);
-
-  const handleProfileClick = () => {
-    if (currentUser) {
-      setIsDropdownOpen((prev) => !prev);
-    } else {
-      router.push('/login');
-    }
-  };
-
-  const openProfileModal = (tab: 'PROFILE' | 'ORDERS' | 'EDIT') => {
-    setIsDropdownOpen(false);
-    if (tab === 'ORDERS') {
-      router.push('/orders');
-      return;
-    }
-    setAuthModalTab(tab);
-    setIsAuthOpen(true);
-  };
 
   const handleLogout = async () => {
     setIsDropdownOpen(false);
@@ -198,30 +177,37 @@ export default function Header() {
 
             {/* Profile Button & Dropdown Container */}
             <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={handleProfileClick}
-                aria-expanded={isDropdownOpen}
-                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors border border-surface-container-high/80"
-                title={currentUser ? currentUser.name : 'Login / Register'}
-              >
-                {currentUser ? (
+              {currentUser ? (
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen((prev) => !prev)}
+                  aria-expanded={isDropdownOpen}
+                  className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors border border-surface-container-high/80"
+                  title={currentUser.name}
+                >
                   <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-xs shadow-xs">
                     {currentUser.name.charAt(0).toUpperCase()}
                   </div>
-                ) : (
+                </button>
+              ) : (
+                <Link
+                  href="/login"
+                  className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors border border-surface-container-high/80"
+                  title="Login / Register"
+                >
                   <span className="material-symbols-outlined text-[22px] text-on-surface-variant">
                     account_circle
                   </span>
-                )}
-              </button>
+                </Link>
+              )}
 
             {/* THEME-BASED PROFILE DROPDOWN */}
             {isDropdownOpen && currentUser && (
               <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-white rounded-3xl shadow-2xl border border-stone-200/90 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                 {/* 1. Header User Card (Tap to view profile details) */}
-                <button
-                  type="button"
-                  onClick={() => openProfileModal('PROFILE')}
+                <Link
+                  href="/login"
+                  onClick={() => setIsDropdownOpen(false)}
                   className="w-full text-left p-4 bg-gradient-to-r from-emerald-900 via-primary to-emerald-950 text-white flex items-center gap-3 hover:opacity-95 transition-opacity"
                 >
                   <div className="w-11 h-11 rounded-full bg-white/20 flex items-center justify-center font-bold text-lg border border-white/20 shrink-0">
@@ -230,16 +216,16 @@ export default function Header() {
                   <div className="min-w-0 flex-1">
                     <div className="font-bold text-sm truncate leading-tight flex items-center justify-between">
                       <span>{currentUser.name}</span>
-                      <span className="material-symbols-outlined text-sm text-emerald-300">edit</span>
+                      <span className="material-symbols-outlined text-sm text-emerald-300">manage_accounts</span>
                     </div>
                     <div className="text-xs text-emerald-200 font-mono mt-0.5">+91 {currentUser.phone}</div>
                     <div className="mt-1 flex items-center gap-1.5">
                       <span className="px-2 py-0.2 rounded-full bg-white/20 text-[10px] font-bold text-emerald-100">
-                        {currentUser.orderCount || 0} Tiffins Ordered
+                        Manage Account / Switch
                       </span>
                     </div>
                   </div>
-                </button>
+                </Link>
 
                 {/* 2. Ongoing / Recent Order Quick Card (if exists) */}
                 {latestOrder && (
@@ -284,9 +270,9 @@ export default function Header() {
                   </Link>
 
                   {/* Saved Address & Profile Edit */}
-                  <button
-                    type="button"
-                    onClick={() => openProfileModal('EDIT')}
+                  <Link
+                    href="/login"
+                    onClick={() => setIsDropdownOpen(false)}
                     className="w-full flex items-start gap-3 p-2.5 rounded-2xl hover:bg-stone-100/80 transition-colors text-stone-800 text-left"
                   >
                     <span className="w-8 h-8 rounded-xl bg-amber-50 text-amber-800 flex items-center justify-center shrink-0">
@@ -303,7 +289,7 @@ export default function Header() {
                           : 'Add your home or office address'}
                       </div>
                     </div>
-                  </button>
+                  </Link>
 
                   {/* WhatsApp Kitchen Support */}
                   <a
@@ -340,22 +326,6 @@ export default function Header() {
           </div>
         </div>
       </header>
-
-      {/* Login & Profile Management Modal */}
-      <CustomerAuthModal
-        isOpen={isAuthOpen}
-        initialTab={authModalTab}
-        onClose={() => {
-          setIsAuthOpen(false);
-          api.getCurrentUser().then((user) => {
-            if (user && user.role === 'CUSTOMER') setCurrentUser(user);
-          });
-        }}
-        onLoginSuccess={(user) => {
-          setCurrentUser(user);
-          setIsAuthOpen(false);
-        }}
-      />
 
       {/* Delivery Location Selector Modal */}
       <LocationMapModal

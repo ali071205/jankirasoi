@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, DeliverySlot, QuoteResponse, DEFAULT_FOOD_IMAGE, UserProfile } from '../../lib/api';
 import { useCart } from '../../context/CartContext';
-import CustomerAuthModal from '../../components/CustomerAuthModal';
 import LocationMapModal, { LocationData } from '../../components/LocationMapModal';
 
 export default function CartPage() {
@@ -29,10 +28,8 @@ export default function CartPage() {
 
   // Address & Customer form state
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isAddressConfirmModalOpen, setIsAddressConfirmModalOpen] = useState(false);
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
-  const [authModalTab, setAuthModalTab] = useState<'PROFILE' | 'ORDERS' | 'EDIT'>('PROFILE');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [flat, setFlat] = useState('');
@@ -303,9 +300,8 @@ export default function CartPage() {
         setIsMapModalOpen(true);
         showToast('Please select your delivery location on the map.', true);
       } else {
-        setAuthModalTab('PROFILE');
-        setIsAuthOpen(true);
-        showToast('Please provide your mobile number to proceed.', true);
+        router.push('/login?redirect=/cart');
+        showToast('Please sign in with your mobile number to proceed.', true);
       }
       return;
     }
@@ -607,14 +603,10 @@ export default function CartPage() {
               <span className="material-symbols-outlined text-[13px]">expand_more</span>
             </button>
 
-            {/* Profile / Account Button */}
+            {/* Profile / Account Link */}
             {currentUser ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthModalTab('PROFILE');
-                  setIsAuthOpen(true);
-                }}
+              <Link
+                href="/login?redirect=/cart"
                 className="flex items-center gap-1.5 py-1 px-2 rounded-full hover:bg-slate-100 border border-slate-200 transition-colors shrink-0"
                 title={`${currentUser.name} - View Profile & Orders`}
               >
@@ -624,19 +616,15 @@ export default function CartPage() {
                 <span className="text-xs font-bold text-slate-800 max-w-[70px] truncate hidden sm:inline">
                   {currentUser.name ? currentUser.name.split(' ')[0] : 'Profile'}
                 </span>
-              </button>
+              </Link>
             ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthModalTab('PROFILE');
-                  setIsAuthOpen(true);
-                }}
+              <Link
+                href="/login?redirect=/cart"
                 className="flex items-center gap-1 py-1.5 px-3 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-xs transition-colors shrink-0"
               >
                 <span className="material-symbols-outlined text-[16px]">account_circle</span>
                 <span>Login</span>
-              </button>
+              </Link>
             )}
           </div>
         </div>
@@ -1460,24 +1448,7 @@ export default function CartPage() {
         </div>
       )}
 
-      {/* Customer Auth Modal */}
-      <CustomerAuthModal
-        isOpen={isAuthOpen}
-        initialTab={authModalTab}
-        onClose={() => setIsAuthOpen(false)}
-        onLoginSuccess={(user: UserProfile) => {
-          setCurrentUser(user);
-          if (user.name) setCustomerName(user.name);
-          if (user.phone) setCustomerPhone(user.phone);
-          if (user.savedAddress) {
-            if (user.savedAddress.flat) setFlat(user.savedAddress.flat);
-            if (user.savedAddress.street) setStreet(user.savedAddress.street);
-            if (user.savedAddress.landmark) setLandmark(user.savedAddress.landmark);
-            if (user.savedAddress.pincode) setPincode(user.savedAddress.pincode);
-          }
-          showToast(`Welcome ${user.name || user.phone}!`);
-        }}
-      />
+
 
       {/* Location & Map Selector Modal */}
       <LocationMapModal
