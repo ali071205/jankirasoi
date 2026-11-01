@@ -101,4 +101,88 @@ test.describe('Operations Console & Kitchen KDS (Admin App)', () => {
 
     expect(pageErrors).toEqual([]);
   });
+
+  test('Rider assignment lifecycle displays Assigning and Assigned states instead of OTP', async ({ page }) => {
+    // Intercept admin orders API to verify the exact UI rendering of the assignment lifecycle
+    await page.route('**/api/v1/admin/orders*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          orders: [
+            {
+              id: 'ord-unassigned-1',
+              orderNumber: 'JR-1001',
+              status: 'READY_FOR_PICKUP',
+              customerName: 'Aarav Patel',
+              customerPhone: '9876500001',
+              deliveryAddress: 'Flat 101, Galaxy Heights, Sagore',
+              slotLabel: 'Tonight Dinner (07:30 PM - 09:30 PM)',
+              totalAmountPaise: 12000,
+              paymentMethod: 'ONLINE',
+              paymentStatus: 'CAPTURED',
+              assignedRider: null,
+              itemsCount: 1,
+              items: [{ productId: 'p1', productName: 'Deluxe Thali', quantity: 1, unitPricePaise: 12000, totalPricePaise: 12000 }],
+              createdAt: new Date().toISOString(),
+            },
+            {
+              id: 'ord-assigning-2',
+              orderNumber: 'JR-1002',
+              status: 'READY_FOR_PICKUP',
+              customerName: 'Pooja Verma',
+              customerPhone: '9876500002',
+              deliveryAddress: 'House 22, Sector 3, Sagore',
+              slotLabel: 'Tonight Dinner (07:30 PM - 09:30 PM)',
+              totalAmountPaise: 15000,
+              paymentMethod: 'COD',
+              paymentStatus: 'PENDING',
+              assignedRider: {
+                id: 'rider-1',
+                name: 'Delivery Rider',
+                phone: '9876543210',
+                assignmentStatus: 'ASSIGNED',
+              },
+              itemsCount: 1,
+              items: [{ productId: 'p2', productName: 'Special Thali', quantity: 1, unitPricePaise: 15000, totalPricePaise: 15000 }],
+              createdAt: new Date().toISOString(),
+            },
+            {
+              id: 'ord-accepted-3',
+              orderNumber: 'JR-1003',
+              status: 'OUT_FOR_DELIVERY',
+              customerName: 'Sanjay Gupta',
+              customerPhone: '9876500003',
+              deliveryAddress: 'Shop 5, Main Bazar, Sagore',
+              slotLabel: 'Tonight Dinner (07:30 PM - 09:30 PM)',
+              totalAmountPaise: 18000,
+              paymentMethod: 'ONLINE',
+              paymentStatus: 'CAPTURED',
+              assignedRider: {
+                id: 'rider-1',
+                name: 'Delivery Rider',
+                phone: '9876543210',
+                assignmentStatus: 'ACCEPTED',
+              },
+              itemsCount: 1,
+              items: [{ productId: 'p1', productName: 'Deluxe Thali', quantity: 1, unitPricePaise: 18000, totalPricePaise: 18000 }],
+              createdAt: new Date().toISOString(),
+            },
+          ],
+          meta: { total: 3, page: 1, limit: 25, totalPages: 1 },
+        }),
+      });
+    });
+
+    await page.goto(ADMIN_BASE, { waitUntil: 'domcontentloaded' });
+
+    // 1. Unassigned ready order should show "Assign"
+    await expect(page.locator('button').filter({ hasText: /Assign/i }).first()).toBeVisible({ timeout: 15000 });
+
+    // 2. Dispatched but not yet accepted order should show "Assigning"
+    await expect(page.locator('button').filter({ hasText: /Assigning/i }).first()).toBeVisible({ timeout: 10000 });
+
+    // 3. Accepted order in transit should show "Assigned" instead of bare "OTP"
+    await expect(page.locator('button').filter({ hasText: /Assigned/i }).first()).toBeVisible({ timeout: 10000 });
+  });
 });
