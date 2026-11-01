@@ -1053,28 +1053,39 @@ export default function CartPage() {
             </div>
 
             {/* Desktop Pay Button & Payment Method Selector */}
-            <div className="hidden lg:flex flex-col gap-3 pt-3 mt-1 border-t border-slate-100">
+            <div className="hidden lg:flex flex-col gap-3 pt-3 mt-1 border-t border-[#EEE7DC]">
               <div
                 onClick={() => setIsPaymentModalOpen(true)}
-                className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 cursor-pointer transition-colors"
+                className="group flex items-center justify-between p-3 rounded-2xl bg-[#FFF9F0] hover:bg-[#F7F2E8] border border-[#EEE7DC] hover:border-[#38754A]/40 cursor-pointer transition-all shadow-xs"
               >
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[18px] text-slate-700">account_balance_wallet</span>
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold shrink-0 border ${
+                    paymentMethod === 'COD'
+                      ? 'bg-[#FFF1DC] text-[#8C550A] border-[#FFE2B8]'
+                      : 'bg-[#EAF4ED] text-[#38754A] border-[#CBE8D3]'
+                  }`}>
+                    <span className="material-symbols-outlined text-[20px]">
+                      {paymentMethod === 'COD' ? 'payments' : 'qr_code_2'}
+                    </span>
+                  </div>
                   <div>
-                    <p className="text-[10px] uppercase font-bold text-slate-500">Payment Method</p>
-                    <p className="text-xs font-extrabold text-slate-900">
-                      {paymentMethod === 'COD' ? 'Pay on Delivery (Cash/UPI)' : 'Online UPI / Cards'}
+                    <p className="text-[10px] uppercase font-extrabold tracking-wider text-[#77786F]">Payment Method</p>
+                    <p className="text-xs font-extrabold text-[#292D26]">
+                      {paymentMethod === 'COD' ? 'Cash / UPI on Delivery' : 'Online UPI / Cards'}
                     </p>
                   </div>
                 </div>
-                <span className="text-[11px] font-bold text-emerald-700">Change</span>
+                <div className="flex items-center gap-0.5 text-xs font-bold text-[#38754A] group-hover:text-[#285C38] px-2.5 py-1 rounded-lg bg-white/80 border border-[#EEE7DC] group-hover:border-[#38754A]/30 transition-all">
+                  <span>Change</span>
+                  <span className="material-symbols-outlined text-[15px]">expand_more</span>
+                </div>
               </div>
 
               <button
                 type="button"
                 onClick={handlePlaceOrder}
                 disabled={placingOrder || quoteLoading || pinStatusMsg?.isError}
-                className="w-full bg-[#008848] hover:bg-[#00703c] active:scale-98 text-white font-extrabold text-base py-3.5 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full bg-[#38754A] hover:bg-[#285C38] active:scale-[0.98] text-white font-extrabold text-base py-3.5 px-4 rounded-xl shadow-md shadow-[#38754A]/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <span>
                   {placingOrder
@@ -1083,6 +1094,9 @@ export default function CartPage() {
                     ? 'Delivery Unavailable'
                     : `Place Order • ₹${(finalTotalPaise / 100).toFixed(0)}`}
                 </span>
+                {!placingOrder && !pinStatusMsg?.isError && (
+                  <span className="material-symbols-outlined text-[18px]">lock</span>
+                )}
                 {placingOrder && (
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0 inline-block" />
                 )}
@@ -1093,41 +1107,62 @@ export default function CartPage() {
       </div>
 
       {/* 10. Sticky Bottom Payment Bar (Mobile & Tablet Portrait Only) */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 px-4 py-2.5 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#EEE7DC] px-4 py-2.5 shadow-[0_-4px_20px_rgba(41,45,38,0.08)]">
         <div className="max-w-xl mx-auto flex items-center justify-between gap-3">
-          {/* Left: Payment Method Info */}
+          {/* Left: Payment Method Tap Target */}
           <div
             onClick={() => setIsPaymentModalOpen(true)}
-            className="flex flex-col cursor-pointer select-none min-w-0 hover:opacity-85 transition-opacity"
-            title="Click to change payment method"
+            className="group flex items-center gap-2.5 p-1.5 -ml-1 rounded-2xl hover:bg-[#F7F2E8] active:bg-[#EEE7DC]/50 cursor-pointer select-none min-w-0 transition-colors"
+            title="Tap to change payment method"
           >
-            <div className="flex items-center gap-1 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
-              <span className="material-symbols-outlined text-[13px] text-slate-600">account_balance_wallet</span>
-              <span>PAY USING</span>
-              <span className="text-[10px] text-emerald-700 font-bold">▲ CHANGE</span>
+            {/* Method Icon Badge */}
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold shrink-0 border shadow-xs ${
+              paymentMethod === 'COD'
+                ? 'bg-[#FFF1DC] text-[#8C550A] border-[#FFE2B8]'
+                : 'bg-[#EAF4ED] text-[#38754A] border-[#CBE8D3]'
+            }`}>
+              <span className="material-symbols-outlined text-[20px]">
+                {paymentMethod === 'COD' ? 'payments' : 'qr_code_2'}
+              </span>
             </div>
-            <div className="flex items-center gap-1.5 font-extrabold text-xs sm:text-sm text-slate-900 truncate mt-0.5">
-              <span>{paymentMethod === 'COD' ? 'Pay on Delivery (Cash/UPI)' : 'Online UPI / Cards'}</span>
+
+            {/* Method Text Info */}
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-1.5 leading-none">
+                <span className="text-[9.5px] font-extrabold text-[#77786F] uppercase tracking-wider">
+                  PAY USING
+                </span>
+                <span className="inline-flex items-center text-[10px] font-bold text-[#38754A] group-hover:text-[#285C38]">
+                  <span>Change</span>
+                  <span className="material-symbols-outlined text-[13px] leading-none">expand_more</span>
+                </span>
+              </div>
+              <div className="flex items-center gap-1 font-extrabold text-xs text-[#292D26] truncate mt-0.5">
+                <span>{paymentMethod === 'COD' ? 'Cash on Delivery' : 'Online UPI / Cards'}</span>
+              </div>
+              <span className="text-[10px] text-[#77786F] truncate leading-tight mt-0.5">
+                {paymentMethod === 'COD' ? 'Pay cash or scan QR on arrival' : 'PhonePe, GPay, Paytm, Cards'}
+              </span>
             </div>
-            <span className="text-[10px] text-slate-500 truncate leading-none mt-0.5">
-              {paymentMethod === 'COD' ? 'Cash or scan rider QR code' : 'Instant PhonePe, GPay, Paytm'}
-            </span>
           </div>
 
-          {/* Right: Big Green Pay Button */}
+          {/* Right: Premium Pay Button */}
           <button
             type="button"
             onClick={handlePlaceOrder}
             disabled={placingOrder || quoteLoading || pinStatusMsg?.isError}
-            className="bg-[#008848] hover:bg-[#00703c] active:scale-98 text-white font-extrabold text-sm sm:text-base px-6 sm:px-8 py-3 rounded-xl shadow-md transition-all flex items-center gap-2 shrink-0 disabled:opacity-50"
+            className="bg-[#38754A] hover:bg-[#285C38] active:scale-[0.98] text-white font-extrabold text-sm sm:text-base px-6 sm:px-7 py-3 rounded-xl shadow-md shadow-[#38754A]/25 transition-all flex items-center gap-1.5 shrink-0 disabled:opacity-50"
           >
             <span>
               {placingOrder
                 ? 'Processing...'
                 : pinStatusMsg?.isError
-                ? 'Delivery Unavailable'
+                ? 'Unavailable'
                 : `Pay ₹${(finalTotalPaise / 100).toFixed(0)}`}
             </span>
+            {!placingOrder && !pinStatusMsg?.isError && (
+              <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+            )}
             {placingOrder && (
               <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0 inline-block" />
             )}
@@ -1329,28 +1364,28 @@ export default function CartPage() {
                 }}
                 className={`p-3.5 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all ${
                   paymentMethod === 'RAZORPAY'
-                    ? 'border-[#008848] bg-emerald-50/60 shadow-xs'
-                    : 'border-slate-200 hover:border-slate-300 bg-white'
+                    ? 'border-[#38754A] bg-[#EAF4ED]/40 shadow-xs'
+                    : 'border-[#EEE7DC] hover:border-slate-300 bg-white'
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-lg shrink-0 border border-purple-200">
-                    <span className="material-symbols-outlined text-[22px]">contactless</span>
+                  <div className="w-10 h-10 rounded-xl bg-[#EAF4ED] text-[#38754A] flex items-center justify-center font-bold text-lg shrink-0 border border-[#CBE8D3]">
+                    <span className="material-symbols-outlined text-[22px]">qr_code_2</span>
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-sm text-slate-900">Online UPI / Cards</span>
-                      <span className="px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-700 font-extrabold text-[10px]">
+                      <span className="font-extrabold text-sm text-[#292D26]">Online UPI / Cards</span>
+                      <span className="px-2 py-0.5 rounded-full bg-[#EAF4ED] text-[#285C38] border border-[#CBE8D3] font-extrabold text-[10px]">
                         RECOMMENDED
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-xs text-[#77786F] mt-0.5">
                       PhonePe, Google Pay, Paytm, UPI, Cards, Netbanking
                     </p>
                   </div>
                 </div>
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ml-2 ${
-                  paymentMethod === 'RAZORPAY' ? 'border-[#008848] bg-[#008848]' : 'border-slate-300'
+                  paymentMethod === 'RAZORPAY' ? 'border-[#38754A] bg-[#38754A]' : 'border-slate-300'
                 }`}>
                   {paymentMethod === 'RAZORPAY' && <span className="w-2 h-2 rounded-full bg-white"></span>}
                 </div>
@@ -1364,25 +1399,25 @@ export default function CartPage() {
                 }}
                 className={`p-3.5 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all ${
                   paymentMethod === 'COD'
-                    ? 'border-[#008848] bg-emerald-50/60 shadow-xs'
-                    : 'border-slate-200 hover:border-slate-300 bg-white'
+                    ? 'border-[#38754A] bg-[#EAF4ED]/40 shadow-xs'
+                    : 'border-[#EEE7DC] hover:border-slate-300 bg-white'
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-lg shrink-0 border border-amber-200">
+                  <div className="w-10 h-10 rounded-xl bg-[#FFF1DC] text-[#8C550A] flex items-center justify-center font-bold text-lg shrink-0 border border-[#FFE2B8]">
                     <span className="material-symbols-outlined text-[22px]">payments</span>
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-sm text-slate-900">Cash / UPI on Delivery</span>
+                      <span className="font-extrabold text-sm text-[#292D26]">Cash / UPI on Delivery</span>
                     </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-xs text-[#77786F] mt-0.5">
                       Pay cash or scan rider's QR code when order arrives
                     </p>
                   </div>
                 </div>
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ml-2 ${
-                  paymentMethod === 'COD' ? 'border-[#008848] bg-[#008848]' : 'border-slate-300'
+                  paymentMethod === 'COD' ? 'border-[#38754A] bg-[#38754A]' : 'border-slate-300'
                 }`}>
                   {paymentMethod === 'COD' && <span className="w-2 h-2 rounded-full bg-white"></span>}
                 </div>
@@ -1391,13 +1426,13 @@ export default function CartPage() {
 
             <div className="p-4 pt-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
               <span className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-[16px] text-emerald-700">verified_user</span>
+                <span className="material-symbols-outlined text-[16px] text-[#38754A]">verified_user</span>
                 <span>Bank-grade 256-bit encryption</span>
               </span>
               <button
                 type="button"
                 onClick={() => setIsPaymentModalOpen(false)}
-                className="font-bold text-[#008848] hover:underline"
+                className="font-bold text-[#38754A] hover:underline"
               >
                 Confirm
               </button>
