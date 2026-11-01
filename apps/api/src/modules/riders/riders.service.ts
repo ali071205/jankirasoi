@@ -42,34 +42,12 @@ export class RidersService {
       return { deliveries: [] };
     }
 
-    // Auto-assign any active unassigned orders to available rider so riders can immediately deliver
-    if (riderProfileId) {
-      const unassignedOrders = await this.prisma.order.findMany({
-        where: {
-          status: { in: ['READY_FOR_PICKUP'] },
-          riderAssignments: {
-            none: { status: 'ASSIGNED' },
-          },
-        },
-        take: 10,
-      });
-
-      for (const unassigned of unassignedOrders) {
-        await this.prisma.riderAssignment.create({
-          data: {
-            orderId: unassigned.id,
-            riderId: riderProfileId,
-            status: 'ASSIGNED',
-          },
-        }).catch(() => {});
-      }
-    }
-
     const assignments = await this.prisma.riderAssignment.findMany({
       where: {
         ...(riderProfileId ? { riderId: riderProfileId } : {}),
         OR: [
           { status: 'ASSIGNED' },
+          { status: 'ACCEPTED' },
           { status: 'COMPLETED' },
           { order: { status: 'DELIVERED' } },
         ],
@@ -88,16 +66,16 @@ export class RidersService {
 
     // Deduplicate orders by ID to prevent duplicate deliveries from reassigned/multi-attempt records
     const seenOrderIds = new Set<string>();
-    const ordersToDisplay: (typeof assignments)[0]['order'][] = [];
+    const ordersToDisplay: { order: (typeof assignments)[0]['order']; assignmentStatus: string }[] = [];
     for (const a of assignments) {
       if (a.order && !seenOrderIds.has(a.order.id)) {
         seenOrderIds.add(a.order.id);
-        ordersToDisplay.push(a.order);
+        ordersToDisplay.push({ order: a.order, assignmentStatus: a.status });
       }
     }
 
     return {
-      deliveries: ordersToDisplay.map((o) => {
+      deliveries: ordersToDisplay.map(({ order: o, assignmentStatus }) => {
         const addr = (o.deliveryAddress as any) || {};
         const rawLat = Number(addr.latitude);
         const rawLng = Number(addr.longitude);
@@ -130,6 +108,7 @@ export class RidersService {
           orderId: o.id,
           orderNumber: o.orderNumber,
           status: o.status,
+          assignmentStatus,
           customerName: o.customerName,
           customerPhone: o.customerPhone,
           deliveryAddress: `${addr.flat || ''}, ${addr.street || ''}, ${addr.pincode || ''}`.replace(/^,\s*|,\s*$/g, ''),
@@ -142,6 +121,50 @@ export class RidersService {
           itemsSummary: o.items.map((i) => `${i.quantity}x ${i.productName}`).join(', '),
         };
       }),
+    };
+  }
+
+  async acceptDelivery(orderId: string, riderUserId?: string) {
+    let riderProfileId: string | undefined = undefined;
+    if (riderUserId) {
+      const profile = await this.prisma.riderProfile.findFirst({
+        where: { OR: [{ id: riderUserId }, { userId: riderUserId }] },
+      });
+      if (profile) riderProfileId = profile.id;
+    }
+
+    const assignment = await this.prisma.riderAssignment.findFirst({
+      where: {
+        orderId,
+        ...(riderProfileId ? { riderId: riderProfileId } : {}),
+        status: 'ASSIGNED',
+      },
+      orderBy: { assignedAt: 'desc' },
+    });
+
+    if (!assignment) {
+      const existing = await this.prisma.riderAssignment.findFirst({
+        where: {
+          orderId,
+          ...(riderProfileId ? { riderId: riderProfileId } : {}),
+          status: 'ACCEPTED',
+        },
+      });
+      if (existing) {
+        return { success: true, assignment: existing, message: 'Delivery already accepted' };
+      }
+      throw new NotFoundException('Pending delivery assignment not found');
+    }
+
+    const updated = await this.prisma.riderAssignment.update({
+      where: { id: assignment.id },
+      data: { status: 'ACCEPTED' },
+    });
+
+    return {
+      success: true,
+      assignment: updated,
+      message: 'Delivery assignment accepted successfully',
     };
   }
 
@@ -163,6 +186,12 @@ export class RidersService {
       await tx.order.update({
         where: { id: orderId },
         data: { status: 'OUT_FOR_DELIVERY' },
+      });
+
+      // Ensure assignment moves to ACCEPTED if it was still pending in ASSIGNED
+      await tx.riderAssignment.updateMany({
+        where: { orderId, status: 'ASSIGNED' },
+        data: { status: 'ACCEPTED' },
       });
 
       // Record status event atomically with the update

@@ -56,7 +56,9 @@ export class OrdersService {
       include: {
         deliverySlot: true,
         riderAssignments: {
-          where: { status: 'ASSIGNED' },
+          where: { status: { in: ['ASSIGNED', 'ACCEPTED'] } },
+          orderBy: { assignedAt: 'desc' },
+          take: 1,
           include: {
             rider: {
               include: { user: { select: { id: true, name: true, phone: true } } },
@@ -207,7 +209,9 @@ export class OrdersService {
         include: {
           deliverySlot: true,
           riderAssignments: {
-            where: { status: 'ASSIGNED' },
+            where: { status: { in: ['ASSIGNED', 'ACCEPTED'] } },
+            orderBy: { assignedAt: 'desc' },
+            take: 1,
             include: {
               rider: {
                 include: { user: { select: { id: true, name: true, phone: true } } },
@@ -242,6 +246,7 @@ export class OrdersService {
               id: o.riderAssignments[0].rider.id,
               name: o.riderAssignments[0].rider.user.name,
               phone: o.riderAssignments[0].rider.user.phone,
+              assignmentStatus: o.riderAssignments[0].status,
             }
           : null,
         itemsCount: o.items.reduce((sum, it) => sum + it.quantity, 0),
@@ -373,7 +378,7 @@ export class OrdersService {
 
       // 2. Mark previous assignments cancelled
       await tx.riderAssignment.updateMany({
-        where: { orderId, status: 'ASSIGNED' },
+        where: { orderId, status: { in: ['ASSIGNED', 'ACCEPTED'] } },
         data: { status: 'CANCELLED' },
       });
 
@@ -472,7 +477,7 @@ export class OrdersService {
       });
 
       await tx.riderAssignment.updateMany({
-        where: { orderId, status: 'ASSIGNED' },
+        where: { orderId, status: { in: ['ASSIGNED', 'ACCEPTED'] } },
         data: { status: 'COMPLETED' },
       });
 

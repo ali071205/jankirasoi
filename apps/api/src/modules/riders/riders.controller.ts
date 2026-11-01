@@ -34,6 +34,13 @@ export class RidersController {
     return this.ridersService.getAssignedDeliveries(riderUserId);
   }
 
+  @Patch(':id/accept')
+  @ApiOperation({ summary: 'Rider accepts assigned delivery batch' })
+  async acceptDelivery(@Param('id') orderId: string, @Req() req: Request) {
+    const riderUserId = (req as any).user?.id;
+    return this.ridersService.acceptDelivery(orderId, riderUserId);
+  }
+
   @Patch(':id/out-for-delivery')
   @ApiOperation({ summary: 'Mark order out for delivery and dispatch customer SMS OTP' })
   async markOutForDelivery(@Param('id') orderId: string, @Req() req: Request) {

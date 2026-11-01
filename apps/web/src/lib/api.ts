@@ -243,6 +243,7 @@ export interface RiderDelivery {
   orderId: string;
   orderNumber: string;
   status: string;
+  assignmentStatus?: 'ASSIGNED' | 'ACCEPTED' | 'COMPLETED' | 'CANCELLED';
   customerName: string;
   customerPhone: string;
   deliveryAddress: string;
@@ -619,6 +620,25 @@ export const api = {
     }
     const data = await res.json();
     return { deliveries: Array.isArray(data?.deliveries) ? data.deliveries : (Array.isArray(data) ? data : []) };
+  },
+
+  // 10b. Rider Accept Delivery Assignment
+  async acceptRiderDelivery(orderId: string) {
+    const base = getApiBase();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
+    const res = await fetch(`${base}/rider/deliveries/${encodeURIComponent(orderId)}/accept`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to accept delivery assignment');
+    }
+    return res.json();
   },
 
   // 11. Rider Mark Out for Delivery (generates customer PIN)

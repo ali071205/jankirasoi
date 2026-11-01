@@ -265,6 +265,25 @@ export default function RiderPage() {
     }
   }, [loadDeliveries, riderUser]);
 
+  // Handle Accept Assigned Delivery
+  const handleAcceptTrip = async (orderId: string) => {
+    setActionLoadingId(orderId);
+    try {
+      await api.acceptRiderDelivery(orderId);
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate([80]);
+      }
+      setDeliveries((prev) =>
+        prev.map((d) => (d.orderId === orderId ? { ...d, assignmentStatus: 'ACCEPTED' } : d))
+      );
+      await loadDeliveries(true);
+    } catch (err: any) {
+      alert(err.message || 'Failed to accept delivery assignment.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   // Handle Mark Out For Delivery
   const handleStartTrip = async (orderId: string) => {
     setActionLoadingId(orderId);
@@ -625,6 +644,7 @@ export default function RiderPage() {
                 const isOutOfDelivery = del.status === 'OUT_FOR_DELIVERY';
                 const isReady = del.status === 'READY_FOR_PICKUP';
                 const isDelivered = del.status === 'DELIVERED';
+                const isPendingAcceptance = del.assignmentStatus === 'ASSIGNED' && !isOutOfDelivery && !isDelivered;
 
                 return (
                   <div
@@ -645,6 +665,8 @@ export default function RiderPage() {
                             ? 'bg-[#EAF4ED] text-[#38754A] border border-[#38754A]/30'
                             : isOutOfDelivery
                             ? 'bg-[#FFF1DC] text-[#E99A32] border border-[#E99A32]/40 animate-pulse'
+                            : isPendingAcceptance
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
                             : 'bg-blue-50 text-blue-700 border border-blue-200'
                         }`}
                       >
@@ -652,6 +674,8 @@ export default function RiderPage() {
                           ? 'DELIVERED'
                           : isOutOfDelivery
                           ? 'ON THE WAY'
+                          : isPendingAcceptance
+                          ? 'DISPATCH PENDING'
                           : 'READY AT KITCHEN'}
                       </span>
                     </div>
@@ -752,7 +776,22 @@ export default function RiderPage() {
                         </button>
 
                         {/* Step Transitions */}
-                        {isReady ? (
+                        {isPendingAcceptance ? (
+                          <button
+                            onClick={() => handleAcceptTrip(del.orderId)}
+                            disabled={actionLoadingId === del.orderId}
+                            className="h-11 rounded-xl bg-[#38754A] hover:bg-[#285C38] font-bold text-xs flex items-center justify-center gap-1.5 text-white active:scale-95 transition-transform shadow-xs"
+                          >
+                            {actionLoadingId === del.orderId ? (
+                              <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+                            ) : (
+                              <>
+                                <span className="material-symbols-outlined text-[18px]">thumb_up</span>
+                                <span>Accept Delivery</span>
+                              </>
+                            )}
+                          </button>
+                        ) : isReady ? (
                           <button
                             onClick={() => handleStartTrip(del.orderId)}
                             disabled={actionLoadingId === del.orderId}
