@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCart } from '../context/CartContext';
 import { api, TrackOrderResponse } from '../lib/api';
+import { getActiveTrackingIdentifier } from '../lib/orderStorage';
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -23,7 +24,7 @@ export default function BottomNav() {
     async function checkActiveOrder() {
       if (typeof window === 'undefined') return;
       try {
-        const lastToken = window.localStorage.getItem('jr_last_tracking_token');
+        const lastToken = getActiveTrackingIdentifier();
         if (!lastToken) {
           if (isMounted) setActiveOrder(null);
           return;

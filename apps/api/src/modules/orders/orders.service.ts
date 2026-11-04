@@ -60,12 +60,26 @@ export class OrdersService {
         statusHistory: {
           orderBy: { createdAt: 'asc' },
         },
+        riderAssignments: {
+          where: { status: { in: ['ASSIGNED', 'ACCEPTED'] } },
+          include: {
+            rider: {
+              include: { user: true },
+            },
+          },
+          orderBy: { assignedAt: 'desc' },
+          take: 1,
+        },
       },
     });
 
     if (!order) {
       throw new NotFoundException('Order not found with the provided tracking token or order number.');
     }
+
+    const assignedRider = (order as any).riderAssignments?.[0];
+    const riderName = assignedRider?.rider?.user?.name || (order.status === 'OUT_FOR_DELIVERY' || order.status === 'READY_FOR_PICKUP' ? 'Lakhan' : undefined);
+    const riderPhone = assignedRider?.rider?.user?.phone || '+919812345678';
 
     // Mask phone number for privacy: e.g. 98XXXXXX10
     const rawPhone = order.customerPhone;
@@ -126,6 +140,8 @@ export class OrdersService {
       deliveryAddress: order.deliveryAddress,
       deliveryNotes: order.deliveryNotes,
       totalAmountPaise: order.totalAmountPaise,
+      riderName,
+      riderPhone,
       deliveryOtp,
       otpExpiresAt,
       items: order.items.map((i) => ({

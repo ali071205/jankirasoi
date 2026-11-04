@@ -159,6 +159,7 @@ export interface TrackOrderResponse {
   riderName?: string;
   riderPhone?: string;
   customerName?: string;
+  maskedPhone?: string;
   deliveryAddress?: {
     flat?: string;
     street?: string;
@@ -520,24 +521,62 @@ export const api = {
     }
 
     // Client-side fallback for Sagore kitchen (5km Free Delivery, max 15km boundary)
-    if (cleanPin === '454774') {
-      const sagoreData: PincodeCheckResponse = {
+    // 1. If coordinates are provided, compute real distance
+    if (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)) {
+      const R = 6371;
+      const dLat = ((lat - 22.6288) * Math.PI) / 180;
+      const dLon = ((lng - 75.5684) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((22.6288 * Math.PI) / 180) * Math.cos((lat * Math.PI) / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distKm = Math.round(R * c * 10) / 10;
+
+      if (distKm <= 5.0) {
+        return setCached(cacheKey, {
+          serviceable: true,
+          pincode: cleanPin || '454774',
+          city: 'Sagore, Pithampur',
+          zoneName: `Sagore Local (${distKm} km)`,
+          distanceKm: distKm,
+          deliveryFeePaise: 0,
+          isFreeDelivery: true,
+          message: `✓ Delivering within 5 km (${distKm} km) • Free Delivery`,
+        }, 300000);
+      } else if (distKm <= 15.0) {
+        return setCached(cacheKey, {
+          serviceable: true,
+          pincode: cleanPin || '454775',
+          city: 'Pithampur Outer, Dhar',
+          zoneName: `Pithampur Outer (${distKm} km)`,
+          distanceKm: distKm,
+          deliveryFeePaise: 3500,
+          isFreeDelivery: false,
+          message: `✓ Serviceable (${distKm} km) • Delivery Fee ₹35`,
+        }, 300000);
+      }
+    }
+
+    // 2. Local Pincode heuristics for Sagore / Pithampur / Dhar / Mhow
+    if (cleanPin === '454774' || cleanPin.startsWith('454') || cleanPin.startsWith('453') || !cleanPin) {
+      const isCore = cleanPin === '454774' || !cleanPin;
+      return setCached(cacheKey, {
         serviceable: true,
-        pincode: '454774',
+        pincode: cleanPin || '454774',
         city: 'Sagore, Pithampur',
         district: 'Dhar',
         state: 'Madhya Pradesh',
-        zoneName: 'Sagore Central Zone (Within 5 km)',
-        distanceKm: 2.0,
+        zoneName: isCore ? 'Sagore Central Zone (Within 5 km)' : 'Pithampur Zone',
+        distanceKm: isCore ? 2.0 : 4.5,
         deliveryFeePaise: 0,
         isFreeDelivery: true,
         message: '✓ Delivering to Sagore • Free Delivery (Within 5 km)',
-      };
-      return setCached(cacheKey, sagoreData, 300000);
+      }, 300000);
     }
 
     if (cleanPin === '454775') {
-      const outerData: PincodeCheckResponse = {
+      return setCached(cacheKey, {
         serviceable: true,
         pincode: '454775',
         city: 'Pithampur Outer, Dhar',
@@ -547,9 +586,8 @@ export const api = {
         distanceKm: 7.5,
         deliveryFeePaise: 3500,
         isFreeDelivery: false,
-        message: '✓ Serviceable: Pithampur Outer (~7.5 km) • Delivery Fee ₹35 (Beyond 5 km free zone)',
-      };
-      return setCached(cacheKey, outerData, 300000);
+        message: '✓ Serviceable: Pithampur Outer (~7.5 km) • Delivery Fee ₹35',
+      }, 300000);
     }
 
     const unserviceableData: PincodeCheckResponse = {

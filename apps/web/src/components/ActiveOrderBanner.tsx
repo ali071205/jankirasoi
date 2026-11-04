@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { api, TrackOrderResponse, DEFAULT_FOOD_IMAGE } from '../lib/api';
+import { api, TrackOrderResponse } from '../lib/api';
+import { getActiveTrackingIdentifier } from '../lib/orderStorage';
+import LakhanAvatar from './LakhanAvatar';
 
 interface ActiveOrderBannerProps {
   className?: string;
@@ -10,154 +12,163 @@ interface ActiveOrderBannerProps {
 
 export default function ActiveOrderBanner({ className = '' }: ActiveOrderBannerProps) {
   const [order, setOrder] = useState<TrackOrderResponse | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [trackingId, setTrackingId] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState(false);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function fetchOrder() {
-      if (typeof window === 'undefined') return;
-      const lastToken = window.localStorage.getItem('jr_last_tracking_token');
-      if (!lastToken) {
-        if (isMounted) setOrder(null);
-        return;
-      }
-
-      try {
-        const data = await api.trackOrder(lastToken);
-        if (!isMounted) return;
-
-        // Only show if order is active (not delivered or cancelled)
-        if (data && data.status !== 'DELIVERED' && data.status !== 'CANCELLED') {
-          setOrder(data);
-          setToken(lastToken);
-        } else {
-          setOrder(null);
-        }
-      } catch {
-        if (isMounted) setOrder(null);
-      }
+  const syncOrder = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    const identifier = getActiveTrackingIdentifier();
+    if (!identifier) {
+      setOrder(null);
+      setTrackingId(null);
+      return;
     }
 
-    fetchOrder();
-    const interval = setInterval(fetchOrder, 10000);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
+    try {
+      const data = await api.trackOrder(identifier);
+      if (data && data.status !== 'DELIVERED' && data.status !== 'CANCELLED') {
+        setOrder(data);
+        setTrackingId(identifier);
+      } else {
+        setOrder(null);
+      }
+    } catch {
+      // In case of network glitch, keep existing active state or try fallback
+    }
   }, []);
 
-  if (!order || !token) return null;
+  useEffect(() => {
+    syncOrder();
 
-  // Status mapping matching Blinkit style
-  const statusConfig: Record<string, { title: string; subtitle: string; icon: string; badgeBg: string }> = {
-    PLACED: {
-      title: 'Order Received & Confirmed',
-      subtitle: 'Kitchen assigned • Cooking soon',
-      icon: 'receipt_long',
-      badgeBg: 'bg-[#38754A]',
-    },
-    ACCEPTED: {
-      title: 'Order Confirmed by Chef',
-      subtitle: 'Preparing fresh homestyle ingredients',
-      icon: 'check_circle',
-      badgeBg: 'bg-[#38754A]',
-    },
-    PREPARING: {
-      title: 'Cooking on Fresh Tawa 🔥',
-      subtitle: 'Homestyle rotis & thali being packed',
-      icon: 'skillet',
-      badgeBg: 'bg-[#E85D04]',
-    },
-    READY_FOR_PICKUP: {
-      title: 'Packed & Ready for Rider 🍱',
-      subtitle: 'Insulated cask packed at kitchen',
-      icon: 'takeout_dining',
-      badgeBg: 'bg-[#E99A32]',
-    },
-    OUT_FOR_DELIVERY: {
-      title: 'Out for Delivery 🛵',
-      subtitle: `Rider ${order.riderName || 'on bike'} is on the way`,
-      icon: 'moped',
-      badgeBg: 'bg-[#38754A]',
-    },
-  };
+    // Listen to global order placed / update events
+    const handleOrderEvent = () => syncOrder();
+    window.addEventListener('jr_order_placed', handleOrderEvent);
+    window.addEventListener('storage', handleOrderEvent);
+    window.addEventListener('focus', handleOrderEvent);
 
-  const currentConfig = statusConfig[order.status] || {
-    title: 'Active Order in Progress',
-    subtitle: order.deliverySlot || 'Homestyle Delivery',
-    icon: 'moped',
-    badgeBg: 'bg-[#38754A]',
-  };
+    const interval = setInterval(syncOrder, 8000);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('jr_order_placed', handleOrderEvent);
+      window.removeEventListener('storage', handleOrderEvent);
+      window.removeEventListener('focus', handleOrderEvent);
+    };
+  }, [syncOrder]);
 
-  const firstItem = order.items?.[0]?.name || 'Homestyle Pure Veg Meal';
-  const itemCount = order.items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || 1;
+  if (!order || !trackingId || dismissed) return null;
 
-  // ETA calculation
-  let etaText = 'On Schedule';
-  if (order.status === 'OUT_FOR_DELIVERY') {
-    etaText = 'Arriving in 10-15 mins';
-  } else if (order.deliverySlot) {
-    etaText = order.deliverySlot.includes('Lunch') ? 'Lunch (12:00 - 2:30 PM)' : 'Dinner (7:30 - 10:00 PM)';
+  // Status mapping matching Image 2 reference styling
+  const isOutForDelivery = order.status === 'OUT_FOR_DELIVERY';
+  const isReady = order.status === 'READY_FOR_PICKUP';
+  const isPreparing = order.status === 'PREPARING';
+
+  let statusSubtitle = 'Order Received & Confirmed';
+  let etaHeadline = 'Arriving in 15–20 mins';
+  let partnerMessage = 'Chef is preparing your fresh homestyle ingredients 🍳';
+
+  if (isOutForDelivery) {
+    statusSubtitle = 'Order is on the way';
+    etaHeadline = 'Arriving in 6 minutes';
+    partnerMessage = 'I have picked up your order, and I am on the way 🛵';
+  } else if (isReady) {
+    statusSubtitle = 'Packed & Ready for Rider';
+    etaHeadline = 'Arriving in 8–10 minutes';
+    partnerMessage = 'Insulated tiffin packed, rider arriving at kitchen 🍱';
+  } else if (isPreparing) {
+    statusSubtitle = 'Cooking on Fresh Tawa';
+    etaHeadline = 'Arriving in 12–15 minutes';
+    partnerMessage = 'Homestyle rotis & vegetables being prepared fresh 🔥';
   }
 
+  const riderDisplayName = order.riderName || 'Lakhan';
+  const firstItem = order.items?.[0]?.name || 'Homestyle Pure Veg Meal';
+  const totalItemCount = order.items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || 1;
+  const moreItemsCount = totalItemCount - 1;
+
   return (
-    <div className={`w-full ${className}`}>
-      <Link
-        href={`/track?token=${token}`}
-        id="active-order-tracking-banner"
-        aria-label="View live kitchen order tracking"
-        className="group relative flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-white border border-[#38754A]/30 shadow-md hover:shadow-lg active:scale-[0.99] transition-all overflow-hidden cursor-pointer"
-      >
-        {/* Subtle decorative left accent stripe */}
-        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-[#38754A] via-[#5BAB74] to-[#285C38] rounded-l-2xl" />
+    <aside
+      aria-label="Active order tracking preview"
+      className={`w-full transition-all duration-300 ${className}`}
+    >
+      <div className="relative group bg-white rounded-2xl border-2 border-[#15803d]/30 shadow-md hover:shadow-lg transition-all overflow-hidden p-3.5 sm:p-4">
+        {/* Top Decorative Emerald Stripe */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#15803d] via-[#22c55e] to-[#15803d]" />
 
-        {/* Left Section: Pulsing Icon & Status Info */}
-        <div className="flex items-center gap-3 min-w-0 flex-1 pl-1">
-          {/* Animated Status Icon */}
-          <div className="relative shrink-0 w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-[#EAF4ED] border border-[#38754A]/20 flex items-center justify-center text-[#38754A]">
-            <span
-              className="material-symbols-outlined text-[24px] sm:text-[26px]"
-              style={{ fontVariationSettings: "'FILL' 1" }}
-            >
-              {currentConfig.icon}
-            </span>
-            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#38754A] border-2 border-white animate-ping" />
-            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#38754A] border-2 border-white" />
-          </div>
+        {/* Dismiss Button */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setDismissed(true);
+          }}
+          className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors text-xs z-10"
+          title="Minimize banner"
+          aria-label="Minimize banner"
+        >
+          ✕
+        </button>
 
-          {/* Texts */}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs sm:text-sm font-extrabold text-[#292D26] truncate">
-                {currentConfig.title}
-              </span>
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EAF4ED] text-[#38754A] border border-[#38754A]/20">
-                <span className="material-symbols-outlined text-[12px]">schedule</span>
-                <span>{etaText}</span>
+        {/* Clickable Area Leading to 2nd Image Live Tracking */}
+        <Link
+          href={`/track?token=${encodeURIComponent(trackingId)}`}
+          className="block select-none"
+        >
+          {/* Top Row: Live Indicator + Status + Order Number */}
+          <div className="flex items-center justify-between gap-2 pr-6 mb-2">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#15803d] animate-ping" />
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#15803d]">
+                Live Order Tracking
               </span>
             </div>
-
-            <div className="text-[11px] sm:text-xs text-[#77786F] truncate mt-0.5">
-              <strong className="text-[#292D26] font-semibold">{firstItem}</strong>
-              {itemCount > 1 ? ` +${itemCount - 1} more` : ''} &bull; Order #{order.orderNumber}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Section: Action Button with Chevron */}
-        <div className="shrink-0 flex items-center gap-1.5 pl-2">
-          <div className="hidden sm:flex flex-col items-end mr-1">
-            <span className="text-[10px] uppercase tracking-wider font-bold text-[#77786F]">Live Status</span>
-            <span className="text-xs font-bold text-[#38754A]">Track Order</span>
-          </div>
-          <div className="w-8 h-8 rounded-full bg-[#38754A] group-hover:bg-[#285C38] text-white flex items-center justify-center shadow-xs transition-colors">
-            <span className="material-symbols-outlined text-[18px] group-hover:translate-x-0.5 transition-transform">
-              chevron_right
+            <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+              #{order.orderNumber}
             </span>
           </div>
-        </div>
-      </Link>
-    </div>
+
+          {/* Headline Matching Image 2 */}
+          <div className="mb-3">
+            <div className="text-xs font-semibold text-slate-700">
+              {statusSubtitle}
+            </div>
+            <div className="text-xl sm:text-2xl font-black text-[#15803d] tracking-tight flex items-center gap-2">
+              <span>{etaHeadline}</span>
+              <span className="text-base sm:text-lg animate-bounce">🛵</span>
+            </div>
+          </div>
+
+          {/* Delivery Partner Lakhan Card Preview (Matching Image 2) */}
+          <div className="bg-[#F8FAF8] rounded-xl p-2.5 border border-[#15803d]/15 flex items-center gap-3 mb-3">
+            <LakhanAvatar size={44} />
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-extrabold text-slate-900 truncate">
+                I&apos;m {riderDisplayName}, your delivery partner
+              </div>
+              {/* Light Green Chat Bubble */}
+              <div className="inline-block mt-1 bg-[#DCFCE7]/70 border border-[#86EFAC]/40 text-[#166534] text-[11px] font-medium px-2 py-0.5 rounded-lg truncate max-w-full">
+                &ldquo;{partnerMessage}&rdquo;
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Action Row: Items Summary + Track Live Button */}
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+            <div className="text-[11px] text-slate-500 truncate flex-1 min-w-0">
+              <span className="font-bold text-slate-800">{firstItem}</span>
+              {moreItemsCount > 0 && <span> +{moreItemsCount} more</span>}
+              <span className="text-slate-400"> &bull; </span>
+              <span className="text-slate-600">{order.deliverySlot}</span>
+            </div>
+
+            <div className="shrink-0 flex items-center gap-1 bg-[#15803d] hover:bg-[#166534] text-white px-3 py-1.5 rounded-full text-xs font-extrabold shadow-xs transition-colors">
+              <span>Live Map</span>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </div>
+        </Link>
+      </div>
+    </aside>
   );
 }
