@@ -96,10 +96,11 @@ export default function LiveDeliveryMap({
       });
       mapInstanceRef.current = map;
 
-      // Clean CartoDB Positron / OSM vector-style light tiles (fast, zero API limits)
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      // Clean OpenStreetMap standard tiles (100% free, zero watermark, full local road accuracy)
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        subdomains: 'abcd',
+        subdomains: ['a', 'b', 'c'],
+        attribution: '&copy; OpenStreetMap contributors',
       }).addTo(map);
 
       // Add Zoom Control at bottom right

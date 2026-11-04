@@ -20,6 +20,14 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'lh3.googleusercontent.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'images.pexels.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'upload.wikimedia.org',
+      },
     ],
   },
   headers: async () => [
@@ -28,12 +36,20 @@ const nextConfig = {
       headers: [
         {
           key: 'Cache-Control',
-          value: 'public, max-age=31536000, immutable',
+          value: 'no-cache, must-revalidate',
         },
       ],
     },
   ],
   allowedDevOrigins: ['10.103.206.252:3001', '10.103.206.252', 'localhost:3001'],
+  webpack: (config, { dev }) => {
+    if (dev) {
+      // Use in-memory webpack cache during dev on Windows to prevent
+      // corrupt/missing chunk errors (e.g. "Cannot find module './280.js'")
+      config.cache = { type: 'memory' };
+    }
+    return config;
+  },
   async rewrites() {
     const rawApiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3000';
     const cleanBase = rawApiUrl.replace(/\/api\/v1\/?$/, '').replace(/\/+$/, '');

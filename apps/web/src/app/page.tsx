@@ -34,7 +34,7 @@ export default function HomePage() {
         setLoading(false);
       }
     }
-    loadData(true);
+    loadData(false);
 
     // Subscribe to cross-tab updates & focus revalidation
     const unsubscribe = api.subscribeToCatalogUpdates(() => {
@@ -42,8 +42,8 @@ export default function HomePage() {
     });
 
     const interval = setInterval(() => {
-      loadData(true);
-    }, 15000);
+      loadData(false);
+    }, 30000);
 
     return () => {
       unsubscribe();
@@ -130,7 +130,7 @@ export default function HomePage() {
               alt="Indian royal vegetarian thali overhead view"
               fetchPriority="high"
               decoding="async"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAmNaJ5ALgFMsHGc_5ZSAC4yWBAEsiB_kuk55Pd1H9gFrmgaGDcNyEl7tf2oRF-iskUz0TCTd0EaaujsArEQT0yE1XaYDWkZldDdaZ6ZZk1hH_CzReVsHLDdPMRSTstB8uXB5RagmdAg9paaPnyYuEFONYhWSpAjxa8hH_ZGLxTvoz-QKjPwoSoJ0ZIznftCy3FX_hZl1ThZniWwlAiFwCLgQMR67wwmb8szFdmwZy7ZVkb6QhQMw6H"
+              src="/images/hero-thali.jpg"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent"></div>
 

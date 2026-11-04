@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { api, DeliverySlot, QuoteResponse, DEFAULT_FOOD_IMAGE, UserProfile } from '../../lib/api';
+import { api, DeliverySlot, QuoteResponse, DEFAULT_FOOD_IMAGE, UserProfile, MenuItem, CatalogResponse } from '../../lib/api';
 import { useCart } from '../../context/CartContext';
 import LocationMapModal, { LocationData } from '../../components/LocationMapModal';
 
@@ -51,6 +51,8 @@ export default function CartPage() {
   const [directionsToReach, setDirectionsToReach] = useState('');
   const [showDirectionsInput, setShowDirectionsInput] = useState(false);
   const [tipPaise, setTipPaise] = useState(0);
+  const [orderSuccessData, setOrderSuccessData] = useState<{ orderNumber: string; trackingToken: string } | null>(null);
+  const [menuAddons, setMenuAddons] = useState<MenuItem[]>([]);
 
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
 
@@ -75,6 +77,33 @@ export default function CartPage() {
     }
     fetchSlots();
   }, [today]);
+
+  // Fetch authentic companions & sides from live database catalog
+  useEffect(() => {
+    function filterAddons(cat: CatalogResponse) {
+      if (!cat?.categories) return;
+      const all = cat.categories.flatMap((c) => c.items);
+      const companions = all.filter((item) => {
+        const n = item.name.toLowerCase();
+        return (
+          n.includes('paratha') ||
+          n.includes('rice') ||
+          n.includes('dal') ||
+          n.includes('poha') ||
+          n.includes('chai') ||
+          n.includes('chips')
+        ) && !item.isSoldOut;
+      });
+      setMenuAddons(companions.length > 0 ? companions.slice(0, 10) : all.slice(0, 8));
+    }
+
+    const cached = api.getCachedCatalog();
+    if (cached) filterAddons(cached);
+
+    api.getCatalog().then((cat) => {
+      if (cat) filterAddons(cat);
+    }).catch(() => {});
+  }, []);
 
   // Fetch logged in customer and prefill address
   useEffect(() => {
@@ -311,8 +340,8 @@ export default function CartPage() {
       return;
     }
 
-    // Show 1-click address confirmation modal
-    setIsAddressConfirmModalOpen(true);
+    // Instant 1-Click Order Execution without blocking popup modal
+    await executeOrderPlacement();
   };
 
   // Execute Order Placement after Address Confirmation
@@ -429,6 +458,10 @@ export default function CartPage() {
 
       // Successfully placed: reset idempotency key and clear cart
       orderIdempotencyKeyRef.current = null;
+      setOrderSuccessData({
+        orderNumber: orderResult.orderNumber,
+        trackingToken: orderResult.trackingToken,
+      });
       clearCart();
 
       if (typeof window !== 'undefined') {
@@ -443,11 +476,23 @@ export default function CartPage() {
           );
           const recents = JSON.parse(window.localStorage.getItem('jr_recent_orders') || '[]');
           recents.unshift({
+            id: orderResult.orderNumber,
             orderNumber: orderResult.orderNumber,
             trackingToken: orderResult.trackingToken,
-            placedAt: new Date().toISOString(),
+            status: orderResult.status || 'PLACED',
+            totalAmountPaise: finalTotalPaise,
+            paymentMethod: paymentMethod,
+            createdAt: new Date().toISOString(),
+            itemsSummary: items.map((i) => i.quantity + 'x ' + i.name).join(' • '),
+            deliveryAddress: { flat, street, landmark, pincode },
+            items: items.map((i) => ({
+              name: i.name,
+              quantity: i.quantity,
+              variant: i.variantName,
+              pricePaise: i.pricePaise,
+            })),
           });
-          window.localStorage.setItem('jr_recent_orders', JSON.stringify(recents.slice(0, 10)));
+          window.localStorage.setItem('jr_recent_orders', JSON.stringify(recents.slice(0, 20)));
         } catch {}
       }
 
@@ -460,10 +505,8 @@ export default function CartPage() {
         })
         .catch(() => {});
 
-      showToast('Order placed successfully!');
-      setTimeout(() => {
-        router.push(`/track?token=${orderResult.trackingToken}`);
-      }, 800);
+      showToast('Order confirmed! Opening live tracking...');
+      router.push(`/track?token=${orderResult.trackingToken}`);
     } catch (err: any) {
       setPlacingOrder(false);
       isSubmittingOrderRef.current = false;
@@ -483,6 +526,42 @@ export default function CartPage() {
   };
 
   const selectedSlot = slots.find((s) => s.id === selectedSlotId);
+
+  // If order was just placed successfully, show instant confirmation screen (no empty cart flash)
+  if (orderSuccessData) {
+    return (
+      <main className="flex flex-col items-center justify-center min-h-[75vh] pt-20 pb-28 px-4 bg-[#FFF9F0]">
+        <div className="bg-white p-7 rounded-3xl shadow-md border border-[#EEE7DC] max-w-sm w-full text-center flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 rounded-full bg-[#EAF4ED] flex items-center justify-center text-[#38754A]">
+            <span className="material-symbols-outlined text-[38px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+          </div>
+          <div>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EAF4ED] text-[#38754A] border border-[#38754A]/20 text-xs font-bold mb-2">
+              <span className="w-2 h-2 rounded-full bg-[#38754A] animate-ping" />
+              Delivering in ~12-15 mins
+            </span>
+            <h2 className="text-xl font-extrabold text-[#292D26]">Order Confirmed!</h2>
+            <p className="text-xs text-[#77786F] mt-1 leading-relaxed">
+              Order #{orderSuccessData.orderNumber} has been received by Janki Rasoi kitchen.
+            </p>
+          </div>
+          <Link
+            href={`/track?token=${orderSuccessData.trackingToken}`}
+            className="w-full h-12 rounded-2xl bg-[#38754A] hover:bg-[#285C38] text-white text-sm font-extrabold flex items-center justify-center gap-2 shadow-md shadow-[#38754A]/25 transition-all"
+          >
+            <span>Track Live Order</span>
+            <span className="material-symbols-outlined text-[18px]">moped</span>
+          </Link>
+          <Link
+            href="/"
+            className="text-xs text-[#38754A] font-bold hover:underline"
+          >
+            Back to Home
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   // If cart is empty
   if (items.length === 0) {
@@ -512,39 +591,6 @@ export default function CartPage() {
   const deliveryFeePaise = quote?.deliveryFeePaise ?? 0;
   const packagingFeePaise = quote?.packagingFeePaise ?? 1500;
   const finalTotalPaise = (quote?.totalPaise ?? (itemsTotalPaise + deliveryFeePaise + packagingFeePaise)) + tipPaise;
-
-  const COMPLETE_MEAL_ADDONS = [
-    {
-      id: 'addon-roti-4',
-      name: 'Plain Phulka Roti (4 Pcs)',
-      pricePaise: 4000,
-      imageUrl: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=400&q=80',
-    },
-    {
-      id: 'addon-paratha-plain',
-      name: 'Plain Paratha (2 Pcs)',
-      pricePaise: 5000,
-      imageUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=400&q=80',
-    },
-    {
-      id: 'addon-boondi-raita',
-      name: 'Boondi Raita (Fresh Curd)',
-      pricePaise: 3500,
-      imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400&q=80',
-    },
-    {
-      id: 'addon-gulab-jamun',
-      name: 'Gulab Jamun (2 Pcs)',
-      pricePaise: 4500,
-      imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=400&q=80',
-    },
-    {
-      id: 'addon-papad-salad',
-      name: 'Roasted Papad & Salad',
-      pricePaise: 2000,
-      imageUrl: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=400&q=80',
-    },
-  ];
 
   return (
     <main className="flex flex-col relative w-full pb-36 bg-[#F4F4F6] min-h-screen">
@@ -717,46 +763,67 @@ export default function CartPage() {
             </div>
           </div>
 
-          {/* 5. Complete Your Meal Addons Horizontal Carousel */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4">
-            <h3 className="text-[11px] sm:text-xs uppercase font-extrabold tracking-wider text-slate-500 mb-3">
-              COMPLETE YOUR MEAL
-            </h3>
-            <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
-              {COMPLETE_MEAL_ADDONS.map((addon) => (
-                <div key={addon.id} className="w-28 sm:w-32 shrink-0 flex flex-col gap-1">
-                  <div className="relative w-28 sm:w-32 h-20 sm:h-24 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
-                    <img src={addon.imageUrl} alt={addon.name} className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        addItem({
-                          productId: addon.id,
-                          name: addon.name,
-                          pricePaise: addon.pricePaise,
-                          quantity: 1,
-                          imageUrl: addon.imageUrl,
-                        });
-                        showToast(`Added ${addon.name}`);
-                      }}
-                      className="absolute top-1 right-1 w-6 h-6 rounded-md bg-white text-emerald-700 font-extrabold text-sm flex items-center justify-center shadow-md hover:scale-110 active:scale-95 transition-transform border border-emerald-600"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <span className="w-2.5 h-2.5 rounded-2xs border border-emerald-600 flex items-center justify-center p-0.5 shrink-0 bg-white">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                    </span>
-                    <p className="text-[11px] sm:text-xs font-bold text-slate-800 truncate leading-tight">{addon.name}</p>
-                  </div>
-                  <span className="text-xs sm:text-sm font-extrabold text-slate-900">
-                    ₹{(addon.pricePaise / 100).toFixed(0)}
-                  </span>
-                </div>
-              ))}
+          {/* 5. Complete Your Meal Addons Horizontal Carousel (Live Database Menu Dishes) */}
+          {menuAddons.length > 0 && (
+            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-[11px] sm:text-xs uppercase font-extrabold tracking-wider text-slate-500">
+                  COMPLETE YOUR MEAL
+                </h3>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                  Fresh Menu Sides
+                </span>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
+                {menuAddons.map((addon) => {
+                  const dishImage = addon.imageUrl || DEFAULT_FOOD_IMAGE;
+                  return (
+                    <div key={addon.id} className="w-28 sm:w-32 shrink-0 flex flex-col gap-1">
+                      <div className="relative w-28 sm:w-32 h-20 sm:h-24 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
+                        <img
+                          src={dishImage}
+                          alt={addon.name}
+                          loading="lazy"
+                          decoding="async"
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = DEFAULT_FOOD_IMAGE;
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            addItem({
+                              productId: addon.id,
+                              name: addon.name,
+                              pricePaise: addon.basePricePaise,
+                              quantity: 1,
+                              imageUrl: dishImage,
+                            });
+                            showToast(`Added ${addon.name}`);
+                          }}
+                          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-md bg-white text-emerald-700 font-extrabold text-sm flex items-center justify-center shadow-md hover:scale-110 active:scale-95 transition-transform border border-emerald-600"
+                          aria-label={`Add ${addon.name}`}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className="w-2.5 h-2.5 rounded-2xs border border-emerald-600 flex items-center justify-center p-0.5 shrink-0 bg-white">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                        </span>
+                        <p className="text-[11px] sm:text-xs font-bold text-slate-800 truncate leading-tight">{addon.name}</p>
+                      </div>
+                      <span className="text-xs sm:text-sm font-extrabold text-slate-900">
+                        ₹{(addon.basePricePaise / 100).toFixed(0)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* 7. Rider Delivery Instructions (Exact 1:1 with Reference Image 2) */}
           <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 flex flex-col gap-3">
@@ -1084,18 +1151,18 @@ export default function CartPage() {
               <button
                 type="button"
                 onClick={handlePlaceOrder}
-                disabled={placingOrder || quoteLoading || pinStatusMsg?.isError}
-                className="w-full bg-[#38754A] hover:bg-[#285C38] active:scale-[0.98] text-white font-extrabold text-base py-3.5 px-4 rounded-xl shadow-md shadow-[#38754A]/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                disabled={placingOrder || pinStatusMsg?.isError}
+                className="w-full bg-[#008744] hover:bg-[#007038] active:scale-[0.98] text-white font-black text-base py-3.5 px-4 rounded-xl shadow-lg shadow-emerald-700/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span>
                   {placingOrder
-                    ? 'Processing Order...'
+                    ? 'Placing Order...'
                     : pinStatusMsg?.isError
                     ? 'Delivery Unavailable'
                     : `Place Order • ₹${(finalTotalPaise / 100).toFixed(0)}`}
                 </span>
                 {!placingOrder && !pinStatusMsg?.isError && (
-                  <span className="material-symbols-outlined text-[18px]">lock</span>
+                  <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
                 )}
                 {placingOrder && (
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0 inline-block" />
@@ -1150,8 +1217,8 @@ export default function CartPage() {
           <button
             type="button"
             onClick={handlePlaceOrder}
-            disabled={placingOrder || quoteLoading || pinStatusMsg?.isError}
-            className="bg-[#38754A] hover:bg-[#285C38] active:scale-[0.98] text-white font-extrabold text-sm sm:text-base px-6 sm:px-7 py-3 rounded-xl shadow-md shadow-[#38754A]/25 transition-all flex items-center gap-1.5 shrink-0 disabled:opacity-50"
+            disabled={placingOrder || pinStatusMsg?.isError}
+            className="bg-[#008744] hover:bg-[#007038] active:scale-[0.98] text-white font-black text-sm sm:text-base px-6 sm:px-7 py-3 rounded-xl shadow-lg shadow-emerald-700/25 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span>
               {placingOrder

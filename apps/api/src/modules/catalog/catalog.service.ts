@@ -15,7 +15,21 @@ interface CachedCatalog {
 export function optimizeCloudinaryUrl(url?: string): string | undefined {
   if (!url) return url;
   if (url.includes('cloudinary.com') && url.includes('/upload/') && !url.includes('/f_auto')) {
-    return url.replace('/upload/', '/upload/f_auto,q_auto,w_1200,c_limit/');
+    return url.replace('/upload/', '/upload/f_auto,q_auto,w_600,c_limit/');
+  }
+  if (url.includes('images.unsplash.com')) {
+    try {
+      const u = new URL(url);
+      u.searchParams.set('auto', 'format');
+      u.searchParams.set('fit', 'crop');
+      if (!u.searchParams.has('w') || parseInt(u.searchParams.get('w') || '0', 10) > 600) {
+        u.searchParams.set('w', '600');
+      }
+      u.searchParams.set('q', '75');
+      return u.toString();
+    } catch (e) {
+      return url;
+    }
   }
   return url;
 }
@@ -40,7 +54,7 @@ function getNormalizedServiceDate(serviceDateString?: string): { dateObj: Date; 
 @Injectable()
 export class CatalogService {
   private readonly catalogCache = new Map<string, CachedCatalog>();
-  private readonly CACHE_TTL_MS = 5_000; // 5s short in-memory cache for high-concurrency surge protection
+  private readonly CACHE_TTL_MS = 60_000; // 60s in-memory cache for high-concurrency surge protection
 
   constructor(
     private readonly prisma: PrismaService,
