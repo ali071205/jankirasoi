@@ -195,6 +195,41 @@ export class OrdersService {
     };
   }
 
+  async getCustomerOrders(phone: string) {
+    const cleanPhone = phone.trim().replace(/\D/g, '').slice(-10);
+    if (!cleanPhone || cleanPhone.length < 10) return [];
+
+    const orders = await this.prisma.order.findMany({
+      where: {
+        customerPhone: { endsWith: cleanPhone },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      include: {
+        deliverySlot: true,
+        items: true,
+      },
+    });
+
+    return orders.map((o) => ({
+      id: o.orderNumber,
+      orderNumber: o.orderNumber,
+      trackingToken: o.trackingToken,
+      status: o.status,
+      totalAmountPaise: o.totalAmountPaise,
+      paymentMethod: o.paymentMethod,
+      createdAt: o.createdAt.toISOString(),
+      itemsSummary: o.items.map((i) => i.quantity + 'x ' + i.productName).join(' • ') || 'Homestyle Pure Veg Meal',
+      deliveryAddress: o.deliveryAddress,
+      items: o.items.map((i) => ({
+        name: i.productName,
+        quantity: i.quantity,
+        variant: i.variantName,
+        pricePaise: i.unitPricePaise,
+      })),
+    }));
+  }
+
   async getAdminOrders(status?: OrderStatus, serviceDateString?: string, page = 1, limit = 25) {
     const where: any = {};
     if (status) where.status = status;

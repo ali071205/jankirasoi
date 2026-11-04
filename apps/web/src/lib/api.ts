@@ -259,7 +259,7 @@ export interface RiderDelivery {
   itemsSummary: string;
 }
 
-export const DEFAULT_FOOD_IMAGE = 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80';
+export const DEFAULT_FOOD_IMAGE = '/images/dishes/special-thali-bhar-pet.jpg';
 
 // In-memory + SessionStorage cache for instant zero-latency client transitions without re-fetching
 const memoryCache = new Map<string, { data: any; expiry: number }>();
@@ -276,14 +276,14 @@ function getCached<T>(key: string): T | null {
   // Cross-refresh fallback from sessionStorage
   if (typeof window !== 'undefined') {
     try {
-      const stored = window.sessionStorage.getItem(`jr_cache_${key}`);
+      const stored = window.sessionStorage.getItem(`jr_v3_cache_${key}`);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Date.now() <= parsed.expiry) {
           memoryCache.set(key, parsed);
           return parsed.data as T;
         } else {
-          window.sessionStorage.removeItem(`jr_cache_${key}`);
+          window.sessionStorage.removeItem(`jr_v3_cache_${key}`);
         }
       }
     } catch {
@@ -299,7 +299,7 @@ function setCached<T>(key: string, data: T, ttlMs = 180000): T {
   memoryCache.set(key, { data, expiry });
   if (typeof window !== 'undefined') {
     try {
-      window.sessionStorage.setItem(`jr_cache_${key}`, JSON.stringify({ data, expiry }));
+      window.sessionStorage.setItem(`jr_v3_cache_${key}`, JSON.stringify({ data, expiry }));
     } catch {
       // Ignore quota issues
     }
@@ -320,10 +320,27 @@ const getApiBase = () => {
   return '/api/v1';
 };
 
-export function optimizeImageUrl(url?: string): string {
+export function optimizeImageUrl(url?: string, width = 400): string {
   if (!url) return '';
+  if (url.startsWith('/images/dishes/') || url.startsWith('/images/')) {
+    return url.includes('?') ? url : `${url}?v=20261105c`;
+  }
   if (url.includes('cloudinary.com') && url.includes('/upload/') && !url.includes('/f_auto')) {
-    return url.replace('/upload/', '/upload/f_auto,q_auto,w_1200,c_limit/');
+    return url.replace('/upload/', `/upload/f_auto,q_auto,w_${width},c_limit/`);
+  }
+  if (url.includes('images.unsplash.com')) {
+    try {
+      const u = new URL(url);
+      u.searchParams.set('auto', 'format');
+      u.searchParams.set('fit', 'crop');
+      if (!u.searchParams.has('w') || parseInt(u.searchParams.get('w') || '0', 10) > width) {
+        u.searchParams.set('w', width.toString());
+      }
+      u.searchParams.set('q', '75');
+      return u.toString();
+    } catch (e) {
+      return url;
+    }
   }
   return url;
 }
@@ -367,7 +384,7 @@ export const api = {
         });
       });
     }
-    return setCached(cacheKey, data, 10000); // 10s fresh cache
+    return setCached(cacheKey, data, 60000); // 60s fresh cache
   },
 
   // Real-time listener for cross-tab and cross-window menu changes
@@ -379,7 +396,10 @@ export const api = {
       channel = new BroadcastChannel('jankirasoi_menu_channel');
       channel.onmessage = () => {
         memoryCache.delete('catalog_today');
-        try { window.sessionStorage.removeItem('jr_cache_catalog_today'); } catch {}
+        try { 
+          window.sessionStorage.removeItem('jr_v3_cache_catalog_today');
+          window.sessionStorage.removeItem('jr_cache_catalog_today');
+        } catch {}
         callback();
       };
     } catch {}
@@ -387,14 +407,20 @@ export const api = {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'jr_menu_timestamp') {
         memoryCache.delete('catalog_today');
-        try { window.sessionStorage.removeItem('jr_cache_catalog_today'); } catch {}
+        try { 
+          window.sessionStorage.removeItem('jr_v3_cache_catalog_today');
+          window.sessionStorage.removeItem('jr_cache_catalog_today');
+        } catch {}
         callback();
       }
     };
 
     const handleFocus = () => {
       memoryCache.delete('catalog_today');
-      try { window.sessionStorage.removeItem('jr_cache_catalog_today'); } catch {}
+      try { 
+        window.sessionStorage.removeItem('jr_v3_cache_catalog_today');
+        window.sessionStorage.removeItem('jr_cache_catalog_today');
+      } catch {}
       callback();
     };
 
@@ -491,6 +517,20 @@ export const api = {
       throw new Error(err.message || 'Tracking token not found or expired');
     }
     return res.json();
+  },
+
+  // 6b. Get Customer Order History by Phone
+  async getCustomerOrders(phone: string): Promise<any[]> {
+    const cleanPhone = phone.trim().replace(/\D/g, '').slice(-10);
+    if (!cleanPhone || cleanPhone.length < 10) return [];
+    const base = getApiBase();
+    try {
+      const res = await fetch(base + '/orders/customer/' + encodeURIComponent(cleanPhone), { cache: 'no-store' });
+      if (!res.ok) return [];
+      return res.json();
+    } catch {
+      return [];
+    }
   },
 
   // 7. Kitchen KDS Admin Orders

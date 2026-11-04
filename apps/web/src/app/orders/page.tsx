@@ -53,19 +53,44 @@ export default function OrdersPage() {
         const user = await api.getCurrentUser('CUSTOMER');
         if (isMounted) setCurrentUser(user);
 
-        // 1. Gather all tokens from user profile + localStorage
-        const tokensToFetch = new Set<string>();
+        const fetchedList: CompactOrder[] = [];
+        const seenOrderNumbers = new Set<string>();
 
-        // From user recentOrders
-        if (user?.recentOrders && Array.isArray(user.recentOrders)) {
-          user.recentOrders.forEach((o) => {
-            if (o.trackingToken) tokensToFetch.add(o.trackingToken);
-            else if (o.orderNumber) tokensToFetch.add(o.orderNumber);
-          });
+        // 1. Fetch authentic order history by customer phone from DB
+        const customerPhone = user?.phone || (typeof window !== 'undefined' ? localStorage.getItem('jr_customer_phone') : null);
+        if (customerPhone) {
+          try {
+            const liveOrders = await api.getCustomerOrders(customerPhone);
+            if (Array.isArray(liveOrders)) {
+              liveOrders.forEach((ord: any) => {
+                if (ord.orderNumber && !seenOrderNumbers.has(ord.orderNumber)) {
+                  seenOrderNumbers.add(ord.orderNumber);
+                  fetchedList.push({
+                    id: ord.orderNumber,
+                    orderNumber: ord.orderNumber,
+                    trackingToken: ord.trackingToken || ord.orderNumber,
+                    status: ord.status,
+                    totalAmountPaise: ord.totalAmountPaise,
+                    paymentMethod: ord.paymentMethod || 'COD',
+                    createdAt: ord.createdAt || new Date().toISOString(),
+                    itemsSummary: ord.itemsSummary || 'Homestyle Pure Veg Meal',
+                    deliveryAddress: ord.deliveryAddress,
+                    items: ord.items || [],
+                  });
+                }
+              });
+            }
+          } catch (e) {
+            console.warn('Failed to fetch orders by phone:', e);
+          }
         }
 
-        // From localStorage recent orders
+        // 2. Also check active tracking token from localStorage
+        const tokensToFetch = new Set<string>();
         if (typeof window !== 'undefined') {
+          const lastToken = localStorage.getItem('jr_last_tracking_token');
+          if (lastToken) tokensToFetch.add(lastToken);
+
           try {
             const stored = JSON.parse(localStorage.getItem('jr_recent_orders') || '[]');
             if (Array.isArray(stored)) {
@@ -75,22 +100,19 @@ export default function OrdersPage() {
               });
             }
           } catch {}
-
-          const lastToken = localStorage.getItem('jr_last_tracking_token');
-          if (lastToken) tokensToFetch.add(lastToken);
         }
 
-        // 2. Fetch full live status for every order token
-        const fetchedList: CompactOrder[] = [];
-        const promises = Array.from(tokensToFetch).map(async (tok) => {
+        const validStoredOrders: any[] = [];
+        for (const tok of Array.from(tokensToFetch)) {
           try {
-            const data: TrackOrderResponse = await api.trackOrder(tok);
-            if (data && data.orderNumber) {
+            const data = await api.trackOrder(tok);
+            if (data && data.orderNumber && !seenOrderNumbers.has(data.orderNumber)) {
+              seenOrderNumbers.add(data.orderNumber);
               const summary = data.items && data.items.length > 0
-                ? data.items.map((i) => `${i.quantity}x ${i.name}`).join(' • ')
-                : 'Homestyle Fresh Meal';
+                ? data.items.map((i: any) => i.quantity + 'x ' + i.name).join(' • ')
+                : 'Homestyle Pure Veg Meal';
 
-              return {
+              const orderObj: CompactOrder = {
                 id: data.orderNumber,
                 orderNumber: data.orderNumber,
                 trackingToken: tok,
@@ -102,52 +124,33 @@ export default function OrdersPage() {
                 deliveryAddress: data.deliveryAddress,
                 items: data.items,
               };
+              fetchedList.push(orderObj);
+              validStoredOrders.push(orderObj);
             }
           } catch {
-            // Silently fallback if a token cannot be fetched
+            // Prune invalid or non-existent tokens
           }
-          return null;
-        });
+        }
 
-        const results = await Promise.allSettled(promises);
-        results.forEach((r) => {
-          if (r.status === 'fulfilled' && r.value) {
-            if (!fetchedList.some((existing) => existing.orderNumber === r.value!.orderNumber)) {
-              fetchedList.push(r.value);
-            }
-          }
-        });
+        // Filter out any mock/corrupt zero-rupee orders
+        const realOrders = fetchedList.filter((o) => (o.totalAmountPaise || 0) > 0);
 
-        // 3. Fallback: if backend didn't return some local cached orders
+        // Remove stale/fake legacy mock orders from localStorage
         if (typeof window !== 'undefined') {
           try {
-            const stored = JSON.parse(localStorage.getItem('jr_recent_orders') || '[]');
-            if (Array.isArray(stored)) {
-              stored.forEach((item: any) => {
-                if (item.orderNumber && !fetchedList.some((f) => f.orderNumber === item.orderNumber)) {
-                  fetchedList.push({
-                    id: item.id || item.orderNumber,
-                    orderNumber: item.orderNumber,
-                    trackingToken: item.trackingToken || item.orderNumber,
-                    status: item.status || 'PLACED',
-                    totalAmountPaise: item.totalAmountPaise || 0,
-                    paymentMethod: item.paymentMethod || 'COD',
-                    createdAt: item.createdAt || new Date().toISOString(),
-                    itemsSummary: item.itemsSummary || 'Fresh Homestyle Meal',
-                    deliveryAddress: item.deliveryAddress,
-                    items: item.items || [],
-                  });
-                }
-              });
+            if (realOrders.length > 0) {
+              localStorage.setItem('jr_recent_orders', JSON.stringify(realOrders.slice(0, 20)));
+            } else {
+              localStorage.removeItem('jr_recent_orders');
             }
           } catch {}
         }
 
         // Sort by createdAt descending
-        fetchedList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        realOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
         if (isMounted) {
-          setOrders(fetchedList);
+          setOrders(realOrders);
         }
       } catch (err) {
         console.warn('Orders load error:', err);

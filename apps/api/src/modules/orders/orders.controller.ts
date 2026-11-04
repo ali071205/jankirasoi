@@ -13,4 +13,11 @@ export class OrdersController {
   async trackOrder(@Param('token') token: string) {
     return this.ordersService.trackOrderByToken(token);
   }
+
+  @Get('customer/:phone')
+  @ApiOperation({ summary: 'Get live orders history for customer by verified phone number' })
+  @ApiParam({ name: 'phone', description: '10-digit customer phone number' })
+  async getCustomerOrders(@Param('phone') phone: string) {
+    return this.ordersService.getCustomerOrders(phone);
+  }
 }

@@ -17,20 +17,43 @@ export default function ActiveOrderBanner({ className = '' }: ActiveOrderBannerP
 
     async function fetchOrder() {
       if (typeof window === 'undefined') return;
-      const lastToken = window.localStorage.getItem('jr_last_tracking_token');
-      if (!lastToken) {
+      let tokenToUse = window.localStorage.getItem('jr_last_tracking_token');
+
+      // Fallback 1: check recent orders in local storage
+      if (!tokenToUse) {
+        try {
+          const stored = JSON.parse(window.localStorage.getItem('jr_recent_orders') || '[]');
+          if (Array.isArray(stored) && stored.length > 0) {
+            tokenToUse = stored[0].trackingToken || stored[0].orderNumber;
+          }
+        } catch {}
+      }
+
+      // Fallback 2: check active orders by customer phone
+      if (!tokenToUse) {
+        const phone = window.localStorage.getItem('jr_customer_phone');
+        if (phone) {
+          try {
+            const customerOrders = await api.getCustomerOrders(phone);
+            const active = customerOrders.find((o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED');
+            if (active) tokenToUse = active.trackingToken || active.orderNumber;
+          } catch {}
+        }
+      }
+
+      if (!tokenToUse) {
         if (isMounted) setOrder(null);
         return;
       }
 
       try {
-        const data = await api.trackOrder(lastToken);
+        const data = await api.trackOrder(tokenToUse);
         if (!isMounted) return;
 
         // Only show if order is active (not delivered or cancelled)
         if (data && data.status !== 'DELIVERED' && data.status !== 'CANCELLED') {
           setOrder(data);
-          setToken(lastToken);
+          setToken(tokenToUse);
         } else {
           setOrder(null);
         }
@@ -93,13 +116,73 @@ export default function ActiveOrderBanner({ className = '' }: ActiveOrderBannerP
   const firstItem = order.items?.[0]?.name || 'Homestyle Pure Veg Meal';
   const itemCount = order.items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || 1;
 
-  // ETA calculation
-  let etaText = 'Delivering in ~25-30 mins';
-  if (order.status === 'OUT_FOR_DELIVERY') {
-    etaText = 'Arriving in 10-15 mins';
-  } else if (order.deliverySlot) {
-    etaText = order.deliverySlot;
-  }
+  // Real-time Dynamic ETA Calculation based on Prep Time + Distance
+  const etaText = (() => {
+    // 1. Kitchen prep / packaging time based on items:
+    // - Parathas, Sabzis, Dals: ~6-8 min cook time
+    // - Rice, Poha, Chai, Thalis: ~2-4 min packaging only
+    const items = order.items || [];
+    let prepMinutes = 4; // default packaging buffer
+    const hasFreshCookItem = items.some((i) => {
+      const n = (i.name || '').toLowerCase();
+      return n.includes('paratha') || n.includes('sabzi') || n.includes('paneer') || n.includes('tadka');
+    });
+    if (hasFreshCookItem) {
+      prepMinutes = 7;
+    }
+
+    // 2. Distance in KM from Sagore Kitchen (22.6288, 75.5684)
+    let distanceKm = 2.5; // default within Sagore town
+    if (order.coordinates?.latitude && order.coordinates?.longitude) {
+      const lat1 = (22.6288 * Math.PI) / 180;
+      const lat2 = (order.coordinates.latitude * Math.PI) / 180;
+      const dLat = ((order.coordinates.latitude - 22.6288) * Math.PI) / 180;
+      const dLng = ((order.coordinates.longitude - 75.5684) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      distanceKm = Math.min(15, Math.max(0.5, 6371 * c));
+    } else if (order.deliveryAddress?.pincode === '454774') {
+      distanceKm = 2.0;
+    } else if (order.deliveryAddress?.pincode === '454775') {
+      distanceKm = 5.0;
+    }
+
+    // 3. Travel time: ~2 minutes per km + 2 min dispatch buffer
+    const travelMinutes = Math.round(distanceKm * 2.0 + 2);
+
+    // 4. Elapsed time since order creation
+    let elapsedMinutes = 0;
+    if (order.createdAt) {
+      const createdTs = new Date(order.createdAt).getTime();
+      if (!isNaN(createdTs)) {
+        elapsedMinutes = Math.max(0, Math.floor((Date.now() - createdTs) / 60000));
+      }
+    }
+
+    if (order.status === 'DELIVERED') return 'Delivered ✓';
+
+    if (order.status === 'OUT_FOR_DELIVERY') {
+      const transitElapsed = Math.floor(elapsedMinutes * 0.5);
+      const remaining = Math.max(3, travelMinutes - transitElapsed);
+      return `Arriving in ${remaining} mins`;
+    }
+
+    if (order.status === 'READY_FOR_PICKUP') {
+      const remaining = Math.max(5, travelMinutes + 2);
+      return `Arriving in ${remaining} mins`;
+    }
+
+    if (order.status === 'PREPARING') {
+      const remaining = Math.max(6, prepMinutes + travelMinutes - elapsedMinutes);
+      return `Delivering in ${remaining} mins`;
+    }
+
+    // PLACED / ACCEPTED
+    const remaining = Math.max(10, prepMinutes + travelMinutes - elapsedMinutes);
+    return `Delivering in ${remaining} mins`;
+  })();
 
   return (
     <div className={`w-full ${className}`}>

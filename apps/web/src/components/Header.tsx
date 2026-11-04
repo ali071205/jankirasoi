@@ -147,12 +147,7 @@ export default function Header() {
             >
               Today's Menu
             </Link>
-            <Link
-              href="/orders"
-              className={`hover:text-[#38754A] transition-colors ${pathname === '/orders' ? 'text-[#38754A]' : 'text-[#77786F]'}`}
-            >
-              My Orders
-            </Link>
+
           </nav>
 
           {/* Delivery Location Selector Pill */}

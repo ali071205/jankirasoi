@@ -162,9 +162,38 @@ export class CheckoutService {
       });
     }
 
-    let zone = await this.prisma.deliveryZone.findUnique({
-      where: { pincode: cleanPin },
-    });
+    const productIds = dto.items.map((i) => i.productId);
+
+    // Batch-parallelize remote database queries for zone, slot, and items
+    const [existingZone, slot, products] = await Promise.all([
+      this.prisma.deliveryZone.findUnique({
+        where: { pincode: cleanPin },
+      }),
+      this.prisma.deliverySlot.findUnique({
+        where: { id: dto.deliverySlotId },
+        include: {
+          capacities: {
+            where: { serviceDate },
+          },
+        },
+      }),
+      this.prisma.product.findMany({
+        where: { id: { in: productIds } },
+        include: {
+          variants: true,
+          availabilities: { where: { serviceDate } },
+          addonGroups: {
+            include: {
+              addonGroup: {
+                include: { options: true },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    let zone = existingZone;
     if (!zone) {
       zone = await this.prisma.deliveryZone.upsert({
         where: { pincode: cleanPin },
@@ -184,15 +213,6 @@ export class CheckoutService {
       });
     }
 
-    // 2. Verify Delivery Slot & Capacity
-    const slot = await this.prisma.deliverySlot.findUnique({
-      where: { id: dto.deliverySlotId },
-      include: {
-        capacities: {
-          where: { serviceDate },
-        },
-      },
-    });
     if (!slot || !slot.isActive) {
       throw new BadRequestException('Selected delivery slot is inactive or not found.');
     }
@@ -205,22 +225,6 @@ export class CheckoutService {
       });
     }
 
-    // 3. FIX #13: Batch-fetch all products in ONE query instead of N individual queries.
-    const productIds = dto.items.map((i) => i.productId);
-    const products = await this.prisma.product.findMany({
-      where: { id: { in: productIds } },
-      include: {
-        variants: true,
-        availabilities: { where: { serviceDate } },
-        addonGroups: {
-          include: {
-            addonGroup: {
-              include: { options: true },
-            },
-          },
-        },
-      },
-    });
     const productMap = new Map(products.map((p) => [p.id, p]));
 
     let subtotalPaise = 0;
