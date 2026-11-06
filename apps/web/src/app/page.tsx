@@ -142,6 +142,15 @@ export default function HomePage() {
               </span>
             </div>
 
+            {/* Official Brand Logo Badge on Hero */}
+            <div className="absolute top-3 right-3 sm:top-4 sm:right-4 bg-white/90 backdrop-blur-md rounded-2xl px-3 py-1 shadow-sm border border-white/40 flex items-center gap-1.5">
+              <img
+                src="/images/logo.png"
+                alt="Janki Rasoi"
+                className="h-7 sm:h-9 w-auto object-contain"
+              />
+            </div>
+
             {/* Hero Bottom Content */}
             <div className="absolute bottom-4 inset-x-4 sm:bottom-6 sm:inset-x-6 text-white">
               <div className="flex items-center gap-2 mb-1.5 sm:mb-2">

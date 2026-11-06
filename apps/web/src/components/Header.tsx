@@ -111,17 +111,21 @@ export default function Header() {
       <header className="fixed top-0 inset-x-0 z-50 bg-white/95 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-[#EEE7DC]">
         <div className="max-w-7xl mx-auto h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3 sm:gap-6">
           {/* Brand Logo & Live Status */}
-          <Link href="/" className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
-              JR
+          <Link href="/" className="flex items-center gap-2.5 sm:gap-3 shrink-0 group">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden bg-[#FFF9F0] border border-[#7A1E1E]/20 shadow-xs shrink-0 flex items-center justify-center p-0.5 group-hover:scale-105 transition-transform">
+              <img
+                src="/images/logo-avatar.png"
+                alt="Janki Rasoi Logo"
+                className="w-full h-full object-cover rounded-full"
+              />
             </div>
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="font-title-md text-base sm:text-lg text-[#292D26] truncate font-black font-headline">
+                <span className="font-title-md text-base sm:text-lg text-[#292D26] truncate font-black font-headline group-hover:text-[#7A1E1E] transition-colors">
                   Janki Rasoi
                 </span>
-                <span className="hidden xs:inline-block text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-[#EAF4ED] text-[#38754A] uppercase shrink-0 font-bold border border-[#38754A]/20">
-                  Ghar Ka Swad
+                <span className="hidden xs:inline-block text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-[#FDF2E9] text-[#7A1E1E] uppercase shrink-0 font-bold border border-[#7A1E1E]/20">
+                  स्वाद ऐसा... जो दिल जीत ले
                 </span>
               </div>
               <div className="flex items-center gap-1.5">

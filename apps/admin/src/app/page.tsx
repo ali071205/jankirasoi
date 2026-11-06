@@ -1491,9 +1491,13 @@ export default function OperationsConsolePage() {
 
           {/* Logo & Title */}
           <div className="flex items-center gap-2.5">
-            <span className="w-9 h-9 rounded-xl bg-emerald-700 text-white flex items-center justify-center shadow-xs">
-              <span className="material-symbols-outlined text-[20px]">psychiatry</span>
-            </span>
+            <div className="w-10 h-10 rounded-xl overflow-hidden bg-[#FFF9F0] border border-[#7A1E1E]/20 shadow-xs flex items-center justify-center p-0.5 shrink-0">
+              <img
+                src="/images/logo-avatar.png"
+                alt="Janki Rasoi Logo"
+                className="w-full h-full object-cover rounded-lg"
+              />
+            </div>
             <div>
               <h1 className="font-headline font-bold text-base leading-none text-gray-900">
                 Janki Rasoi
@@ -2888,9 +2892,13 @@ export default function OperationsConsolePage() {
               {/* Header */}
               <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                 <div className="flex items-center gap-2.5">
-                  <span className="w-8 h-8 rounded-xl bg-emerald-700 text-white flex items-center justify-center shadow-xs">
-                    <span className="material-symbols-outlined text-[18px]">psychiatry</span>
-                  </span>
+                  <div className="w-8 h-8 rounded-xl overflow-hidden bg-[#FFF9F0] border border-[#7A1E1E]/20 shadow-xs flex items-center justify-center p-0.5 shrink-0">
+                    <img
+                      src="/images/logo-avatar.png"
+                      alt="Janki Rasoi Logo"
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                  </div>
                   <div>
                     <div className="font-headline font-bold text-sm text-gray-900 leading-none">Janki Rasoi</div>
                     <div className="text-[10px] text-gray-400 font-medium">Operations Console</div>
