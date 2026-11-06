@@ -323,7 +323,7 @@ const getApiBase = () => {
 export function optimizeImageUrl(url?: string, width = 400): string {
   if (!url) return '';
   if (url.startsWith('/images/dishes/') || url.startsWith('/images/')) {
-    return url.includes('?') ? url : `${url}?v=20261105c`;
+    return url.includes('?') ? url : `${url}?v=20261106_v2`;
   }
   if (url.includes('cloudinary.com') && url.includes('/upload/') && !url.includes('/f_auto')) {
     return url.replace('/upload/', `/upload/f_auto,q_auto,w_${width},c_limit/`);

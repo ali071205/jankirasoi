@@ -43,3 +43,6 @@ Thumbs.db
 playwright-report/
 test-results/
 
+
+rea-evidence.bundle
+rea-source-paths.json
