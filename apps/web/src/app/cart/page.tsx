@@ -94,65 +94,32 @@ export default function CartPage() {
     }).catch(() => {});
   }, []);
 
-  // Context-aware dynamic suggestions based on what is in the cart
+  // Stable meal companion suggestions from live database catalog (items never disappear when added)
   const suggestedAddons = useMemo(() => {
     if (!allCatalogItems || allCatalogItems.length === 0) return [];
 
-    const cartItemNames = items.map((i) => (i.name || '').toLowerCase());
-    const cartProductIds = new Set(items.map((i) => i.productId));
+    // Filter out sold out items only (items NEVER disappear when added to cart)
+    const available = allCatalogItems.filter((item) => !item.isSoldOut);
 
-    const hasCurry = cartItemNames.some((n) =>
-      n.includes('paneer') || n.includes('sabzi') || n.includes('sev') || n.includes('aloo') || n.includes('chana')
-    );
-    const hasBreads = cartItemNames.some((n) =>
-      n.includes('paratha') || n.includes('roti')
-    );
-    const hasRiceOrDal = cartItemNames.some((n) =>
-      n.includes('rice') || n.includes('pulao') || n.includes('dal')
-    );
-    const hasThali = cartItemNames.some((n) =>
-      n.includes('thali')
-    );
-
-    // Available items excluding sold out & already in cart
-    const available = allCatalogItems.filter(
-      (item) => !item.isSoldOut && !cartProductIds.has(item.id)
-    );
-
-    // Score items for smart meal pairing
+    // Score items so complementary breads, rice, snacks and sides are featured
     const scored = available.map((item) => {
       let score = 0;
       const name = item.name.toLowerCase();
 
-      // 1. Sabzi pairs best with Paratha / Breads
-      if (hasCurry && !hasBreads && name.includes('paratha')) {
-        score += 50;
-      }
-      // 2. Sabzi pairs with Rice
-      if (hasCurry && !hasRiceOrDal && (name.includes('rice') || name.includes('pulao'))) {
-        score += 40;
-      }
-      // 3. Breads pair best with Dal / Sabzi
-      if (hasBreads && !hasCurry && (name.includes('dal') || name.includes('paneer') || name.includes('sev'))) {
-        score += 50;
-      }
-      // 4. Thali pairs well with Gud Ki Chai or Finger Chips or Poha
-      if (hasThali && (name.includes('chai') || name.includes('chips') || name.includes('poha'))) {
-        score += 35;
-      }
-      // Universal crowd favourites for completing a meal
-      if (name.includes('chai')) score += 30;
-      if (name.includes('chips')) score += 25;
-      if (name.includes('paratha')) score += 20;
-      if (name.includes('rice') || name.includes('pulao')) score += 18;
-      if (name.includes('dal')) score += 15;
+      if (name.includes('paratha')) score += 50;
+      if (name.includes('rice') || name.includes('pulao')) score += 45;
+      if (name.includes('dal')) score += 40;
+      if (name.includes('chai')) score += 35;
+      if (name.includes('chips')) score += 30;
+      if (name.includes('poha')) score += 25;
+      if (name.includes('paneer') || name.includes('sabzi') || name.includes('sev')) score += 20;
 
       return { item, score };
     });
 
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, 10).map((s) => s.item);
-  }, [allCatalogItems, items]);
+    return scored.slice(0, 12).map((s) => s.item);
+  }, [allCatalogItems]);
 
   // Fetch logged in customer and prefill address
   useEffect(() => {
@@ -827,6 +794,9 @@ export default function CartPage() {
                 {suggestedAddons.map((addon) => {
                   const dishImage = resolveDishImageUrl(addon);
                   const fallbackImage = (addon.slug && DEFAULT_DISH_IMAGES[addon.slug]) || DEFAULT_FOOD_IMAGE;
+                  const cartItemIdx = items.findIndex((i) => i.productId === addon.id);
+                  const inCartQty = cartItemIdx > -1 ? items[cartItemIdx].quantity : 0;
+
                   return (
                     <div key={addon.id} className="w-28 sm:w-32 shrink-0 flex flex-col gap-1">
                       <div className="relative w-28 sm:w-32 h-20 sm:h-24 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
@@ -841,23 +811,51 @@ export default function CartPage() {
                             e.currentTarget.src = fallbackImage;
                           }}
                         />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            addItem({
-                              productId: addon.id,
-                              name: addon.name,
-                              pricePaise: addon.basePricePaise,
-                              quantity: 1,
-                              imageUrl: dishImage,
-                            });
-                            showToast(`Added ${addon.name}`);
-                          }}
-                          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-md bg-white text-emerald-700 font-extrabold text-sm flex items-center justify-center shadow-md hover:scale-110 active:scale-95 transition-transform border border-emerald-600"
-                          aria-label={`Add ${addon.name}`}
-                        >
-                          +
-                        </button>
+                        {inCartQty > 0 ? (
+                          <div className="absolute top-1.5 right-1.5 bg-emerald-700 text-white font-extrabold text-xs flex items-center rounded-md shadow-md border border-emerald-600 overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                updateQty(cartItemIdx, -1);
+                              }}
+                              className="w-5 h-5 flex items-center justify-center hover:bg-emerald-800 active:scale-95 transition-transform"
+                              aria-label={`Decrease ${addon.name}`}
+                            >
+                              -
+                            </button>
+                            <span className="px-1 text-[11px] font-bold min-w-3 text-center">{inCartQty}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                updateQty(cartItemIdx, 1);
+                                showToast(`Added another ${addon.name}`);
+                              }}
+                              className="w-5 h-5 flex items-center justify-center hover:bg-emerald-800 active:scale-95 transition-transform"
+                              aria-label={`Increase ${addon.name}`}
+                            >
+                              +
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              addItem({
+                                productId: addon.id,
+                                name: addon.name,
+                                pricePaise: addon.basePricePaise,
+                                quantity: 1,
+                                imageUrl: dishImage,
+                              });
+                            }}
+                            className="absolute top-1.5 right-1.5 w-6 h-6 rounded-md bg-white text-emerald-700 font-extrabold text-sm flex items-center justify-center shadow-md hover:scale-110 active:scale-95 transition-transform border border-emerald-600"
+                            aria-label={`Add ${addon.name}`}
+                          >
+                            +
+                          </button>
+                        )}
                       </div>
                       <div className="flex items-center gap-1 mt-0.5">
                         <span className="w-2.5 h-2.5 rounded-2xs border border-emerald-600 flex items-center justify-center p-0.5 shrink-0 bg-white">
