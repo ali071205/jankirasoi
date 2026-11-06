@@ -261,8 +261,69 @@ export interface RiderDelivery {
 
 export const DEFAULT_FOOD_IMAGE = '/images/dishes/special-thali-bhar-pet.jpg';
 
+export const DEFAULT_DISH_IMAGES: Record<string, string> = {
+  'aloo-gobhi': '/images/dishes/aloo-gobhi.jpg',
+  'aloo-matar': '/images/dishes/aloo-matar.jpg',
+  'aloo-paratha': '/images/dishes/aloo-paratha.jpg',
+  'aloo-tamatar': '/images/dishes/aloo-tamatar.jpg',
+  'chana-masala': '/images/dishes/chana-masala.jpg',
+  'dal-bati-thali': '/images/dishes/dal-bati-thali.jpg',
+  'dal-fry': '/images/dishes/dal-fry.jpg',
+  'dal-tadka': '/images/dishes/dal-tadka.jpg',
+  'finger-chips': '/images/dishes/finger-chips.jpg',
+  'gobhi-paratha': '/images/dishes/gobhi-paratha.jpg',
+  'gud-ki-chai': '/images/dishes/gud-ki-chai.jpg',
+  'indori-poha-special-nashta': '/images/dishes/indori-poha-special-nashta.jpg',
+  'jeera-dal': '/images/dishes/jeera-dal.jpg',
+  'jeera-rice': '/images/dishes/jeera-rice.jpg',
+  'kadhai-paneer': '/images/dishes/kadhai-paneer.jpg',
+  'matar-paneer': '/images/dishes/matar-paneer.jpg',
+  'matar-pulao': '/images/dishes/matar-pulao.jpg',
+  'mix-dal': '/images/dishes/mix-dal.jpg',
+  'mix-sabzi': '/images/dishes/mix-sabzi.jpg',
+  'paneer-masala': '/images/dishes/paneer-masala.jpg',
+  'paneer-paratha': '/images/dishes/paneer-paratha.jpg',
+  'plain-paratha': '/images/dishes/plain-paratha.jpg',
+  'plain-rice': '/images/dishes/plain-rice.jpg',
+  'sadi-thali': '/images/dishes/sadi-thali.jpg',
+  'sev-bhaji': '/images/dishes/sev-bhaji.jpg',
+  'sev-masala': '/images/dishes/sev-masala.jpg',
+  'sev-paratha': '/images/dishes/sev-paratha.jpg',
+  'sev-tamatar': '/images/dishes/sev-tamatar.jpg',
+  'shahi-paneer': '/images/dishes/shahi-paneer.jpg',
+  'special-thali-bhar-pet': '/images/dishes/special-thali-bhar-pet.jpg',
+  'urad-chana-dal': '/images/dishes/urad-chana-dal.jpg',
+  // Common legacy seeds
+  'executive-north-indian-thali': '/images/dishes/special-thali-bhar-pet.jpg',
+  'homestyle-dal-khichdi-bowl': '/images/dishes/mix-dal.jpg',
+  'janaki-special-full-thali': '/images/dishes/special-thali-bhar-pet.jpg',
+  'regular-home-thali': '/images/dishes/sadi-thali.jpg',
+  'roti-sabzi-duo': '/images/dishes/mix-sabzi.jpg',
+};
+
+export function resolveDishImageUrl(dish?: { imageUrl?: string | null; slug?: string; name?: string }): string {
+  if (!dish) return DEFAULT_FOOD_IMAGE;
+  const img = dish.imageUrl?.trim();
+  if (img && img !== DEFAULT_FOOD_IMAGE) {
+    return img;
+  }
+  if (dish.slug && DEFAULT_DISH_IMAGES[dish.slug]) {
+    return DEFAULT_DISH_IMAGES[dish.slug];
+  }
+  if (dish.name) {
+    const norm = dish.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    for (const [slug, url] of Object.entries(DEFAULT_DISH_IMAGES)) {
+      if (norm.includes(slug) || slug.includes(norm)) {
+        return url;
+      }
+    }
+  }
+  return DEFAULT_FOOD_IMAGE;
+}
+
 // In-memory + SessionStorage cache for instant zero-latency client transitions without re-fetching
 const memoryCache = new Map<string, { data: any; expiry: number }>();
+const CACHE_PREFIX = 'jr_v5_cache_';
 
 function getCached<T>(key: string): T | null {
   const item = memoryCache.get(key);
@@ -276,14 +337,14 @@ function getCached<T>(key: string): T | null {
   // Cross-refresh fallback from sessionStorage
   if (typeof window !== 'undefined') {
     try {
-      const stored = window.sessionStorage.getItem(`jr_v3_cache_${key}`);
+      const stored = window.sessionStorage.getItem(`${CACHE_PREFIX}${key}`);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Date.now() <= parsed.expiry) {
           memoryCache.set(key, parsed);
           return parsed.data as T;
         } else {
-          window.sessionStorage.removeItem(`jr_v3_cache_${key}`);
+          window.sessionStorage.removeItem(`${CACHE_PREFIX}${key}`);
         }
       }
     } catch {
@@ -299,7 +360,7 @@ function setCached<T>(key: string, data: T, ttlMs = 180000): T {
   memoryCache.set(key, { data, expiry });
   if (typeof window !== 'undefined') {
     try {
-      window.sessionStorage.setItem(`jr_v3_cache_${key}`, JSON.stringify({ data, expiry }));
+      window.sessionStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify({ data, expiry }));
     } catch {
       // Ignore quota issues
     }
@@ -397,6 +458,7 @@ export const api = {
       channel.onmessage = () => {
         memoryCache.delete('catalog_today');
         try { 
+          window.sessionStorage.removeItem(`${CACHE_PREFIX}catalog_today`);
           window.sessionStorage.removeItem('jr_v3_cache_catalog_today');
           window.sessionStorage.removeItem('jr_cache_catalog_today');
         } catch {}
@@ -408,6 +470,7 @@ export const api = {
       if (e.key === 'jr_menu_timestamp') {
         memoryCache.delete('catalog_today');
         try { 
+          window.sessionStorage.removeItem(`${CACHE_PREFIX}catalog_today`);
           window.sessionStorage.removeItem('jr_v3_cache_catalog_today');
           window.sessionStorage.removeItem('jr_cache_catalog_today');
         } catch {}
@@ -418,6 +481,7 @@ export const api = {
     const handleFocus = () => {
       memoryCache.delete('catalog_today');
       try { 
+        window.sessionStorage.removeItem(`${CACHE_PREFIX}catalog_today`);
         window.sessionStorage.removeItem('jr_v3_cache_catalog_today');
         window.sessionStorage.removeItem('jr_cache_catalog_today');
       } catch {}

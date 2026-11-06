@@ -34,6 +34,45 @@ export function optimizeCloudinaryUrl(url?: string): string | undefined {
   return url;
 }
 
+export const DEFAULT_DISH_IMAGES: Record<string, string> = {
+  'aloo-gobhi': '/images/dishes/aloo-gobhi.jpg',
+  'aloo-matar': '/images/dishes/aloo-matar.jpg',
+  'aloo-paratha': '/images/dishes/aloo-paratha.jpg',
+  'aloo-tamatar': '/images/dishes/aloo-tamatar.jpg',
+  'chana-masala': '/images/dishes/chana-masala.jpg',
+  'dal-bati-thali': '/images/dishes/dal-bati-thali.jpg',
+  'dal-fry': '/images/dishes/dal-fry.jpg',
+  'dal-tadka': '/images/dishes/dal-tadka.jpg',
+  'finger-chips': '/images/dishes/finger-chips.jpg',
+  'gobhi-paratha': '/images/dishes/gobhi-paratha.jpg',
+  'gud-ki-chai': '/images/dishes/gud-ki-chai.jpg',
+  'indori-poha-special-nashta': '/images/dishes/indori-poha-special-nashta.jpg',
+  'jeera-dal': '/images/dishes/jeera-dal.jpg',
+  'jeera-rice': '/images/dishes/jeera-rice.jpg',
+  'kadhai-paneer': '/images/dishes/kadhai-paneer.jpg',
+  'matar-paneer': '/images/dishes/matar-paneer.jpg',
+  'matar-pulao': '/images/dishes/matar-pulao.jpg',
+  'mix-dal': '/images/dishes/mix-dal.jpg',
+  'mix-sabzi': '/images/dishes/mix-sabzi.jpg',
+  'paneer-masala': '/images/dishes/paneer-masala.jpg',
+  'paneer-paratha': '/images/dishes/paneer-paratha.jpg',
+  'plain-paratha': '/images/dishes/plain-paratha.jpg',
+  'plain-rice': '/images/dishes/plain-rice.jpg',
+  'sadi-thali': '/images/dishes/sadi-thali.jpg',
+  'sev-bhaji': '/images/dishes/sev-bhaji.jpg',
+  'sev-masala': '/images/dishes/sev-masala.jpg',
+  'sev-paratha': '/images/dishes/sev-paratha.jpg',
+  'sev-tamatar': '/images/dishes/sev-tamatar.jpg',
+  'shahi-paneer': '/images/dishes/shahi-paneer.jpg',
+  'special-thali-bhar-pet': '/images/dishes/special-thali-bhar-pet.jpg',
+  'urad-chana-dal': '/images/dishes/urad-chana-dal.jpg',
+  'executive-north-indian-thali': '/images/dishes/special-thali-bhar-pet.jpg',
+  'homestyle-dal-khichdi-bowl': '/images/dishes/mix-dal.jpg',
+  'janaki-special-full-thali': '/images/dishes/special-thali-bhar-pet.jpg',
+  'regular-home-thali': '/images/dishes/sadi-thali.jpg',
+  'roti-sabzi-duo': '/images/dishes/mix-sabzi.jpg',
+};
+
 /**
  * Normalizes dates to Indian Standard Time (IST / Asia/Kolkata) calendar day
  * to guarantee accurate day-boundaries across midnight and exact @db.Date matching in PostgreSQL.
@@ -126,7 +165,7 @@ export class CatalogService {
             slug: p.slug,
             description: p.description,
             dietaryType: p.dietaryType,
-            imageUrl: optimizeCloudinaryUrl(p.imageUrl),
+            imageUrl: optimizeCloudinaryUrl(p.imageUrl?.trim() || DEFAULT_DISH_IMAGES[p.slug] || '/images/dishes/special-thali-bhar-pet.jpg'),
             basePricePaise: p.basePricePaise,
             taxRatePercent: p.taxRatePercent,
             isSoldOut,

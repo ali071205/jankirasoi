@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { DEFAULT_FOOD_IMAGE } from '../lib/api';
+import { DEFAULT_FOOD_IMAGE, DEFAULT_DISH_IMAGES } from '../lib/api';
 
 export interface DeliveryStatusPillProps {
   orderNumber: string;
@@ -135,17 +135,23 @@ export function resolveOrderFoodImage(itemName?: string, fallbackUrl?: string): 
   }
 
   if (!itemName) return DEFAULT_FOOD_IMAGE;
-  const lower = itemName.toLowerCase();
+  const norm = itemName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+  for (const [slug, url] of Object.entries(DEFAULT_DISH_IMAGES)) {
+    if (norm.includes(slug) || slug.includes(norm)) {
+      return url;
+    }
+  }
 
+  const lower = itemName.toLowerCase();
   // Common homestyle dish category images
   if (lower.includes('thali') || lower.includes('special')) {
-    return 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=400&q=80';
+    return '/images/dishes/special-thali-bhar-pet.jpg';
   }
   if (lower.includes('khichdi') || lower.includes('bowl')) {
-    return 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?auto=format&fit=crop&w=800&q=80';
+    return '/images/dishes/mix-dal.jpg';
   }
   if (lower.includes('phulka') || lower.includes('roti') || lower.includes('paratha')) {
-    return 'https://images.unsplash.com/photo-1606471191009-63994c53433b?auto=format&fit=crop&w=400&q=80';
+    return '/images/dishes/aloo-paratha.jpg';
   }
 
   return DEFAULT_FOOD_IMAGE;

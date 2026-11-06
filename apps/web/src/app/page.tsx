@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
-import { api, MenuItem, CatalogResponse, TrackOrderResponse, DEFAULT_FOOD_IMAGE } from '../lib/api';
+import { api, MenuItem, CatalogResponse, TrackOrderResponse, DEFAULT_FOOD_IMAGE, resolveDishImageUrl, DEFAULT_DISH_IMAGES } from '../lib/api';
 import { useCart } from '../context/CartContext';
 import DishDetailModal from '../components/DishDetailModal';
 import ActiveOrderBanner from '../components/ActiveOrderBanner';
@@ -243,11 +243,12 @@ export default function HomePage() {
                       style={{ aspectRatio: '1 / 1' }}
                       loading="lazy"
                       decoding="async"
-                      src={dish.imageUrl || DEFAULT_FOOD_IMAGE}
+                      src={resolveDishImageUrl(dish)}
                       alt={dish.name}
                       onError={(e) => {
                         e.currentTarget.onerror = null;
-                        e.currentTarget.src = DEFAULT_FOOD_IMAGE;
+                        const fallback = (dish.slug && DEFAULT_DISH_IMAGES[dish.slug]) || DEFAULT_FOOD_IMAGE;
+                        e.currentTarget.src = fallback;
                       }}
                     />
 

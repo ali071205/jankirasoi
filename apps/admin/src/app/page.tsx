@@ -799,25 +799,118 @@ export default function OperationsConsolePage() {
     }
   };
 
-  // Quick Preset Authentic Thali Images
-  const PRESET_THALI_IMAGES = [
-    {
-      title: 'Deluxe Shahi Paneer Thali',
-      url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=800&auto=format&fit=crop&q=80',
-    },
-    {
-      title: 'Homestyle Dal & Phulka Thali',
-      url: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&auto=format&fit=crop&q=80',
-    },
-    {
-      title: 'Satvik Pure Veg Thali',
-      url: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=800&auto=format&fit=crop&q=80',
-    },
-    {
-      title: 'Rajasthani / Gujarati Feast',
-      url: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=800&auto=format&fit=crop&q=80',
-    },
+  // Quick Preset Authentic Dish Photos
+  const PRESET_AUTHENTIC_DISHES = [
+    { title: 'Special Thali (भर पेट)', url: '/images/dishes/special-thali-bhar-pet.jpg' },
+    { title: 'Dal Bati Thali (दाल-बाटी थाली)', url: '/images/dishes/dal-bati-thali.jpg' },
+    { title: 'Sadi Thali (सादी थाली)', url: '/images/dishes/sadi-thali.jpg' },
+    { title: 'Shahi Paneer', url: '/images/dishes/shahi-paneer.jpg' },
+    { title: 'Paneer Masala', url: '/images/dishes/paneer-masala.jpg' },
+    { title: 'Kadhai Paneer', url: '/images/dishes/kadhai-paneer.jpg' },
+    { title: 'Matar Paneer', url: '/images/dishes/matar-paneer.jpg' },
+    { title: 'Sev Bhaji', url: '/images/dishes/sev-bhaji.jpg' },
+    { title: 'Sev Tamatar', url: '/images/dishes/sev-tamatar.jpg' },
+    { title: 'Sev Masala', url: '/images/dishes/sev-masala.jpg' },
+    { title: 'Dal Tadka', url: '/images/dishes/dal-tadka.jpg' },
+    { title: 'Dal Fry', url: '/images/dishes/dal-fry.jpg' },
+    { title: 'Jeera Dal', url: '/images/dishes/jeera-dal.jpg' },
+    { title: 'Mix Dal', url: '/images/dishes/mix-dal.jpg' },
+    { title: 'Urad Chana Dal', url: '/images/dishes/urad-chana-dal.jpg' },
+    { title: 'Chana Masala', url: '/images/dishes/chana-masala.jpg' },
+    { title: 'Aloo Gobhi', url: '/images/dishes/aloo-gobhi.jpg' },
+    { title: 'Aloo Matar', url: '/images/dishes/aloo-matar.jpg' },
+    { title: 'Aloo Tamatar', url: '/images/dishes/aloo-tamatar.jpg' },
+    { title: 'Mix Sabzi', url: '/images/dishes/mix-sabzi.jpg' },
+    { title: 'Aloo Paratha', url: '/images/dishes/aloo-paratha.jpg' },
+    { title: 'Paneer Paratha', url: '/images/dishes/paneer-paratha.jpg' },
+    { title: 'Gobhi Paratha', url: '/images/dishes/gobhi-paratha.jpg' },
+    { title: 'Sev Paratha', url: '/images/dishes/sev-paratha.jpg' },
+    { title: 'Plain Paratha', url: '/images/dishes/plain-paratha.jpg' },
+    { title: 'Jeera Rice', url: '/images/dishes/jeera-rice.jpg' },
+    { title: 'Matar Pulao', url: '/images/dishes/matar-pulao.jpg' },
+    { title: 'Plain Rice', url: '/images/dishes/plain-rice.jpg' },
+    { title: 'Indori Poha (नाश्ता)', url: '/images/dishes/indori-poha-special-nashta.jpg' },
+    { title: 'Gud Ki Chai', url: '/images/dishes/gud-ki-chai.jpg' },
+    { title: 'Finger Chips', url: '/images/dishes/finger-chips.jpg' },
   ];
+
+  const PRESET_THALI_IMAGES = PRESET_AUTHENTIC_DISHES;
+
+  const DEFAULT_DISH_IMAGES: Record<string, string> = {
+    'aloo-gobhi': '/images/dishes/aloo-gobhi.jpg',
+    'aloo-matar': '/images/dishes/aloo-matar.jpg',
+    'aloo-paratha': '/images/dishes/aloo-paratha.jpg',
+    'aloo-tamatar': '/images/dishes/aloo-tamatar.jpg',
+    'chana-masala': '/images/dishes/chana-masala.jpg',
+    'dal-bati-thali': '/images/dishes/dal-bati-thali.jpg',
+    'dal-fry': '/images/dishes/dal-fry.jpg',
+    'dal-tadka': '/images/dishes/dal-tadka.jpg',
+    'finger-chips': '/images/dishes/finger-chips.jpg',
+    'gobhi-paratha': '/images/dishes/gobhi-paratha.jpg',
+    'gud-ki-chai': '/images/dishes/gud-ki-chai.jpg',
+    'indori-poha-special-nashta': '/images/dishes/indori-poha-special-nashta.jpg',
+    'jeera-dal': '/images/dishes/jeera-dal.jpg',
+    'jeera-rice': '/images/dishes/jeera-rice.jpg',
+    'kadhai-paneer': '/images/dishes/kadhai-paneer.jpg',
+    'matar-paneer': '/images/dishes/matar-paneer.jpg',
+    'matar-pulao': '/images/dishes/matar-pulao.jpg',
+    'mix-dal': '/images/dishes/mix-dal.jpg',
+    'mix-sabzi': '/images/dishes/mix-sabzi.jpg',
+    'paneer-masala': '/images/dishes/paneer-masala.jpg',
+    'paneer-paratha': '/images/dishes/paneer-paratha.jpg',
+    'plain-paratha': '/images/dishes/plain-paratha.jpg',
+    'plain-rice': '/images/dishes/plain-rice.jpg',
+    'sadi-thali': '/images/dishes/sadi-thali.jpg',
+    'sev-bhaji': '/images/dishes/sev-bhaji.jpg',
+    'sev-masala': '/images/dishes/sev-masala.jpg',
+    'sev-paratha': '/images/dishes/sev-paratha.jpg',
+    'sev-tamatar': '/images/dishes/sev-tamatar.jpg',
+    'shahi-paneer': '/images/dishes/shahi-paneer.jpg',
+    'special-thali-bhar-pet': '/images/dishes/special-thali-bhar-pet.jpg',
+    'urad-chana-dal': '/images/dishes/urad-chana-dal.jpg',
+  };
+
+  const compressImageToDataUrl = async (file: File, maxWidth = 900, quality = 0.82): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          if (height > maxWidth) {
+            width = Math.round((width * maxWidth) / height);
+            height = maxWidth;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(e.target?.result as string);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          try {
+            const webp = canvas.toDataURL('image/webp', quality);
+            if (webp && webp.startsWith('data:image/webp')) {
+              resolve(webp);
+              return;
+            }
+          } catch {}
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => reject(new Error('Failed to parse image file'));
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error('Failed to read image file'));
+      reader.readAsDataURL(file);
+    });
+  };
 
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -826,22 +919,30 @@ export default function OperationsConsolePage() {
       setDishFormError('Please select a valid image file (JPG, PNG, or WebP)');
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setDishFormError('Image size exceeds 10MB limit');
+    if (file.size > 15 * 1024 * 1024) {
+      setDishFormError('Image size exceeds 15MB limit');
       return;
     }
     setDishFormError(null);
     setIsUploadingImage(true);
     try {
-      const uploadedUrl = await adminApi.uploadFoodImage(file);
+      let uploadedUrl = '';
+      try {
+        uploadedUrl = await adminApi.uploadFoodImage(file);
+        showToast('Image uploaded via Cloudinary');
+      } catch (uploadErr) {
+        console.warn('Cloudinary upload unavailable, compressing locally:', uploadErr);
+        uploadedUrl = await compressImageToDataUrl(file, 900, 0.82);
+        showToast('Image attached & optimized successfully');
+      }
       setNewDishImageUrl(uploadedUrl);
-      showToast('Image uploaded & compressed via Cloudinary');
     } catch (err: any) {
       console.error('Image upload failed:', err);
       setDishFormError(err.message || 'Image upload failed. Please try again.');
       showToast(err.message || 'Image upload failed');
     } finally {
       setIsUploadingImage(false);
+      e.target.value = '';
     }
   };
 
@@ -919,7 +1020,7 @@ export default function OperationsConsolePage() {
     setEditDishCategory(dish.categoryId || defaultCatId || catalogCategories[0]?.id || '');
     setEditDishPrice(dish.basePricePaise ? (dish.basePricePaise / 100).toString() : '149');
     setEditDishDescription(dish.description || '');
-    setEditDishImageUrl(dish.imageUrl || '');
+    setEditDishImageUrl(dish.imageUrl || DEFAULT_DISH_IMAGES[dish.slug] || '/images/dishes/special-thali-bhar-pet.jpg');
     setEditDishError(null);
     setEditDishSuccess(null);
     setShowEditDishModal(true);
@@ -932,22 +1033,30 @@ export default function OperationsConsolePage() {
       setEditDishError('Please select a valid image file (JPG, PNG, or WebP)');
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setEditDishError('Image size exceeds 10MB limit');
+    if (file.size > 15 * 1024 * 1024) {
+      setEditDishError('Image size exceeds 15MB limit');
       return;
     }
     setEditDishError(null);
     setIsUploadingEditImage(true);
     try {
-      const uploadedUrl = await adminApi.uploadFoodImage(file);
+      let uploadedUrl = '';
+      try {
+        uploadedUrl = await adminApi.uploadFoodImage(file);
+        showToast('Image uploaded via Cloudinary');
+      } catch (uploadErr) {
+        console.warn('Cloudinary upload unavailable, compressing locally:', uploadErr);
+        uploadedUrl = await compressImageToDataUrl(file, 900, 0.82);
+        showToast('Image updated & attached successfully!');
+      }
       setEditDishImageUrl(uploadedUrl);
-      showToast('Image updated & compressed via Cloudinary');
     } catch (err: any) {
       console.error('Image upload failed:', err);
       setEditDishError(err.message || 'Image upload failed. Please try again.');
       showToast(err.message || 'Image upload failed');
     } finally {
       setIsUploadingEditImage(false);
+      e.target.value = '';
     }
   };
 
@@ -2439,9 +2548,13 @@ export default function OperationsConsolePage() {
                             <div>
                               <div className="relative aspect-[16/10] w-full rounded-xl overflow-hidden bg-stone-100 border border-stone-200/60 mb-3 shadow-2xs">
                                 <img
-                                  src={item.imageUrl || PRESET_THALI_IMAGES[0].url}
+                                  src={item.imageUrl || DEFAULT_DISH_IMAGES[item.slug] || PRESET_AUTHENTIC_DISHES[0].url}
                                   alt={item.name}
                                   className="w-full h-full object-cover object-center"
+                                  onError={(e) => {
+                                    e.currentTarget.onerror = null;
+                                    e.currentTarget.src = DEFAULT_DISH_IMAGES[item.slug] || PRESET_AUTHENTIC_DISHES[0].url;
+                                  }}
                                 />
                                 <span className="absolute top-2 left-2 w-4 h-4 rounded-xs border border-green-600 bg-white p-0.5 flex items-center justify-center shadow-xs">
                                   <span className="w-2 h-2 rounded-full bg-green-600"></span>
@@ -3245,23 +3358,39 @@ export default function OperationsConsolePage() {
                     />
                   </div>
 
-                  {/* Preset Quick Select */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
-                    <span className="text-[10px] text-gray-500 font-bold shrink-0">Presets:</span>
-                    {PRESET_THALI_IMAGES.map((preset) => (
-                      <button
-                        key={preset.title}
-                        type="button"
-                        onClick={() => setNewDishImageUrl(preset.url)}
-                        className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold whitespace-nowrap border transition-colors ${
-                          newDishImageUrl === preset.url
-                            ? 'bg-emerald-50 text-emerald-900 border-emerald-300 font-bold'
-                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-200'
-                        }`}
-                      >
-                        {preset.title}
-                      </button>
-                    ))}
+                  {/* Authentic Dish Presets */}
+                  <div className="flex flex-col gap-1.5 pt-1">
+                    <div className="flex items-center justify-between text-[11px] text-gray-600 font-bold">
+                      <span>Or Choose Authentic Dish Photo:</span>
+                      <span className="text-emerald-700 font-medium">31 Dishes Available</span>
+                    </div>
+                    <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 no-scrollbar">
+                      {PRESET_AUTHENTIC_DISHES.map((preset) => {
+                        const isSelected = newDishImageUrl === preset.url;
+                        return (
+                          <button
+                            key={preset.title}
+                            type="button"
+                            onClick={() => setNewDishImageUrl(preset.url)}
+                            className={`group flex items-center gap-2 px-2.5 py-1.5 rounded-xl border text-left shrink-0 transition-all ${
+                              isSelected
+                                ? 'bg-emerald-50 text-emerald-950 border-emerald-500 shadow-xs ring-1 ring-emerald-500 font-bold'
+                                : 'bg-white hover:bg-stone-50 text-stone-700 border-stone-200 font-medium'
+                            }`}
+                          >
+                            <img
+                              src={preset.url}
+                              alt={preset.title}
+                              className="w-7 h-7 rounded-lg object-cover border border-stone-200 shrink-0"
+                            />
+                            <span className="text-xs whitespace-nowrap">{preset.title}</span>
+                            {isSelected && (
+                              <span className="material-symbols-outlined text-[15px] text-emerald-700 shrink-0">check_circle</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -3468,23 +3597,39 @@ export default function OperationsConsolePage() {
                     />
                   </div>
 
-                  {/* Presets */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
-                    <span className="text-[10px] text-gray-500 font-bold shrink-0">Presets:</span>
-                    {PRESET_THALI_IMAGES.map((preset) => (
-                      <button
-                        key={preset.title}
-                        type="button"
-                        onClick={() => setEditDishImageUrl(preset.url)}
-                        className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold whitespace-nowrap border transition-colors ${
-                          editDishImageUrl === preset.url
-                            ? 'bg-emerald-50 text-emerald-900 border-emerald-300 font-bold'
-                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-200'
-                        }`}
-                      >
-                        {preset.title}
-                      </button>
-                    ))}
+                  {/* Authentic Dish Presets */}
+                  <div className="flex flex-col gap-1.5 pt-1">
+                    <div className="flex items-center justify-between text-[11px] text-gray-600 font-bold">
+                      <span>Or Choose Authentic Dish Photo:</span>
+                      <span className="text-emerald-700 font-medium">31 Dishes Available</span>
+                    </div>
+                    <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 no-scrollbar">
+                      {PRESET_AUTHENTIC_DISHES.map((preset) => {
+                        const isSelected = editDishImageUrl === preset.url;
+                        return (
+                          <button
+                            key={preset.title}
+                            type="button"
+                            onClick={() => setEditDishImageUrl(preset.url)}
+                            className={`group flex items-center gap-2 px-2.5 py-1.5 rounded-xl border text-left shrink-0 transition-all ${
+                              isSelected
+                                ? 'bg-emerald-50 text-emerald-950 border-emerald-500 shadow-xs ring-1 ring-emerald-500 font-bold'
+                                : 'bg-white hover:bg-stone-50 text-stone-700 border-stone-200 font-medium'
+                            }`}
+                          >
+                            <img
+                              src={preset.url}
+                              alt={preset.title}
+                              className="w-7 h-7 rounded-lg object-cover border border-stone-200 shrink-0"
+                            />
+                            <span className="text-xs whitespace-nowrap">{preset.title}</span>
+                            {isSelected && (
+                              <span className="material-symbols-outlined text-[15px] text-emerald-700 shrink-0">check_circle</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
