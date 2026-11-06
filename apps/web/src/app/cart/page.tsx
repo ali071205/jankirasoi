@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { api, DeliverySlot, QuoteResponse, DEFAULT_FOOD_IMAGE, UserProfile, MenuItem, CatalogResponse } from '../../lib/api';
+import { api, DeliverySlot, QuoteResponse, DEFAULT_FOOD_IMAGE, UserProfile, MenuItem, CatalogResponse, resolveDishImageUrl, DEFAULT_DISH_IMAGES } from '../../lib/api';
 import { useCart } from '../../context/CartContext';
 import LocationMapModal, { LocationData } from '../../components/LocationMapModal';
 
@@ -52,7 +52,7 @@ export default function CartPage() {
   const [showDirectionsInput, setShowDirectionsInput] = useState(false);
   const [tipPaise, setTipPaise] = useState(0);
   const [orderSuccessData, setOrderSuccessData] = useState<{ orderNumber: string; trackingToken: string } | null>(null);
-  const [menuAddons, setMenuAddons] = useState<MenuItem[]>([]);
+  const [allCatalogItems, setAllCatalogItems] = useState<MenuItem[]>([]);
 
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
 
@@ -78,32 +78,81 @@ export default function CartPage() {
     fetchSlots();
   }, [today]);
 
-  // Fetch authentic companions & sides from live database catalog
+  // Fetch live authentic menu items from database catalog
   useEffect(() => {
-    function filterAddons(cat: CatalogResponse) {
+    function loadCatalog(cat: CatalogResponse) {
       if (!cat?.categories) return;
       const all = cat.categories.flatMap((c) => c.items);
-      const companions = all.filter((item) => {
-        const n = item.name.toLowerCase();
-        return (
-          n.includes('paratha') ||
-          n.includes('rice') ||
-          n.includes('dal') ||
-          n.includes('poha') ||
-          n.includes('chai') ||
-          n.includes('chips')
-        ) && !item.isSoldOut;
-      });
-      setMenuAddons(companions.length > 0 ? companions.slice(0, 10) : all.slice(0, 8));
+      setAllCatalogItems(all);
     }
 
     const cached = api.getCachedCatalog();
-    if (cached) filterAddons(cached);
+    if (cached) loadCatalog(cached);
 
     api.getCatalog().then((cat) => {
-      if (cat) filterAddons(cat);
+      if (cat) loadCatalog(cat);
     }).catch(() => {});
   }, []);
+
+  // Context-aware dynamic suggestions based on what is in the cart
+  const suggestedAddons = useMemo(() => {
+    if (!allCatalogItems || allCatalogItems.length === 0) return [];
+
+    const cartItemNames = items.map((i) => (i.name || '').toLowerCase());
+    const cartProductIds = new Set(items.map((i) => i.productId));
+
+    const hasCurry = cartItemNames.some((n) =>
+      n.includes('paneer') || n.includes('sabzi') || n.includes('sev') || n.includes('aloo') || n.includes('chana')
+    );
+    const hasBreads = cartItemNames.some((n) =>
+      n.includes('paratha') || n.includes('roti')
+    );
+    const hasRiceOrDal = cartItemNames.some((n) =>
+      n.includes('rice') || n.includes('pulao') || n.includes('dal')
+    );
+    const hasThali = cartItemNames.some((n) =>
+      n.includes('thali')
+    );
+
+    // Available items excluding sold out & already in cart
+    const available = allCatalogItems.filter(
+      (item) => !item.isSoldOut && !cartProductIds.has(item.id)
+    );
+
+    // Score items for smart meal pairing
+    const scored = available.map((item) => {
+      let score = 0;
+      const name = item.name.toLowerCase();
+
+      // 1. Sabzi pairs best with Paratha / Breads
+      if (hasCurry && !hasBreads && name.includes('paratha')) {
+        score += 50;
+      }
+      // 2. Sabzi pairs with Rice
+      if (hasCurry && !hasRiceOrDal && (name.includes('rice') || name.includes('pulao'))) {
+        score += 40;
+      }
+      // 3. Breads pair best with Dal / Sabzi
+      if (hasBreads && !hasCurry && (name.includes('dal') || name.includes('paneer') || name.includes('sev'))) {
+        score += 50;
+      }
+      // 4. Thali pairs well with Gud Ki Chai or Finger Chips or Poha
+      if (hasThali && (name.includes('chai') || name.includes('chips') || name.includes('poha'))) {
+        score += 35;
+      }
+      // Universal crowd favourites for completing a meal
+      if (name.includes('chai')) score += 30;
+      if (name.includes('chips')) score += 25;
+      if (name.includes('paratha')) score += 20;
+      if (name.includes('rice') || name.includes('pulao')) score += 18;
+      if (name.includes('dal')) score += 15;
+
+      return { item, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, 10).map((s) => s.item);
+  }, [allCatalogItems, items]);
 
   // Fetch logged in customer and prefill address
   useEffect(() => {
@@ -764,19 +813,20 @@ export default function CartPage() {
           </div>
 
           {/* 5. Complete Your Meal Addons Horizontal Carousel (Live Database Menu Dishes) */}
-          {menuAddons.length > 0 && (
+          {suggestedAddons.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-[11px] sm:text-xs uppercase font-extrabold tracking-wider text-slate-500">
                   COMPLETE YOUR MEAL
                 </h3>
                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
-                  Fresh Menu Sides
+                  Pairs With Your Meal
                 </span>
               </div>
               <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
-                {menuAddons.map((addon) => {
-                  const dishImage = addon.imageUrl || DEFAULT_FOOD_IMAGE;
+                {suggestedAddons.map((addon) => {
+                  const dishImage = resolveDishImageUrl(addon);
+                  const fallbackImage = (addon.slug && DEFAULT_DISH_IMAGES[addon.slug]) || DEFAULT_FOOD_IMAGE;
                   return (
                     <div key={addon.id} className="w-28 sm:w-32 shrink-0 flex flex-col gap-1">
                       <div className="relative w-28 sm:w-32 h-20 sm:h-24 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
@@ -788,7 +838,7 @@ export default function CartPage() {
                           className="w-full h-full object-cover"
                           onError={(e) => {
                             e.currentTarget.onerror = null;
-                            e.currentTarget.src = DEFAULT_FOOD_IMAGE;
+                            e.currentTarget.src = fallbackImage;
                           }}
                         />
                         <button
