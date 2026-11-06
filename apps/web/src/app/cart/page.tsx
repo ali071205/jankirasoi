@@ -480,6 +480,17 @@ export default function CartPage() {
       });
       clearCart();
 
+      // Instant 0ms local broadcast to any open kitchen admin tab
+      try {
+        const bc = new BroadcastChannel('jankirasoi_orders_channel');
+        bc.postMessage({
+          type: 'ORDER_CREATED',
+          orderNumber: orderResult.orderNumber,
+          orderId: orderResult.orderId,
+        });
+        setTimeout(() => bc.close(), 1000);
+      } catch {}
+
       if (typeof window !== 'undefined') {
         try {
           window.localStorage.setItem('jr_last_tracking_token', orderResult.trackingToken);

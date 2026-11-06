@@ -623,8 +623,21 @@ export default function OperationsConsolePage() {
     document.addEventListener('visibilitychange', handleVisibilityOrFocus);
     window.addEventListener('focus', handleVisibilityOrFocus);
 
-    // 3. Real-time Server-Sent Events (SSE) for instant sub-second order arrival
+    // 3. Real-time Server-Sent Events (SSE) + Zero-Millisecond BroadcastChannel for Instant Arrival
     let eventSource: EventSource | null = null;
+    let ordersBroadcast: BroadcastChannel | null = null;
+
+    try {
+      ordersBroadcast = new BroadcastChannel('jankirasoi_orders_channel');
+      ordersBroadcast.onmessage = (event) => {
+        if (event.data?.type === 'ORDER_CREATED') {
+          playKitchenOrderChime();
+          showToast(`⚡ New order received: #${event.data.orderNumber || ''}`);
+          loadOrders(true);
+        }
+      };
+    } catch {}
+
     try {
       const streamUrl = '/api/v1/admin/orders/stream?simulated_role=STAFF';
       eventSource = new EventSource(streamUrl);
@@ -656,6 +669,9 @@ export default function OperationsConsolePage() {
       window.removeEventListener('focus', handleVisibilityOrFocus);
       if (eventSource) {
         eventSource.close();
+      }
+      if (ordersBroadcast) {
+        ordersBroadcast.close();
       }
     };
   }, [loadOrders, loadRiders, loadSlots, refreshIntervalSec]);
