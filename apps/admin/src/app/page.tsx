@@ -639,7 +639,8 @@ export default function OperationsConsolePage() {
     } catch {}
 
     try {
-      const streamUrl = '/api/v1/admin/orders/stream?simulated_role=STAFF';
+      const apiHost = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3000' : '';
+      const streamUrl = `${apiHost}/api/v1/admin/orders/stream?simulated_role=STAFF`;
       eventSource = new EventSource(streamUrl);
 
       eventSource.onmessage = (event) => {
@@ -1171,8 +1172,8 @@ export default function OperationsConsolePage() {
       return true;
     })
     .sort((a, b) => {
-      // Largest elapsed time when ordered: earliest timestamp comes first
-      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      // Newest orders first so newly placed orders appear instantly at the top of the queue
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
   const selectedOrder = orders.find((o) => o.id === selectedOrderId) || filteredOrders[0] || null;
