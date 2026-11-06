@@ -363,9 +363,30 @@ export const adminApi = {
     return res.json();
   },
 
-  // 12. Upload Food Image to Cloudinary via backend-signed signature
+  // 12. Upload Food Image directly to Supabase Storage (with Cloudinary fallback)
   async uploadFoodImage(file: File): Promise<string> {
     const base = getApiBase();
+
+    // 1. Try Supabase Storage direct upload via backend
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${base}/admin/uploads/food-image`, {
+        method: 'POST',
+        headers: {
+          'X-Simulated-Role': 'STAFF',
+        },
+        body: formData,
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.url) return json.url;
+      }
+    } catch (e) {
+      console.warn('Supabase backend upload failed, trying Cloudinary signature:', e);
+    }
+
+    // 2. Cloudinary signed upload fallback
     const sigRes = await fetch(`${base}/admin/uploads/signature?folder=jankirasoi/menu`, {
       headers: {
         'X-Simulated-Role': 'STAFF',

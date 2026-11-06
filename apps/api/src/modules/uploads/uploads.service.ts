@@ -31,4 +31,35 @@ export class UploadsService {
       uploadUrl: `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
     };
   }
+
+  async uploadFoodImageToSupabase(fileBuffer: Buffer, mimeType: string, filename: string): Promise<{ url: string }> {
+    const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
+    const serviceRoleKey = this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new BadRequestException('Supabase credentials (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) are not configured.');
+    }
+
+    const cleanName = (filename || 'dish.jpg').replace(/[^a-zA-Z0-9.-]/g, '_');
+    const storagePath = `dishes/${Date.now()}-${cleanName}`;
+
+    const res = await fetch(`${supabaseUrl}/storage/v1/object/menu/${storagePath}`, {
+      method: 'POST',
+      headers: {
+        'apikey': serviceRoleKey,
+        'Authorization': `Bearer ${serviceRoleKey}`,
+        'Content-Type': mimeType || 'image/jpeg',
+        'x-upsert': 'true',
+      },
+      body: fileBuffer as any,
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new BadRequestException(`Failed to upload to Supabase Storage: ${err}`);
+    }
+
+    const url = `${supabaseUrl}/storage/v1/object/public/menu/${storagePath}`;
+    return { url };
+  }
 }
