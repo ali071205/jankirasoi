@@ -36,6 +36,7 @@ export default function CartPage() {
   const [street, setStreet] = useState('');
   const [landmark, setLandmark] = useState('');
   const [pincode, setPincode] = useState('454774');
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>({ lat: 22.6288, lng: 75.5684 });
   const [detectedCity, setDetectedCity] = useState<string | null>('Sagore, Pithampur');
   const [checkingPin, setCheckingPin] = useState(false);
   const [deliveryNotes, setDeliveryNotes] = useState('');
@@ -286,7 +287,7 @@ export default function CartPage() {
 
     const timer = setTimeout(async () => {
       try {
-        const res = await api.checkPincode(cleanPin);
+        const res = await api.checkPincode(cleanPin, coords?.lat, coords?.lng);
         if (!isMounted) return;
 
         if (res.city) {
@@ -302,7 +303,6 @@ export default function CartPage() {
             text: `✓ ${res.zoneName || res.city || 'Sagore'} • ${feeText}`,
             isError: false,
           });
-          requestQuoteRef.current();
         } else {
           setPinStatusMsg({
             text: res.message || 'Delivery not available beyond 15 km from Sagore Kitchen.',
@@ -313,7 +313,7 @@ export default function CartPage() {
         if (!isMounted) return;
         setPinStatusMsg({
           text: err.message || 'Error checking pincode',
-          isError: true,
+          isError: false, // Don't block order on network check glitch
         });
       } finally {
         if (isMounted) setCheckingPin(false);
@@ -520,6 +520,14 @@ export default function CartPage() {
             })),
           });
           window.localStorage.setItem('jr_recent_orders', JSON.stringify(recents.slice(0, 20)));
+          window.dispatchEvent(
+            new CustomEvent('jr_order_placed', {
+              detail: {
+                trackingToken: orderResult.trackingToken,
+                orderNumber: orderResult.orderNumber,
+              },
+            })
+          );
         } catch {}
       }
 
