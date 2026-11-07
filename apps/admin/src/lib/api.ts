@@ -27,6 +27,11 @@ export interface AdminOrder {
   } | string;
   deliveryNotes?: string | null;
   slotLabel: string;
+  subtotalPaise?: number;
+  taxPaise?: number;
+  deliveryFeePaise?: number;
+  packagingFeePaise?: number;
+  discountPaise?: number;
   totalAmountPaise: number;
   assignedRider?: {
     id?: string;
@@ -79,10 +84,13 @@ export const adminApi = {
   // 1. Fetch Orders Queue with Status Filter
   async getOrders(status?: string): Promise<AdminOrdersResponse> {
     const base = getApiBase();
-    const query = status ? `?status=${encodeURIComponent(status)}&limit=100` : '?limit=100';
+    const ts = Date.now();
+    const query = status ? `?status=${encodeURIComponent(status)}&limit=100&_t=${ts}` : `?limit=100&_t=${ts}`;
     const res = await fetch(`${base}/admin/orders${query}`, {
       headers: {
         'X-Simulated-Role': 'STAFF',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
       },
       cache: 'no-store',
     });
