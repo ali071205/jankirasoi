@@ -2,7 +2,10 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { api, RiderDelivery, UserProfile } from '../../lib/api';
+
+const LiveDeliveryMap = dynamic(() => import('../../components/LiveDeliveryMap'), { ssr: false });
 
 export default function RiderPage() {
   const [deliveries, setDeliveries] = useState<RiderDelivery[]>([]);
@@ -14,10 +17,11 @@ export default function RiderPage() {
   // Rider Auth State
   const [riderUser, setRiderUser] = useState<UserProfile | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
-  const [loginPhone, setLoginPhone] = useState('9811223344');
-  const [loginPassword, setLoginPassword] = useState('RiderPassword123!');
+  const [loginPhone, setLoginPhone] = useState('987654321');
+  const [loginPassword, setLoginPassword] = useState('200720');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [isTogglingDuty, setIsTogglingDuty] = useState(false);
 
   // Keypad & PIN Verification State
   const [selectedOrder, setSelectedOrder] = useState<RiderDelivery | null>(null);
@@ -52,29 +56,35 @@ export default function RiderPage() {
     setTimeout(() => setToastMsg(null), 3000);
   };
 
-  // Request Rider GPS silently without multiple annoying dialogs
+  // Request Rider GPS silently or with user prompt
   const requestRiderGps = useCallback((forcePrompt = false) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return;
 
     if (!forcePrompt && typeof window !== 'undefined') {
       const isAllowed = localStorage.getItem('jr_rider_gps_enabled') === 'true';
-      if (!isAllowed) return; // don't ask unless rider initiated or previously enabled
+      if (!isAllowed) return;
     }
 
     setIsGpsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setRiderGps({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const heading = pos.coords.heading ?? 0;
+        const speed = pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0;
+
+        setRiderGps({ lat, lng });
         setIsGpsLocating(false);
         try { localStorage.setItem('jr_rider_gps_enabled', 'true'); } catch {}
-        if (forcePrompt) showRiderToast('GPS active • Distances calibrated');
+        api.updateRiderLocation({ latitude: lat, longitude: lng, heading, speed }).catch(() => {});
+        if (forcePrompt) showRiderToast('GPS active • Location synced with live map');
       },
       (err) => {
         setIsGpsLocating(false);
         console.warn('Rider GPS notice:', err.message);
         if (forcePrompt) showRiderToast('Could not access GPS. Distances calculated from Sagore Kitchen.');
       },
-      { timeout: 8000, enableHighAccuracy: true, maximumAge: 60000 }
+      { timeout: 8000, enableHighAccuracy: true, maximumAge: 30000 }
     );
   }, []);
 
@@ -85,18 +95,67 @@ export default function RiderPage() {
     }
   }, [riderUser, isOnDuty, requestRiderGps]);
 
+  // Continuous Rider GPS Telemetry Watcher (Swiggy/Zomato style distance-throttled updates)
+  useEffect(() => {
+    if (!riderUser || !isOnDuty || typeof navigator === 'undefined' || !navigator.geolocation) return;
+
+    let lastSentLat = 0;
+    let lastSentLng = 0;
+    let lastSentTime = 0;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const now = Date.now();
+
+        // Distance thresholding: only send to server if moved > 15m or 10s elapsed
+        const distKm = calculateDistanceKm(lastSentLat, lastSentLng, lat, lng);
+        if (distKm > 0.015 || now - lastSentTime > 10000) {
+          lastSentLat = lat;
+          lastSentLng = lng;
+          lastSentTime = now;
+          setRiderGps({ lat, lng });
+          api.updateRiderLocation({
+            latitude: lat,
+            longitude: lng,
+            heading: pos.coords.heading ?? 0,
+            speed: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0,
+          }).catch(() => {});
+        }
+      },
+      (err) => {
+        console.warn('GPS watcher notice:', err.message);
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+    );
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
+  }, [riderUser, isOnDuty, calculateDistanceKm]);
+
   // Initial Auth Check
   useEffect(() => {
     async function checkRiderAuth() {
         if (typeof window !== 'undefined') localStorage.removeItem('jr_demo_rider_deliveries');
       try {
-        const user = await api.getCurrentUser();
+        const user = await api.getCurrentUser('RIDER');
         if (user && user.role === 'RIDER') {
           setRiderUser(user);
+          if (user.riderProfile?.isAvailable !== undefined) {
+            setIsOnDuty(user.riderProfile.isAvailable);
+          }
         } else {
           const cached = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_profile') : null;
           if (cached) {
-            try { setRiderUser(JSON.parse(cached)); } catch {}
+            try {
+              const parsed = JSON.parse(cached);
+              setRiderUser(parsed);
+              if (parsed?.riderProfile?.isAvailable !== undefined) {
+                setIsOnDuty(parsed.riderProfile.isAvailable);
+              }
+            } catch {}
           }
         }
       } finally {
@@ -112,10 +171,10 @@ export default function RiderPage() {
     setLoginError(null);
     try {
       const res = await api.loginRider(loginPhone.trim(), loginPassword.trim());
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('jr_demo_rider_deliveries');
-      }
       setRiderUser(res.user);
+      if (res.user?.riderProfile?.isAvailable !== undefined) {
+        setIsOnDuty(res.user.riderProfile.isAvailable);
+      }
       loadDeliveries();
     } catch (err: any) {
       setLoginError(err.message || 'Invalid rider phone or password.');
@@ -124,13 +183,40 @@ export default function RiderPage() {
     }
   };
 
+  const handleToggleDuty = async () => {
+    if (isTogglingDuty) return;
+    const nextStatus = !isOnDuty;
+    setIsTogglingDuty(true);
+    setIsOnDuty(nextStatus);
+    try {
+      await api.updateRiderDutyStatus(nextStatus);
+      if (riderUser && riderUser.riderProfile) {
+        const updated = {
+          ...riderUser,
+          riderProfile: {
+            ...riderUser.riderProfile,
+            isAvailable: nextStatus,
+          },
+        };
+        setRiderUser(updated);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('jr_rider_profile', JSON.stringify(updated));
+        }
+      }
+    } catch (err: any) {
+      console.warn('Failed to update duty status on server:', err.message);
+      setIsOnDuty(!nextStatus);
+    } finally {
+      setIsTogglingDuty(false);
+    }
+  };
+
   const handleRiderLogout = async () => {
-    await api.logout();
+    await api.logout('RIDER');
     setRiderUser(null);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('jr_rider_token');
       localStorage.removeItem('jr_rider_profile');
-      localStorage.removeItem('jr_demo_rider_deliveries');
     }
   };
 
@@ -178,6 +264,25 @@ export default function RiderPage() {
       setLoading(false);
     }
   }, [loadDeliveries, riderUser]);
+
+  // Handle Accept Assigned Delivery
+  const handleAcceptTrip = async (orderId: string) => {
+    setActionLoadingId(orderId);
+    try {
+      await api.acceptRiderDelivery(orderId);
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate([80]);
+      }
+      setDeliveries((prev) =>
+        prev.map((d) => (d.orderId === orderId ? { ...d, assignmentStatus: 'ACCEPTED' } : d))
+      );
+      await loadDeliveries(true);
+    } catch (err: any) {
+      alert(err.message || 'Failed to accept delivery assignment.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
 
   // Handle Mark Out For Delivery
   const handleStartTrip = async (orderId: string) => {
@@ -260,64 +365,79 @@ export default function RiderPage() {
     }
   };
 
-  const activeDeliveries = deliveries.filter((d) => d.status !== 'DELIVERED');
-  const completedDeliveries = deliveries.filter((d) => d.status === 'DELIVERED');
+  // Deduplicate deliveries by orderId to guarantee no duplicate cards
+  const uniqueDeliveries = Array.from(
+    new Map(deliveries.map((d) => [d.orderId, d])).values()
+  );
+
+  const activeDeliveries = uniqueDeliveries.filter(
+    (d) => d.status !== 'DELIVERED' && d.status !== 'CANCELLED'
+  );
+  const completedDeliveries = uniqueDeliveries.filter(
+    (d) => d.status === 'DELIVERED'
+  );
   const displayList = activeTab === 'ACTIVE' ? activeDeliveries : completedDeliveries;
 
   return (
     <div className="min-h-screen bg-[#FFF9F0] text-[#292D26] flex flex-col font-body pb-16 selection:bg-[#38754A] selection:text-white">
-      {/* Top Rider Header */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#EEE7DC] px-4 py-3 shadow-2xs">
-        <div className="max-w-md mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className="w-9 h-9 rounded-full bg-[#38754A] text-white font-bold flex items-center justify-center text-sm shadow-xs">
+      {/* Top Rider Header (Optimized for Mobile, Tablet and Laptop) */}
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#EEE7DC] px-4 sm:px-6 lg:px-8 py-2.5 shadow-2xs">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+          {/* Left Brand & Profile Info */}
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <span className="w-8 h-8 rounded-full bg-[#38754A] text-white font-bold flex items-center justify-center text-xs shadow-xs shrink-0">
               JR
             </span>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h1 className="font-headline font-bold text-base text-[#292D26] leading-tight">Janki Rasoi Rider</h1>
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#EAF4ED] text-[#38754A] border border-[#38754A]/30">
-                  PARTNER PWA
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h1 className="font-headline font-bold text-xs sm:text-sm md:text-base text-[#292D26] leading-tight truncate">
+                  Rider Portal
+                </h1>
+                <span className="hidden sm:inline-block px-1.5 py-0.2 rounded text-[9px] font-bold bg-[#EAF4ED] text-[#38754A] border border-[#38754A]/30 shrink-0">
+                  PARTNER
                 </span>
               </div>
-              <p className="text-[11px] text-[#77786F]">
+              <p className="text-[10px] sm:text-xs text-[#77786F] truncate">
                 {riderUser
                   ? `${riderUser.name} • ${riderUser.riderProfile?.vehicleNumber || 'DL-01-AB-1234'}`
-                  : 'Delivery Partner Portal'}
+                  : 'Delivery Partner'}
               </p>
             </div>
           </div>
 
+          {/* Right Action Controls */}
           {riderUser ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               {/* Rider GPS toggle button */}
               <button
                 type="button"
                 onClick={() => requestRiderGps(true)}
                 disabled={isGpsLocating}
                 title={riderGps ? 'GPS Active • Distances Calibrated' : 'Calibrate GPS Location'}
-                className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors shadow-2xs ${
+                className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors shadow-2xs shrink-0 ${
                   riderGps
                     ? 'bg-[#EAF4ED] text-[#38754A] border-[#38754A]/30'
                     : 'bg-white text-[#77786F] border-[#EEE7DC] hover:text-[#292D26]'
                 }`}
               >
-                <span className={`material-symbols-outlined text-[18px] ${isGpsLocating ? 'animate-spin' : ''}`}>
+                <span className={`material-symbols-outlined text-[17px] ${isGpsLocating ? 'animate-spin' : ''}`}>
                   {isGpsLocating ? 'sync' : riderGps ? 'my_location' : 'location_searching'}
                 </span>
               </button>
 
-              {/* Duty Status Toggle */}
+              {/* Duty Status Toggle (Compact pill) */}
               <button
-                onClick={() => setIsOnDuty(!isOnDuty)}
-                className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 transition-colors border shadow-2xs ${
+                onClick={handleToggleDuty}
+                disabled={isTogglingDuty}
+                title={isOnDuty ? 'Tap to go offline' : 'Tap to go on duty'}
+                className={`px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold flex items-center gap-1 transition-colors border shadow-2xs shrink-0 ${
                   isOnDuty
                     ? 'bg-[#EAF4ED] text-[#38754A] border-[#38754A]/30'
                     : 'bg-rose-50 text-rose-700 border-rose-200'
-                }`}
+                } ${isTogglingDuty ? 'opacity-70 cursor-wait' : ''}`}
               >
-                <span className={`w-2 h-2 rounded-full ${isOnDuty ? 'bg-[#38754A] animate-pulse' : 'bg-rose-500'}`}></span>
-                {isOnDuty ? 'ON DUTY' : 'OFFLINE'}
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isOnDuty ? 'bg-[#38754A] animate-pulse' : 'bg-rose-500'}`}></span>
+                <span>{isTogglingDuty ? '...' : isOnDuty ? 'DUTY' : 'OFF'}</span>
               </button>
 
               {/* Quick Refresh */}
@@ -325,9 +445,10 @@ export default function RiderPage() {
                 onClick={() => loadDeliveries()}
                 disabled={isRefreshing}
                 aria-label="Refresh deliveries"
-                className="w-8 h-8 rounded-full bg-white border border-[#EEE7DC] flex items-center justify-center text-[#77786F] hover:text-[#292D26] shadow-2xs active:scale-95 transition-all"
+                title="Refresh deliveries"
+                className="w-8 h-8 rounded-full bg-white border border-[#EEE7DC] flex items-center justify-center text-[#77786F] hover:text-[#292D26] shadow-2xs active:scale-95 transition-all shrink-0"
               >
-                <span className={`material-symbols-outlined text-[18px] ${isRefreshing ? 'animate-spin' : ''}`}>
+                <span className={`material-symbols-outlined text-[17px] ${isRefreshing ? 'animate-spin' : ''}`}>
                   refresh
                 </span>
               </button>
@@ -336,17 +457,17 @@ export default function RiderPage() {
               <button
                 onClick={handleRiderLogout}
                 title="End Shift / Logout"
-                className="w-8 h-8 rounded-full bg-white border border-[#EEE7DC] hover:bg-rose-50 text-[#77786F] hover:text-rose-600 flex items-center justify-center transition-colors shadow-2xs"
+                className="w-8 h-8 rounded-full bg-white border border-[#EEE7DC] hover:bg-rose-50 text-[#77786F] hover:text-rose-600 flex items-center justify-center transition-colors shadow-2xs shrink-0"
               >
-                <span className="material-symbols-outlined text-[18px]">logout</span>
+                <span className="material-symbols-outlined text-[17px]">logout</span>
               </button>
             </div>
           ) : (
             <Link
               href="/"
-              className="text-xs text-[#38754A] hover:text-[#285C38] flex items-center gap-1 font-bold bg-[#EAF4ED] px-3 py-1.5 rounded-full border border-[#38754A]/20 transition-colors shadow-2xs"
+              className="text-xs text-[#38754A] hover:text-[#285C38] flex items-center gap-1 font-bold bg-[#EAF4ED] px-3 py-1.5 rounded-full border border-[#38754A]/20 transition-colors shadow-2xs shrink-0"
             >
-              <span>Storefront</span>
+              <span>Store</span>
               <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
             </Link>
           )}
@@ -421,14 +542,14 @@ export default function RiderPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setLoginPhone('9811223344');
-                  setLoginPassword('RiderPassword123!');
+                  setLoginPhone('987654321');
+                  setLoginPassword('200720');
                   setLoginError(null);
                 }}
                 className="w-full py-2.5 bg-[#FFF9F0] hover:bg-[#F3EADF] text-xs text-[#38754A] font-bold rounded-xl border border-[#EEE7DC] transition-colors flex items-center justify-center gap-1.5"
               >
-                <span>⚡</span>
-                <span>1-Tap Registered Rider (9811223344)</span>
+                <span className="material-symbols-outlined text-[16px]">bolt</span>
+                <span>Quick Fill Registered Rider (987654321)</span>
               </button>
             </form>
           </div>
@@ -436,25 +557,25 @@ export default function RiderPage() {
       ) : (
         <>
           {/* Rider Notice / PWA Banner */}
-          <div className="max-w-md mx-auto w-full px-4 pt-3">
-            <div className="bg-white border border-[#EEE7DC] rounded-2xl p-3 flex items-center justify-between text-xs shadow-2xs">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-[#EAF4ED] text-[#38754A] flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-[18px]">verified</span>
+          <div className="max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-3">
+            <div className="bg-white border border-[#EEE7DC] rounded-2xl p-3 sm:p-4 flex items-center justify-between text-xs sm:text-sm shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#EAF4ED] text-[#38754A] flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-[18px] sm:text-[20px]">verified</span>
                 </div>
                 <span className="text-[#292D26]">
                   <strong className="text-[#38754A]">Handover:</strong> Enter customer PIN upon arrival to finish.
                 </span>
               </div>
-              <Link href="/" className="text-[#38754A] font-bold hover:underline text-[11px] shrink-0">
+              <Link href="/" className="text-[#38754A] font-bold hover:underline text-xs shrink-0">
                 Storefront ›
               </Link>
             </div>
           </div>
 
           {/* Tabs: Active vs Completed */}
-          <div className="max-w-md mx-auto w-full px-4 pt-3">
-            <div className="grid grid-cols-2 bg-white p-1 rounded-2xl border border-[#EEE7DC] shadow-2xs">
+          <div className="max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-3">
+            <div className="grid grid-cols-2 bg-white p-1 rounded-2xl border border-[#EEE7DC] shadow-2xs sm:max-w-md">
               <button
                 onClick={() => setActiveTab('ACTIVE')}
                 className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
@@ -489,14 +610,14 @@ export default function RiderPage() {
           </div>
 
           {/* Deliveries Feed */}
-          <main className="max-w-md mx-auto w-full px-4 pt-3 flex flex-col gap-3 flex-1">
+          <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-4 pb-12 flex-1">
             {loading && deliveries.length === 0 ? (
-              <div className="flex flex-col gap-3 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                 <div className="h-44 bg-white border border-[#EEE7DC] rounded-2xl animate-pulse"></div>
                 <div className="h-44 bg-white border border-[#EEE7DC] rounded-2xl animate-pulse"></div>
               </div>
             ) : displayList.length === 0 ? (
-              <div className="bg-white rounded-2xl p-8 border border-[#EEE7DC] shadow-xs text-center flex flex-col items-center gap-3 my-6">
+              <div className="bg-white rounded-2xl p-8 border border-[#EEE7DC] shadow-xs text-center flex flex-col items-center gap-3 my-6 max-w-md mx-auto">
                 <div className="w-14 h-14 rounded-full bg-[#EAF4ED] text-[#38754A] flex items-center justify-center">
                   <span className="material-symbols-outlined text-[32px]">two_wheeler</span>
                 </div>
@@ -519,10 +640,12 @@ export default function RiderPage() {
                 )}
               </div>
             ) : (
-              displayList.map((del) => {
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {displayList.map((del) => {
                 const isOutOfDelivery = del.status === 'OUT_FOR_DELIVERY';
                 const isReady = del.status === 'READY_FOR_PICKUP';
                 const isDelivered = del.status === 'DELIVERED';
+                const isPendingAcceptance = del.assignmentStatus === 'ASSIGNED' && !isOutOfDelivery && !isDelivered;
 
                 return (
                   <div
@@ -543,6 +666,8 @@ export default function RiderPage() {
                             ? 'bg-[#EAF4ED] text-[#38754A] border border-[#38754A]/30'
                             : isOutOfDelivery
                             ? 'bg-[#FFF1DC] text-[#E99A32] border border-[#E99A32]/40 animate-pulse'
+                            : isPendingAcceptance
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
                             : 'bg-blue-50 text-blue-700 border border-blue-200'
                         }`}
                       >
@@ -550,6 +675,8 @@ export default function RiderPage() {
                           ? 'DELIVERED'
                           : isOutOfDelivery
                           ? 'ON THE WAY'
+                          : isPendingAcceptance
+                          ? 'DISPATCH PENDING'
                           : 'READY AT KITCHEN'}
                       </span>
                     </div>
@@ -650,7 +777,22 @@ export default function RiderPage() {
                         </button>
 
                         {/* Step Transitions */}
-                        {isReady ? (
+                        {isPendingAcceptance ? (
+                          <button
+                            onClick={() => handleAcceptTrip(del.orderId)}
+                            disabled={actionLoadingId === del.orderId}
+                            className="h-11 rounded-xl bg-[#38754A] hover:bg-[#285C38] font-bold text-xs flex items-center justify-center gap-1.5 text-white active:scale-95 transition-transform shadow-xs"
+                          >
+                            {actionLoadingId === del.orderId ? (
+                              <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+                            ) : (
+                              <>
+                                <span className="material-symbols-outlined text-[18px]">thumb_up</span>
+                                <span>Accept Delivery</span>
+                              </>
+                            )}
+                          </button>
+                        ) : isReady ? (
                           <button
                             onClick={() => handleStartTrip(del.orderId)}
                             disabled={actionLoadingId === del.orderId}
@@ -678,7 +820,8 @@ export default function RiderPage() {
                     )}
                   </div>
                 );
-              })
+              })}
+              </div>
             )}
           </main>
 
@@ -813,32 +956,32 @@ export default function RiderPage() {
                   </button>
                 </div>
 
-                {/* Embedded Map Canvas */}
-                <div className="relative w-full h-56 rounded-2xl bg-slate-100 overflow-hidden border border-[#EEE7DC] shrink-0">
-                  <iframe
-                    title="Customer Delivery Destination Map"
-                    src={`https://maps.google.com/maps?q=${encodeURIComponent(
-                      (activeMapDelivery.coordinates
-                        ? `${activeMapDelivery.coordinates.latitude},${activeMapDelivery.coordinates.longitude}`
-                        : activeMapDelivery.deliveryAddress) + ', Sagore, Pithampur'
-                    )}&hl=en&z=15&output=embed`}
-                    className="w-full h-full border-0 pointer-events-auto"
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
+                {/* Real-time Interactive Route & Live Driver Map (Swiggy/Zomato style) */}
+                <div className="w-full shrink-0">
+                  <LiveDeliveryMap
+                    driverLocation={riderGps ? { latitude: riderGps.lat, longitude: riderGps.lng } : null}
+                    customerLocation={{
+                      latitude: activeMapDelivery.coordinates?.latitude || 22.6312,
+                      longitude: activeMapDelivery.coordinates?.longitude || 75.5715,
+                      address: activeMapDelivery.deliveryAddress,
+                      name: activeMapDelivery.customerName,
+                    }}
+                    kitchenLocation={{
+                      latitude: SAGORE_KITCHEN_COORDS.lat,
+                      longitude: SAGORE_KITCHEN_COORDS.lng,
+                      name: 'Janki Rasoi Cloud Kitchen',
+                    }}
+                    orderNumber={activeMapDelivery.orderNumber}
+                    status={activeMapDelivery.status}
+                    riderName={riderUser?.name || 'You'}
+                    riderVehicle={riderUser?.riderProfile?.vehicleNumber || 'MP-09-JR-2026'}
+                    height="280px"
+                    isRiderView={true}
+                    onLocationUpdate={(loc) => {
+                      setRiderGps({ lat: loc.latitude, lng: loc.longitude });
+                      api.updateRiderLocation(loc).catch(() => {});
+                    }}
                   />
-                  <div className="absolute top-2.5 left-2.5 z-10 px-2.5 py-1 rounded-full bg-white/95 text-[#292D26] text-[10px] font-bold shadow-md flex items-center gap-1 backdrop-blur-xs border border-slate-200">
-                    <span className="material-symbols-outlined text-[13px] text-[#38754A]">near_me</span>
-                    <span>
-                      ~{activeMapDelivery.coordinates
-                        ? calculateDistanceKm(
-                            riderGps ? riderGps.lat : SAGORE_KITCHEN_COORDS.lat,
-                            riderGps ? riderGps.lng : SAGORE_KITCHEN_COORDS.lng,
-                            activeMapDelivery.coordinates.latitude,
-                            activeMapDelivery.coordinates.longitude
-                          )
-                        : 2.5} km {riderGps ? '(from you)' : '(from kitchen)'}
-                    </span>
-                  </div>
                 </div>
 
                 {/* Route Breakdown: Pickup -> Drop-off */}

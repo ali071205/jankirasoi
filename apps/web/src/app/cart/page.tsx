@@ -3,9 +3,8 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { api, DeliverySlot, QuoteResponse, DEFAULT_FOOD_IMAGE, UserProfile } from '../../lib/api';
+import { api, DeliverySlot, QuoteResponse, DEFAULT_FOOD_IMAGE, UserProfile, MenuItem, CatalogResponse, resolveDishImageUrl, DEFAULT_DISH_IMAGES } from '../../lib/api';
 import { useCart } from '../../context/CartContext';
-import CustomerAuthModal from '../../components/CustomerAuthModal';
 import LocationMapModal, { LocationData } from '../../components/LocationMapModal';
 
 export default function CartPage() {
@@ -29,10 +28,8 @@ export default function CartPage() {
 
   // Address & Customer form state
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isAddressConfirmModalOpen, setIsAddressConfirmModalOpen] = useState(false);
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
-  const [authModalTab, setAuthModalTab] = useState<'PROFILE' | 'ORDERS' | 'EDIT'>('PROFILE');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [flat, setFlat] = useState('');
@@ -55,6 +52,8 @@ export default function CartPage() {
   const [directionsToReach, setDirectionsToReach] = useState('');
   const [showDirectionsInput, setShowDirectionsInput] = useState(false);
   const [tipPaise, setTipPaise] = useState(0);
+  const [orderSuccessData, setOrderSuccessData] = useState<{ orderNumber: string; trackingToken: string } | null>(null);
+  const [allCatalogItems, setAllCatalogItems] = useState<MenuItem[]>([]);
 
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
 
@@ -79,6 +78,49 @@ export default function CartPage() {
     }
     fetchSlots();
   }, [today]);
+
+  // Fetch live authentic menu items from database catalog
+  useEffect(() => {
+    function loadCatalog(cat: CatalogResponse) {
+      if (!cat?.categories) return;
+      const all = cat.categories.flatMap((c) => c.items);
+      setAllCatalogItems(all);
+    }
+
+    const cached = api.getCachedCatalog();
+    if (cached) loadCatalog(cached);
+
+    api.getCatalog().then((cat) => {
+      if (cat) loadCatalog(cat);
+    }).catch(() => {});
+  }, []);
+
+  // Stable meal companion suggestions from live database catalog (items never disappear when added)
+  const suggestedAddons = useMemo(() => {
+    if (!allCatalogItems || allCatalogItems.length === 0) return [];
+
+    // Filter out sold out items only (items NEVER disappear when added to cart)
+    const available = allCatalogItems.filter((item) => !item.isSoldOut);
+
+    // Score items so complementary breads, rice, snacks and sides are featured
+    const scored = available.map((item) => {
+      let score = 0;
+      const name = item.name.toLowerCase();
+
+      if (name.includes('paratha')) score += 50;
+      if (name.includes('rice') || name.includes('pulao')) score += 45;
+      if (name.includes('dal')) score += 40;
+      if (name.includes('chai')) score += 35;
+      if (name.includes('chips')) score += 30;
+      if (name.includes('poha')) score += 25;
+      if (name.includes('paneer') || name.includes('sabzi') || name.includes('sev')) score += 20;
+
+      return { item, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, 12).map((s) => s.item);
+  }, [allCatalogItems]);
 
   // Fetch logged in customer and prefill address
   useEffect(() => {
@@ -303,9 +345,8 @@ export default function CartPage() {
         setIsMapModalOpen(true);
         showToast('Please select your delivery location on the map.', true);
       } else {
-        setAuthModalTab('PROFILE');
-        setIsAuthOpen(true);
-        showToast('Please provide your mobile number to proceed.', true);
+        router.push('/login?redirect=/cart');
+        showToast('Please sign in with your mobile number to proceed.', true);
       }
       return;
     }
@@ -315,8 +356,8 @@ export default function CartPage() {
       return;
     }
 
-    // Show 1-click address confirmation modal
-    setIsAddressConfirmModalOpen(true);
+    // Instant 1-Click Order Execution without blocking popup modal
+    await executeOrderPlacement();
   };
 
   // Execute Order Placement after Address Confirmation
@@ -433,7 +474,22 @@ export default function CartPage() {
 
       // Successfully placed: reset idempotency key and clear cart
       orderIdempotencyKeyRef.current = null;
+      setOrderSuccessData({
+        orderNumber: orderResult.orderNumber,
+        trackingToken: orderResult.trackingToken,
+      });
       clearCart();
+
+      // Instant 0ms local broadcast to any open kitchen admin tab
+      try {
+        const bc = new BroadcastChannel('jankirasoi_orders_channel');
+        bc.postMessage({
+          type: 'ORDER_CREATED',
+          orderNumber: orderResult.orderNumber,
+          orderId: orderResult.orderId,
+        });
+        setTimeout(() => bc.close(), 1000);
+      } catch {}
 
       if (typeof window !== 'undefined') {
         try {
@@ -447,11 +503,23 @@ export default function CartPage() {
           );
           const recents = JSON.parse(window.localStorage.getItem('jr_recent_orders') || '[]');
           recents.unshift({
+            id: orderResult.orderNumber,
             orderNumber: orderResult.orderNumber,
             trackingToken: orderResult.trackingToken,
-            placedAt: new Date().toISOString(),
+            status: orderResult.status || 'PLACED',
+            totalAmountPaise: finalTotalPaise,
+            paymentMethod: paymentMethod,
+            createdAt: new Date().toISOString(),
+            itemsSummary: items.map((i) => i.quantity + 'x ' + i.name).join(' • '),
+            deliveryAddress: { flat, street, landmark, pincode },
+            items: items.map((i) => ({
+              name: i.name,
+              quantity: i.quantity,
+              variant: i.variantName,
+              pricePaise: i.pricePaise,
+            })),
           });
-          window.localStorage.setItem('jr_recent_orders', JSON.stringify(recents.slice(0, 10)));
+          window.localStorage.setItem('jr_recent_orders', JSON.stringify(recents.slice(0, 20)));
           window.dispatchEvent(
             new CustomEvent('jr_order_placed', {
               detail: {
@@ -472,10 +540,8 @@ export default function CartPage() {
         })
         .catch(() => {});
 
-      showToast('Order placed successfully!');
-      setTimeout(() => {
-        router.push(`/track?token=${orderResult.trackingToken}`);
-      }, 800);
+      showToast('Order confirmed! Opening live tracking...');
+      router.push(`/track?token=${orderResult.trackingToken}`);
     } catch (err: any) {
       setPlacingOrder(false);
       isSubmittingOrderRef.current = false;
@@ -495,6 +561,42 @@ export default function CartPage() {
   };
 
   const selectedSlot = slots.find((s) => s.id === selectedSlotId);
+
+  // If order was just placed successfully, show instant confirmation screen (no empty cart flash)
+  if (orderSuccessData) {
+    return (
+      <main className="flex flex-col items-center justify-center min-h-[75vh] pt-20 pb-28 px-4 bg-[#FFF9F0]">
+        <div className="bg-white p-7 rounded-3xl shadow-md border border-[#EEE7DC] max-w-sm w-full text-center flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 rounded-full bg-[#EAF4ED] flex items-center justify-center text-[#38754A]">
+            <span className="material-symbols-outlined text-[38px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+          </div>
+          <div>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EAF4ED] text-[#38754A] border border-[#38754A]/20 text-xs font-bold mb-2">
+              <span className="w-2 h-2 rounded-full bg-[#38754A] animate-ping" />
+              Delivering in ~12-15 mins
+            </span>
+            <h2 className="text-xl font-extrabold text-[#292D26]">Order Confirmed!</h2>
+            <p className="text-xs text-[#77786F] mt-1 leading-relaxed">
+              Order #{orderSuccessData.orderNumber} has been received by Janki Rasoi kitchen.
+            </p>
+          </div>
+          <Link
+            href={`/track?token=${orderSuccessData.trackingToken}`}
+            className="w-full h-12 rounded-2xl bg-[#38754A] hover:bg-[#285C38] text-white text-sm font-extrabold flex items-center justify-center gap-2 shadow-md shadow-[#38754A]/25 transition-all"
+          >
+            <span>Track Live Order</span>
+            <span className="material-symbols-outlined text-[18px]">moped</span>
+          </Link>
+          <Link
+            href="/"
+            className="text-xs text-[#38754A] font-bold hover:underline"
+          >
+            Back to Home
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   // If cart is empty
   if (items.length === 0) {
@@ -525,39 +627,6 @@ export default function CartPage() {
   const packagingFeePaise = quote?.packagingFeePaise ?? 1500;
   const finalTotalPaise = (quote?.totalPaise ?? (itemsTotalPaise + deliveryFeePaise + packagingFeePaise)) + tipPaise;
 
-  const COMPLETE_MEAL_ADDONS = [
-    {
-      id: 'addon-roti-4',
-      name: 'Plain Phulka Roti (4 Pcs)',
-      pricePaise: 4000,
-      imageUrl: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=400&q=80',
-    },
-    {
-      id: 'addon-paratha-plain',
-      name: 'Plain Paratha (2 Pcs)',
-      pricePaise: 5000,
-      imageUrl: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=400&q=80',
-    },
-    {
-      id: 'addon-boondi-raita',
-      name: 'Boondi Raita (Fresh Curd)',
-      pricePaise: 3500,
-      imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400&q=80',
-    },
-    {
-      id: 'addon-gulab-jamun',
-      name: 'Gulab Jamun (2 Pcs)',
-      pricePaise: 4500,
-      imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=400&q=80',
-    },
-    {
-      id: 'addon-papad-salad',
-      name: 'Roasted Papad & Salad',
-      pricePaise: 2000,
-      imageUrl: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=400&q=80',
-    },
-  ];
-
   return (
     <main className="flex flex-col relative w-full pb-36 bg-[#F4F4F6] min-h-screen">
       {/* Offline Alert Banner */}
@@ -568,8 +637,8 @@ export default function CartPage() {
         </div>
       )}
       {/* 1. Top Header Bar with Back Button, Delivery Address, and Profile Action */}
-      <header className="sticky top-0 z-40 bg-white border-b border-slate-200/80 px-3 sm:px-4 py-2.5 shadow-2xs">
-        <div className="max-w-xl mx-auto flex items-center justify-between gap-2">
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-2.5 shadow-2xs">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 sm:gap-4">
           {/* Back button & Address */}
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <button
@@ -615,14 +684,10 @@ export default function CartPage() {
               <span className="material-symbols-outlined text-[13px]">expand_more</span>
             </button>
 
-            {/* Profile / Account Button */}
+            {/* Profile / Account Link */}
             {currentUser ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthModalTab('PROFILE');
-                  setIsAuthOpen(true);
-                }}
+              <Link
+                href="/login?redirect=/cart"
                 className="flex items-center gap-1.5 py-1 px-2 rounded-full hover:bg-slate-100 border border-slate-200 transition-colors shrink-0"
                 title={`${currentUser.name} - View Profile & Orders`}
               >
@@ -632,50 +697,47 @@ export default function CartPage() {
                 <span className="text-xs font-bold text-slate-800 max-w-[70px] truncate hidden sm:inline">
                   {currentUser.name ? currentUser.name.split(' ')[0] : 'Profile'}
                 </span>
-              </button>
+              </Link>
             ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthModalTab('PROFILE');
-                  setIsAuthOpen(true);
-                }}
+              <Link
+                href="/login?redirect=/cart"
                 className="flex items-center gap-1 py-1.5 px-3 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-xs transition-colors shrink-0"
               >
                 <span className="material-symbols-outlined text-[16px]">account_circle</span>
                 <span>Login</span>
-              </button>
+              </Link>
             )}
           </div>
         </div>
       </header>
 
-      <div className="flex flex-col w-full max-w-xl mx-auto pb-4">
-        {/* 3. Minimalistic Items Summary Bar */}
-        <div className="px-3 pt-3 flex items-center justify-between gap-2">
-          {/* Minimalist Items Count & Subtotal */}
-          <div className="flex items-center gap-1.5 text-xs">
-            <span className="font-bold text-slate-800">
-              {items.reduce((a, b) => a + b.quantity, 0)} {items.reduce((a, b) => a + b.quantity, 0) === 1 ? 'item' : 'items'}
-            </span>
-            <span className="text-slate-300">•</span>
-            <span className="font-extrabold text-slate-900">
-              ₹{(itemsTotalPaise / 100).toFixed(0)}
-            </span>
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-12 flex flex-col lg:flex-row items-start gap-6 lg:gap-8">
+        {/* Left Column: Cart Items, Meal Add-ons, Instructions */}
+        <div className="w-full lg:flex-1 flex flex-col gap-4 min-w-0">
+          {/* 3. Minimalistic Items Summary Bar */}
+          <div className="px-1 flex items-center justify-between gap-2">
+            {/* Minimalist Items Count & Subtotal */}
+            <div className="flex items-center gap-1.5 text-xs sm:text-sm">
+              <span className="font-bold text-slate-800">
+                {items.reduce((a, b) => a + b.quantity, 0)} {items.reduce((a, b) => a + b.quantity, 0) === 1 ? 'item' : 'items'}
+              </span>
+              <span className="text-slate-300">•</span>
+              <span className="font-extrabold text-slate-900">
+                ₹{(itemsTotalPaise / 100).toFixed(0)}
+              </span>
+            </div>
           </div>
-        </div>
 
-        {/* 4. Restaurant Items Card */}
-        <div className="px-3 pt-3">
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 flex flex-col gap-3">
+          {/* 4. Restaurant Items Card */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col gap-3">
             {/* Items Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">
+              <span className="text-[11px] sm:text-xs font-bold text-emerald-700 uppercase tracking-wide">
                 TRYNEW eligible items
               </span>
               <Link
                 href="/menu"
-                className="text-xs font-bold text-[#008848] hover:underline flex items-center gap-1"
+                className="text-xs sm:text-sm font-bold text-[#008848] hover:underline flex items-center gap-1"
               >
                 <span className="text-sm font-extrabold">+</span>
                 <span>Add more</span>
@@ -687,23 +749,23 @@ export default function CartPage() {
               {items.map((item, idx) => (
                 <div
                   key={`${item.productId}-${item.variantId || 'base'}`}
-                  className="py-2.5 flex items-center justify-between gap-3"
+                  className="py-3 flex items-center justify-between gap-3"
                 >
-                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                  <div className="flex items-start gap-2.5 min-w-0 flex-1">
                     <span className="w-3.5 h-3.5 rounded-xs border border-emerald-600 flex items-center justify-center p-0.5 mt-0.5 shrink-0 bg-white">
                       <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
                     </span>
                     <div className="min-w-0">
-                      <p className="font-bold text-xs sm:text-sm text-slate-900 truncate">{item.name}</p>
+                      <p className="font-bold text-xs sm:text-sm md:text-base text-slate-900 truncate">{item.name}</p>
                       {item.variantName && (
-                        <p className="text-[11px] text-slate-500">{item.variantName}</p>
+                        <p className="text-[11px] sm:text-xs text-slate-500">{item.variantName}</p>
                       )}
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3 shrink-0">
                     {/* Stepper */}
-                    <div className="flex items-center bg-white rounded-lg border border-slate-300 shadow-2xs h-7 px-1">
+                    <div className="flex items-center bg-white rounded-lg border border-slate-300 shadow-2xs h-8 px-1.5">
                       <button
                         type="button"
                         onClick={() => updateQty(idx, -1)}
@@ -711,7 +773,7 @@ export default function CartPage() {
                       >
                         -
                       </button>
-                      <span className="px-2 font-extrabold text-xs text-emerald-700">{item.quantity}</span>
+                      <span className="px-2 font-extrabold text-xs sm:text-sm text-emerald-700">{item.quantity}</span>
                       <button
                         type="button"
                         onClick={() => updateQty(idx, 1)}
@@ -722,11 +784,11 @@ export default function CartPage() {
                     </div>
 
                     {/* Price with strikethrough */}
-                    <div className="text-right min-w-[54px]">
-                      <span className="text-[10px] text-slate-400 line-through block leading-none">
+                    <div className="text-right min-w-[54px] sm:min-w-[64px]">
+                      <span className="text-[10px] sm:text-xs text-slate-400 line-through block leading-none">
                         ₹{(((item.pricePaise * item.quantity) / 100) + 40).toFixed(0)}
                       </span>
-                      <span className="text-xs sm:text-sm font-extrabold text-slate-900">
+                      <span className="text-xs sm:text-sm md:text-base font-extrabold text-slate-900">
                         ₹{((item.pricePaise * item.quantity) / 100).toFixed(0)}
                       </span>
                     </div>
@@ -735,55 +797,103 @@ export default function CartPage() {
               ))}
             </div>
           </div>
-        </div>
 
-        {/* 5. Complete Your Meal Addons Horizontal Carousel */}
-        <div className="px-3 pt-3">
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5">
-            <h3 className="text-[11px] uppercase font-extrabold tracking-wider text-slate-500 mb-2.5">
-              COMPLETE YOUR MEAL
-            </h3>
-            <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
-              {COMPLETE_MEAL_ADDONS.map((addon) => (
-                <div key={addon.id} className="w-28 shrink-0 flex flex-col gap-1">
-                  <div className="relative w-28 h-20 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
-                    <img src={addon.imageUrl} alt={addon.name} className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        addItem({
-                          productId: addon.id,
-                          name: addon.name,
-                          pricePaise: addon.pricePaise,
-                          quantity: 1,
-                          imageUrl: addon.imageUrl,
-                        });
-                        showToast(`Added ${addon.name}`);
-                      }}
-                      className="absolute top-1 right-1 w-6 h-6 rounded-md bg-white text-emerald-700 font-extrabold text-sm flex items-center justify-center shadow-md hover:scale-110 active:scale-95 transition-transform border border-emerald-600"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <span className="w-2.5 h-2.5 rounded-2xs border border-emerald-600 flex items-center justify-center p-0.5 shrink-0 bg-white">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                    </span>
-                    <p className="text-[11px] font-bold text-slate-800 truncate leading-tight">{addon.name}</p>
-                  </div>
-                  <span className="text-xs font-extrabold text-slate-900">
-                    ₹{(addon.pricePaise / 100).toFixed(0)}
-                  </span>
-                </div>
-              ))}
+          {/* 5. Complete Your Meal Addons Horizontal Carousel (Live Database Menu Dishes) */}
+          {suggestedAddons.length > 0 && (
+            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-[11px] sm:text-xs uppercase font-extrabold tracking-wider text-slate-500">
+                  COMPLETE YOUR MEAL
+                </h3>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                  Pairs With Your Meal
+                </span>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
+                {suggestedAddons.map((addon) => {
+                  const dishImage = resolveDishImageUrl(addon);
+                  const fallbackImage = (addon.slug && DEFAULT_DISH_IMAGES[addon.slug]) || DEFAULT_FOOD_IMAGE;
+                  const cartItemIdx = items.findIndex((i) => i.productId === addon.id);
+                  const inCartQty = cartItemIdx > -1 ? items[cartItemIdx].quantity : 0;
+
+                  return (
+                    <div key={addon.id} className="w-28 sm:w-32 shrink-0 flex flex-col gap-1">
+                      <div className="relative w-28 sm:w-32 h-20 sm:h-24 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
+                        <img
+                          src={dishImage}
+                          alt={addon.name}
+                          loading="lazy"
+                          decoding="async"
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = fallbackImage;
+                          }}
+                        />
+                        {inCartQty > 0 ? (
+                          <div className="absolute top-1.5 right-1.5 bg-emerald-700 text-white font-extrabold text-xs flex items-center rounded-md shadow-md border border-emerald-600 overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                updateQty(cartItemIdx, -1);
+                              }}
+                              className="w-5 h-5 flex items-center justify-center hover:bg-emerald-800 active:scale-95 transition-transform"
+                              aria-label={`Decrease ${addon.name}`}
+                            >
+                              -
+                            </button>
+                            <span className="px-1 text-[11px] font-bold min-w-3 text-center">{inCartQty}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                updateQty(cartItemIdx, 1);
+                                showToast(`Added another ${addon.name}`);
+                              }}
+                              className="w-5 h-5 flex items-center justify-center hover:bg-emerald-800 active:scale-95 transition-transform"
+                              aria-label={`Increase ${addon.name}`}
+                            >
+                              +
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              addItem({
+                                productId: addon.id,
+                                name: addon.name,
+                                pricePaise: addon.basePricePaise,
+                                quantity: 1,
+                                imageUrl: dishImage,
+                              });
+                            }}
+                            className="absolute top-1.5 right-1.5 w-6 h-6 rounded-md bg-white text-emerald-700 font-extrabold text-sm flex items-center justify-center shadow-md hover:scale-110 active:scale-95 transition-transform border border-emerald-600"
+                            aria-label={`Add ${addon.name}`}
+                          >
+                            +
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className="w-2.5 h-2.5 rounded-2xs border border-emerald-600 flex items-center justify-center p-0.5 shrink-0 bg-white">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                        </span>
+                        <p className="text-[11px] sm:text-xs font-bold text-slate-800 truncate leading-tight">{addon.name}</p>
+                      </div>
+                      <span className="text-xs sm:text-sm font-extrabold text-slate-900">
+                        ₹{(addon.basePricePaise / 100).toFixed(0)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </div>
+          )}
 
-
-        {/* 7. Rider Delivery Instructions (Exact 1:1 with Reference Image 2) */}
-        <div className="px-3 pt-3">
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 flex flex-col gap-2.5">
+          {/* 7. Rider Delivery Instructions (Exact 1:1 with Reference Image 2) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 flex flex-col gap-3">
             {/* Top Tabs */}
             <div className="flex items-center gap-2">
               <button
@@ -1011,19 +1121,40 @@ export default function CartPage() {
           </div>
         </div>
 
+        {/* Right Column: Delivery Details, Bill Summary & Desktop Order CTA */}
+        <div className="w-full lg:w-[380px] xl:w-[420px] flex flex-col gap-4 lg:sticky lg:top-20 shrink-0">
+          {/* Delivery Address Overview Card */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[20px] text-emerald-700">location_on</span>
+                <span className="text-xs font-bold text-slate-900">Delivery Address</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditingAddress(true)}
+                className="text-xs font-bold text-emerald-700 hover:underline"
+              >
+                Change
+              </button>
+            </div>
+            <div className="text-xs text-slate-600 leading-relaxed">
+              <p className="font-bold text-slate-900">{customerName || 'Customer'} • {customerPhone || 'Phone pending'}</p>
+              <p className="text-slate-500 mt-0.5">{flat ? `${flat}${street ? `, ${street}` : ''}` : 'No flat/street entered'}</p>
+              <p className="text-slate-500">{landmark ? `Near: ${landmark} • ` : ''}PIN: {pincode}</p>
+            </div>
+          </div>
 
-
-        {/* 9. Bill Details Breakdown */}
-        <div className="px-3 pt-3">
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 flex flex-col gap-2">
+          {/* 9. Bill Details Breakdown */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col gap-2.5">
             <h3 className="text-xs uppercase font-extrabold tracking-wider text-slate-500 mb-1">
               Bill Details
             </h3>
-            <div className="flex justify-between text-xs text-slate-600">
+            <div className="flex justify-between text-xs sm:text-sm text-slate-600">
               <span>Item Total</span>
               <span className="font-semibold text-slate-900">₹{(itemsTotalPaise / 100).toFixed(0)}</span>
             </div>
-            <div className="flex justify-between text-xs text-slate-600">
+            <div className="flex justify-between text-xs sm:text-sm text-slate-600">
               <span className="flex items-center gap-1">
                 <span>Delivery Partner Fee</span>
                 {deliveryFeePaise === 0 ? (
@@ -1040,60 +1171,132 @@ export default function CartPage() {
                 {deliveryFeePaise === 0 ? 'FREE' : `₹${(deliveryFeePaise / 100).toFixed(0)}`}
               </span>
             </div>
-            <div className="flex justify-between text-xs text-slate-600">
+            <div className="flex justify-between text-xs sm:text-sm text-slate-600">
               <span>Platform &amp; Packaging Fee</span>
               <span className="font-semibold text-slate-900">₹15</span>
             </div>
             {tipPaise > 0 && (
-              <div className="flex justify-between text-xs text-emerald-700 font-bold">
+              <div className="flex justify-between text-xs sm:text-sm text-emerald-700 font-bold">
                 <span>Delivery Partner Tip</span>
                 <span>₹{(tipPaise / 100).toFixed(0)}</span>
               </div>
             )}
-            <div className="pt-2 border-t border-slate-100 flex justify-between text-sm font-extrabold text-slate-900">
+            <div className="pt-3 border-t border-slate-100 flex justify-between text-sm sm:text-base font-extrabold text-slate-900">
               <span>To Pay</span>
               <span>₹{(finalTotalPaise / 100).toFixed(0)}</span>
+            </div>
+
+            {/* Desktop Pay Button & Payment Method Selector */}
+            <div className="hidden lg:flex flex-col gap-3 pt-3 mt-1 border-t border-[#EEE7DC]">
+              <div
+                onClick={() => setIsPaymentModalOpen(true)}
+                className="group flex items-center justify-between p-3 rounded-2xl bg-[#FFF9F0] hover:bg-[#F7F2E8] border border-[#EEE7DC] hover:border-[#38754A]/40 cursor-pointer transition-all shadow-xs"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold shrink-0 border ${
+                    paymentMethod === 'COD'
+                      ? 'bg-[#FFF1DC] text-[#8C550A] border-[#FFE2B8]'
+                      : 'bg-[#EAF4ED] text-[#38754A] border-[#CBE8D3]'
+                  }`}>
+                    <span className="material-symbols-outlined text-[20px]">
+                      {paymentMethod === 'COD' ? 'payments' : 'qr_code_2'}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase font-extrabold tracking-wider text-[#77786F]">Payment Method</p>
+                    <p className="text-xs font-extrabold text-[#292D26]">
+                      {paymentMethod === 'COD' ? 'Cash / UPI on Delivery' : 'Online UPI / Cards'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-0.5 text-xs font-bold text-[#38754A] group-hover:text-[#285C38] px-2.5 py-1 rounded-lg bg-white/80 border border-[#EEE7DC] group-hover:border-[#38754A]/30 transition-all">
+                  <span>Change</span>
+                  <span className="material-symbols-outlined text-[15px]">expand_more</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handlePlaceOrder}
+                disabled={placingOrder || pinStatusMsg?.isError}
+                className="w-full bg-[#008744] hover:bg-[#007038] active:scale-[0.98] text-white font-black text-base py-3.5 px-4 rounded-xl shadow-lg shadow-emerald-700/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span>
+                  {placingOrder
+                    ? 'Placing Order...'
+                    : pinStatusMsg?.isError
+                    ? 'Delivery Unavailable'
+                    : `Place Order • ₹${(finalTotalPaise / 100).toFixed(0)}`}
+                </span>
+                {!placingOrder && !pinStatusMsg?.isError && (
+                  <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+                )}
+                {placingOrder && (
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0 inline-block" />
+                )}
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 10. Sticky Bottom Payment Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 px-4 py-2.5 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
+      {/* 10. Sticky Bottom Payment Bar (Mobile & Tablet Portrait Only) */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#EEE7DC] px-4 py-2.5 shadow-[0_-4px_20px_rgba(41,45,38,0.08)]">
         <div className="max-w-xl mx-auto flex items-center justify-between gap-3">
-          {/* Left: Payment Method Info */}
+          {/* Left: Payment Method Tap Target */}
           <div
             onClick={() => setIsPaymentModalOpen(true)}
-            className="flex flex-col cursor-pointer select-none min-w-0 hover:opacity-85 transition-opacity"
-            title="Click to change payment method"
+            className="group flex items-center gap-2.5 p-1.5 -ml-1 rounded-2xl hover:bg-[#F7F2E8] active:bg-[#EEE7DC]/50 cursor-pointer select-none min-w-0 transition-colors"
+            title="Tap to change payment method"
           >
-            <div className="flex items-center gap-1 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
-              <span className="material-symbols-outlined text-[13px] text-slate-600">account_balance_wallet</span>
-              <span>PAY USING</span>
-              <span className="text-[10px] text-emerald-700 font-bold">▲ CHANGE</span>
+            {/* Method Icon Badge */}
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold shrink-0 border shadow-xs ${
+              paymentMethod === 'COD'
+                ? 'bg-[#FFF1DC] text-[#8C550A] border-[#FFE2B8]'
+                : 'bg-[#EAF4ED] text-[#38754A] border-[#CBE8D3]'
+            }`}>
+              <span className="material-symbols-outlined text-[20px]">
+                {paymentMethod === 'COD' ? 'payments' : 'qr_code_2'}
+              </span>
             </div>
-            <div className="flex items-center gap-1.5 font-extrabold text-xs sm:text-sm text-slate-900 truncate mt-0.5">
-              <span>{paymentMethod === 'COD' ? 'Pay on Delivery (Cash/UPI)' : 'Online UPI / Cards'}</span>
+
+            {/* Method Text Info */}
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-1.5 leading-none">
+                <span className="text-[9.5px] font-extrabold text-[#77786F] uppercase tracking-wider">
+                  PAY USING
+                </span>
+                <span className="inline-flex items-center text-[10px] font-bold text-[#38754A] group-hover:text-[#285C38]">
+                  <span>Change</span>
+                  <span className="material-symbols-outlined text-[13px] leading-none">expand_more</span>
+                </span>
+              </div>
+              <div className="flex items-center gap-1 font-extrabold text-xs text-[#292D26] truncate mt-0.5">
+                <span>{paymentMethod === 'COD' ? 'Cash on Delivery' : 'Online UPI / Cards'}</span>
+              </div>
+              <span className="text-[10px] text-[#77786F] truncate leading-tight mt-0.5">
+                {paymentMethod === 'COD' ? 'Pay cash or scan QR on arrival' : 'PhonePe, GPay, Paytm, Cards'}
+              </span>
             </div>
-            <span className="text-[10px] text-slate-500 truncate leading-none mt-0.5">
-              {paymentMethod === 'COD' ? 'Cash or scan rider QR code' : 'Instant PhonePe, GPay, Paytm'}
-            </span>
           </div>
 
-          {/* Right: Big Green Pay Button */}
+          {/* Right: Premium Pay Button */}
           <button
             type="button"
             onClick={handlePlaceOrder}
-            disabled={placingOrder || quoteLoading || pinStatusMsg?.isError}
-            className="bg-[#008848] hover:bg-[#00703c] active:scale-98 text-white font-extrabold text-sm sm:text-base px-6 sm:px-8 py-3 rounded-xl shadow-md transition-all flex items-center gap-2 shrink-0 disabled:opacity-50"
+            disabled={placingOrder || pinStatusMsg?.isError}
+            className="bg-[#008744] hover:bg-[#007038] active:scale-[0.98] text-white font-black text-sm sm:text-base px-6 sm:px-7 py-3 rounded-xl shadow-lg shadow-emerald-700/25 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span>
               {placingOrder
                 ? 'Processing...'
                 : pinStatusMsg?.isError
-                ? 'Delivery Unavailable'
+                ? 'Unavailable'
                 : `Pay ₹${(finalTotalPaise / 100).toFixed(0)}`}
             </span>
+            {!placingOrder && !pinStatusMsg?.isError && (
+              <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+            )}
             {placingOrder && (
               <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0 inline-block" />
             )}
@@ -1114,7 +1317,7 @@ export default function CartPage() {
                 <span className="material-symbols-outlined text-[22px]">location_on</span>
                 <div>
                   <h3 className="font-extrabold text-sm sm:text-base leading-tight">Change Delivery Address</h3>
-                  <p className="text-[11px] text-emerald-100">Ensure fresh lunch &amp; dinner reaches your doorstep</p>
+                  <p className="text-[11px] text-emerald-100">Ensure fresh hot meals reach your doorstep</p>
                 </div>
               </div>
               <button
@@ -1295,28 +1498,28 @@ export default function CartPage() {
                 }}
                 className={`p-3.5 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all ${
                   paymentMethod === 'RAZORPAY'
-                    ? 'border-[#008848] bg-emerald-50/60 shadow-xs'
-                    : 'border-slate-200 hover:border-slate-300 bg-white'
+                    ? 'border-[#38754A] bg-[#EAF4ED]/40 shadow-xs'
+                    : 'border-[#EEE7DC] hover:border-slate-300 bg-white'
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-lg shrink-0 border border-purple-200">
-                    <span className="material-symbols-outlined text-[22px]">contactless</span>
+                  <div className="w-10 h-10 rounded-xl bg-[#EAF4ED] text-[#38754A] flex items-center justify-center font-bold text-lg shrink-0 border border-[#CBE8D3]">
+                    <span className="material-symbols-outlined text-[22px]">qr_code_2</span>
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-sm text-slate-900">Online UPI / Cards</span>
-                      <span className="px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-700 font-extrabold text-[10px]">
+                      <span className="font-extrabold text-sm text-[#292D26]">Online UPI / Cards</span>
+                      <span className="px-2 py-0.5 rounded-full bg-[#EAF4ED] text-[#285C38] border border-[#CBE8D3] font-extrabold text-[10px]">
                         RECOMMENDED
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-xs text-[#77786F] mt-0.5">
                       PhonePe, Google Pay, Paytm, UPI, Cards, Netbanking
                     </p>
                   </div>
                 </div>
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ml-2 ${
-                  paymentMethod === 'RAZORPAY' ? 'border-[#008848] bg-[#008848]' : 'border-slate-300'
+                  paymentMethod === 'RAZORPAY' ? 'border-[#38754A] bg-[#38754A]' : 'border-slate-300'
                 }`}>
                   {paymentMethod === 'RAZORPAY' && <span className="w-2 h-2 rounded-full bg-white"></span>}
                 </div>
@@ -1330,25 +1533,25 @@ export default function CartPage() {
                 }}
                 className={`p-3.5 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all ${
                   paymentMethod === 'COD'
-                    ? 'border-[#008848] bg-emerald-50/60 shadow-xs'
-                    : 'border-slate-200 hover:border-slate-300 bg-white'
+                    ? 'border-[#38754A] bg-[#EAF4ED]/40 shadow-xs'
+                    : 'border-[#EEE7DC] hover:border-slate-300 bg-white'
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-lg shrink-0 border border-amber-200">
+                  <div className="w-10 h-10 rounded-xl bg-[#FFF1DC] text-[#8C550A] flex items-center justify-center font-bold text-lg shrink-0 border border-[#FFE2B8]">
                     <span className="material-symbols-outlined text-[22px]">payments</span>
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-sm text-slate-900">Cash / UPI on Delivery</span>
+                      <span className="font-extrabold text-sm text-[#292D26]">Cash / UPI on Delivery</span>
                     </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-xs text-[#77786F] mt-0.5">
                       Pay cash or scan rider's QR code when order arrives
                     </p>
                   </div>
                 </div>
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ml-2 ${
-                  paymentMethod === 'COD' ? 'border-[#008848] bg-[#008848]' : 'border-slate-300'
+                  paymentMethod === 'COD' ? 'border-[#38754A] bg-[#38754A]' : 'border-slate-300'
                 }`}>
                   {paymentMethod === 'COD' && <span className="w-2 h-2 rounded-full bg-white"></span>}
                 </div>
@@ -1357,13 +1560,13 @@ export default function CartPage() {
 
             <div className="p-4 pt-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
               <span className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-[16px] text-emerald-700">verified_user</span>
+                <span className="material-symbols-outlined text-[16px] text-[#38754A]">verified_user</span>
                 <span>Bank-grade 256-bit encryption</span>
               </span>
               <button
                 type="button"
                 onClick={() => setIsPaymentModalOpen(false)}
-                className="font-bold text-[#008848] hover:underline"
+                className="font-bold text-[#38754A] hover:underline"
               >
                 Confirm
               </button>
@@ -1468,24 +1671,7 @@ export default function CartPage() {
         </div>
       )}
 
-      {/* Customer Auth Modal */}
-      <CustomerAuthModal
-        isOpen={isAuthOpen}
-        initialTab={authModalTab}
-        onClose={() => setIsAuthOpen(false)}
-        onLoginSuccess={(user: UserProfile) => {
-          setCurrentUser(user);
-          if (user.name) setCustomerName(user.name);
-          if (user.phone) setCustomerPhone(user.phone);
-          if (user.savedAddress) {
-            if (user.savedAddress.flat) setFlat(user.savedAddress.flat);
-            if (user.savedAddress.street) setStreet(user.savedAddress.street);
-            if (user.savedAddress.landmark) setLandmark(user.savedAddress.landmark);
-            if (user.savedAddress.pincode) setPincode(user.savedAddress.pincode);
-          }
-          showToast(`Welcome ${user.name || user.phone}!`);
-        }}
-      />
+
 
       {/* Location & Map Selector Modal */}
       <LocationMapModal

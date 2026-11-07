@@ -14,7 +14,7 @@ export default function Footer() {
 
   return (
     <footer className="bg-white border-t border-[#EEE7DC] text-[#292D26] pb-24 md:pb-12 mt-auto">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-10 pb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
           {/* 1. Brand & Kitchen Assurance */}
           <div className="flex flex-col gap-3">
@@ -69,13 +69,15 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link
-                  href="/admin"
+                <a
+                  href={process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:3002'}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="hover:text-[#38754A] transition-colors flex items-center gap-1.5"
                 >
                   <span className="material-symbols-outlined text-[16px] text-amber-600">admin_panel_settings</span>
-                  <span>Kitchen Admin &amp; Staff KDS</span>
-                </Link>
+                  <span>Kitchen Admin &amp; Staff KDS (Port 3002)</span>
+                </a>
               </li>
               <li>
                 <Link href="/rider" className="hover:text-[#38754A] transition-colors flex items-center gap-1">
@@ -93,15 +95,11 @@ export default function Footer() {
             </span>
             <div className="flex flex-col gap-2 text-xs text-[#77786F]">
               <div>
-                <span className="font-semibold text-[#292D26] block">Lunch Batch</span>
-                <span>12:00 PM - 02:30 PM (Orders cut off at 12:30 PM)</span>
-              </div>
-              <div>
-                <span className="font-semibold text-[#292D26] block">Dinner Batch</span>
-                <span>07:30 PM - 10:00 PM (Orders cut off at 06:30 PM)</span>
+                <span className="font-semibold text-[#292D26] block">Kitchen Service</span>
+                <span>11:00 AM - 11:00 PM (Daily Fresh Batch Deliveries)</span>
               </div>
               <div className="pt-1 text-[11px]">
-                <span className="text-[#38754A] font-semibold">Service Zone:</span> South Delhi (Malviya Nagar, Saket, Hauz Khas, Greater Kailash, Outer Ring Road)
+                <span className="text-[#38754A] font-semibold">Service Zone:</span> Sagore, Pithampur Industrial Area, Sector 1-3 &amp; Nearby Localities
               </div>
             </div>
           </div>

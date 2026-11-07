@@ -53,10 +53,10 @@ function getInitials(name?: string) {
 }
 
 function formatAddress(addr: any): string {
-  if (!addr) return 'Flat 402, Malviya Nagar, New Delhi';
+  if (!addr) return 'Address not specified';
   if (typeof addr === 'string') return addr;
   const parts = [addr.flat, addr.street, addr.landmark, addr.pincode].filter(Boolean);
-  return parts.join(', ') || 'Flat 402, Malviya Nagar, New Delhi';
+  return parts.join(', ') || 'Address not specified';
 }
 
 function OrderDetailsPanel({
@@ -81,221 +81,261 @@ function OrderDetailsPanel({
   isDrawer?: boolean;
 }) {
   return (
-    <div className={`bg-white flex flex-col gap-3 ${isDrawer ? 'h-full' : 'rounded-2xl border border-gray-200/90 p-4 shadow-2xs w-full'}`}>
-      {/* Panel Header */}
-      <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <h3 className="font-bold text-sm text-gray-950 font-mono tracking-tight truncate">
+    <div className={`bg-white flex flex-col gap-3.5 ${isDrawer ? "h-full p-4" : "rounded-2xl border border-gray-200/90 p-4 shadow-2xs w-full"}`}>
+      {/* 1. Header */}
+      <div className="flex items-start justify-between border-b border-gray-100 pb-3">
+        <div>
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Order ID</span>
+          <h3 className="font-bold text-base text-gray-950 font-mono tracking-tight">
             #{selectedOrder.orderNumber}
           </h3>
-          <span
-            className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 flex items-center gap-1 ${
-              selectedOrder.status === 'DELIVERED'
-                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                : selectedOrder.status === 'PLACED'
-                ? 'bg-rose-50 text-rose-800 border border-rose-200'
-                : selectedOrder.status === 'READY_FOR_PICKUP'
-                ? 'bg-blue-50 text-blue-800 border border-blue-200'
-                : selectedOrder.status === 'OUT_FOR_DELIVERY'
-                ? 'bg-purple-50 text-purple-800 border border-purple-200'
-                : 'bg-amber-50 text-amber-900 border border-amber-200'
-            }`}
-          >
+          <div className="mt-1">
             <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                selectedOrder.status === 'DELIVERED'
-                  ? 'bg-emerald-600'
-                  : selectedOrder.status === 'PLACED'
-                  ? 'bg-rose-500 animate-pulse'
-                  : selectedOrder.status === 'READY_FOR_PICKUP'
-                  ? 'bg-blue-500'
-                  : selectedOrder.status === 'OUT_FOR_DELIVERY'
-                  ? 'bg-purple-500'
-                  : 'bg-amber-500'
+              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase ${
+                selectedOrder.status === "DELIVERED"
+                  ? "bg-emerald-100 text-emerald-800"
+                  : selectedOrder.status === "OUT_FOR_DELIVERY"
+                  ? "bg-emerald-100 text-emerald-800"
+                  : selectedOrder.status === "READY_FOR_PICKUP"
+                  ? "bg-blue-100 text-blue-800"
+                  : selectedOrder.status === "PLACED"
+                  ? "bg-rose-100 text-rose-800 animate-pulse"
+                  : "bg-amber-100 text-amber-900"
               }`}
-            ></span>
-            <span>{selectedOrder.status}</span>
-          </span>
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  selectedOrder.status === "DELIVERED" || selectedOrder.status === "OUT_FOR_DELIVERY"
+                    ? "bg-emerald-600"
+                    : selectedOrder.status === "READY_FOR_PICKUP"
+                    ? "bg-blue-600"
+                    : selectedOrder.status === "PLACED"
+                    ? "bg-rose-500"
+                    : "bg-amber-600"
+                }`}
+              />
+              <span>{selectedOrder.status.replace(/_/g, " ")}</span>
+            </span>
+          </div>
         </div>
 
         {onClose && (
           <button
             onClick={onClose}
-            className="w-6 h-6 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 flex items-center justify-center transition-colors shrink-0"
+            className="w-8 h-8 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 flex items-center justify-center transition-colors shrink-0"
             title="Close details"
           >
-            <span className="material-symbols-outlined text-[16px]">close</span>
+            <span className="material-symbols-outlined text-[18px]">close</span>
           </button>
         )}
       </div>
 
-      {/* Sub-tabs: Details | Customer | Timeline */}
-      <div className="flex items-center gap-4 text-xs font-semibold border-b border-gray-100 pb-1.5">
-        <button
-          onClick={() => setDetailTab('DETAILS')}
-          className={`pb-1 transition-colors relative ${
-            detailTab === 'DETAILS'
-              ? 'text-emerald-900 font-bold border-b-2 border-emerald-800'
-              : 'text-gray-400 hover:text-gray-700'
-          }`}
-        >
-          Details
-        </button>
-        <button
-          onClick={() => setDetailTab('CUSTOMER')}
-          className={`pb-1 transition-colors relative ${
-            detailTab === 'CUSTOMER'
-              ? 'text-emerald-900 font-bold border-b-2 border-emerald-800'
-              : 'text-gray-400 hover:text-gray-700'
-          }`}
-        >
-          Customer
-        </button>
-        <button
-          onClick={() => setDetailTab('TIMELINE')}
-          className={`pb-1 transition-colors relative ${
-            detailTab === 'TIMELINE'
-              ? 'text-emerald-900 font-bold border-b-2 border-emerald-800'
-              : 'text-gray-400 hover:text-gray-700'
-          }`}
-        >
-          Timeline
-        </button>
-      </div>
-
-      {detailTab === 'DETAILS' && (
-        <div className="flex flex-col gap-3 text-xs flex-1 overflow-y-auto pr-0.5">
-          {/* Customer Profile & Quick 1-Tap Actions */}
-          <div className="pb-2.5 border-b border-gray-100 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center shrink-0">
-                  {getInitials(selectedOrder.customerName)}
-                </span>
-                <div className="min-w-0">
-                  <h4 className="font-bold text-gray-900 text-xs leading-tight truncate">
-                    {selectedOrder.customerName}
-                  </h4>
-                  <div className="text-[11px] text-gray-400 font-mono">
-                    +91 {selectedOrder.customerPhone}
-                  </div>
-                </div>
-              </div>
-
-              {/* 1-Tap Call, WhatsApp & Map */}
-              <div className="flex items-center gap-1 shrink-0">
-                <a
-                  href={`tel:${selectedOrder.customerPhone}`}
-                  className="p-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-colors"
-                  title="Call Customer"
-                >
-                  <span className="material-symbols-outlined text-[15px]">call</span>
-                </a>
-                <a
-                  href={`https://wa.me/91${selectedOrder.customerPhone}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="p-1 rounded-lg bg-green-50 hover:bg-green-100 text-green-700 transition-colors"
-                  title="WhatsApp"
-                >
-                  <span className="material-symbols-outlined text-[15px]">chat</span>
-                </a>
-                <a
-                  href={`https://maps.google.com/?q=${encodeURIComponent(formatAddress(selectedOrder.deliveryAddress))}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="p-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 transition-colors"
-                  title="View on Maps"
-                >
-                  <span className="material-symbols-outlined text-[15px]">pin_drop</span>
-                </a>
+      {/* 2. Customer & Drop Location Card */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Customer</span>
+        <div className="p-3 rounded-2xl bg-stone-50/80 border border-stone-200/70 flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-9 h-9 rounded-full bg-stone-200 text-stone-800 font-bold text-xs flex items-center justify-center shrink-0">
+                {getInitials(selectedOrder.customerName)}
+              </span>
+              <div className="min-w-0">
+                <h4 className="font-bold text-gray-900 text-xs leading-tight truncate">
+                  {selectedOrder.customerName}
+                </h4>
+                <p className="text-[11px] text-gray-500 font-mono mt-0.5">
+                  +91 {selectedOrder.customerPhone}
+                </p>
               </div>
             </div>
 
-            <div className="text-[11px] text-gray-600 bg-stone-50 rounded-xl p-2 border border-stone-100 leading-snug">
-              <span className="text-[9px] uppercase font-bold text-gray-400 tracking-wider block mb-0.5">Address</span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <a
+                href={`tel:${selectedOrder.customerPhone}`}
+                className="w-8 h-8 rounded-full bg-white hover:bg-emerald-50 text-gray-700 hover:text-emerald-700 border border-gray-200/80 flex items-center justify-center transition-colors shadow-2xs"
+                title="Call Customer"
+              >
+                <span className="material-symbols-outlined text-[16px]">call</span>
+              </a>
+              <a
+                href={`https://maps.google.com/?q=${encodeURIComponent(formatAddress(selectedOrder.deliveryAddress))}`}
+                target="_blank"
+                rel="noreferrer"
+                className="w-8 h-8 rounded-full bg-white hover:bg-stone-100 text-gray-700 border border-gray-200/80 flex items-center justify-center transition-colors shadow-2xs"
+                title="View on Maps"
+              >
+                <span className="material-symbols-outlined text-[16px]">pin_drop</span>
+              </a>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-stone-200/60 text-[11px]">
+            <span className="text-[9px] uppercase font-bold text-gray-400 tracking-wider block mb-0.5">
+              Drop location
+            </span>
+            <p className="text-gray-800 font-medium leading-snug">
               {formatAddress(selectedOrder.deliveryAddress)}
-            </div>
-
+            </p>
             {selectedOrder.deliveryNotes && (
-              <div className="text-[11px] text-amber-900 bg-amber-50/80 border border-amber-200/60 rounded-lg px-2 py-1 flex items-start gap-1 font-medium">
-                <span className="material-symbols-outlined text-[13px] text-amber-700 shrink-0 mt-0.5">edit_note</span>
-                <span>Note: "{selectedOrder.deliveryNotes}"</span>
+              <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200/70 text-[10px] font-semibold">
+                <span className="material-symbols-outlined text-[12px] text-amber-700">edit_note</span>
+                <span>{selectedOrder.deliveryNotes}</span>
               </div>
             )}
           </div>
+        </div>
+      </div>
 
-          {/* Minimalist Order Items */}
-          <div className="pb-2.5 border-b border-gray-100 flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-              <span>Items ({selectedOrder.items?.reduce((acc, it) => acc + it.quantity, 0) || selectedOrder.itemsCount || 1})</span>
-              <span>Amount</span>
+      {/* 3. Order Items & Compact Bill Summary */}
+      <div className="py-2.5 border-t border-b border-gray-100 flex flex-col gap-2 text-xs">
+        <div className="flex items-center justify-between text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+          <span>Order items</span>
+          <span>{selectedOrder.slotLabel ? selectedOrder.slotLabel.split("(")[0].trim() : "Standard"}</span>
+        </div>
+
+        <div className="divide-y divide-gray-50 max-h-36 overflow-y-auto pr-1">
+          {selectedOrder.items && selectedOrder.items.length > 0 ? (
+            selectedOrder.items.map((item, idx) => (
+              <div key={item.id || idx} className="py-1 flex items-center justify-between text-xs">
+                <div className="min-w-0 pr-2 truncate">
+                  <span className="font-semibold text-gray-900">
+                    <span className="font-bold text-emerald-800 mr-1">{item.quantity}×</span>
+                    {item.productName}
+                  </span>
+                  {item.variantName && item.variantName !== "Standard" && (
+                    <span className="text-[10px] text-gray-400 ml-1">({item.variantName})</span>
+                  )}
+                </div>
+                <span className="font-bold font-mono text-gray-900 shrink-0">
+                  ₹{item.totalPricePaise ? (item.totalPricePaise / 100).toFixed(0) : (selectedOrder.totalAmountPaise / 100).toFixed(0)}
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="py-1 text-xs text-gray-600 font-medium">Standard Tiffin Thali (×1)</div>
+          )}
+        </div>
+
+        <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
+          <div>
+            <span className="font-semibold text-gray-600 block text-[11px]">Total payment</span>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+              {selectedOrder.paymentMethod || "COD"} • {selectedOrder.paymentStatus || "PENDING"}
+            </span>
+          </div>
+          <span className="font-bold font-mono text-base text-gray-950">
+            ₹{(selectedOrder.totalAmountPaise / 100).toFixed(2)}
+          </span>
+        </div>
+      </div>
+
+      {/* 4. Unified Rider & Single-Action Dock */}
+      <div className="mt-auto pt-2 flex flex-col gap-2">
+        {selectedOrder.assignedRider ? (
+          <div className="p-3 rounded-2xl bg-white border border-gray-200 shadow-2xs flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-full bg-amber-50 text-amber-800 flex items-center justify-center shrink-0 border border-amber-200/60">
+                  <span className="material-symbols-outlined text-[18px]">moped</span>
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                    Delivery Rider
+                  </span>
+                  <h4 className="font-bold text-gray-900 text-xs leading-tight truncate">
+                    {selectedOrder.assignedRider.name}
+                  </h4>
+                  <p className="text-[11px] text-gray-500 font-mono mt-0.5">
+                    +91 {selectedOrder.assignedRider.phone}
+                  </p>
+                </div>
+              </div>
+
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
+                  selectedOrder.status === "OUT_FOR_DELIVERY"
+                    ? "bg-emerald-100 text-emerald-800"
+                    : selectedOrder.assignedRider.assignmentStatus === "ACCEPTED"
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-amber-100 text-amber-800 animate-pulse"
+                }`}
+              >
+                {selectedOrder.status === "OUT_FOR_DELIVERY"
+                  ? "En Route"
+                  : selectedOrder.assignedRider.assignmentStatus === "ACCEPTED"
+                  ? "Accepted"
+                  : "Assigning..."}
+              </span>
             </div>
 
-            <div className="divide-y divide-gray-50">
-              {selectedOrder.items && selectedOrder.items.length > 0 ? (
-                selectedOrder.items.map((item, idx) => (
-                  <div key={item.id || idx} className="py-1.5 flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold text-gray-900 leading-snug">
-                        <span className="text-emerald-800 font-bold font-mono mr-1">{item.quantity}×</span>
-                        {item.productName}
-                      </div>
-                      <div className="text-[10px] text-gray-400">
-                        {item.variantName || 'Standard Meal'}
-                        {item.addons && item.addons.length > 0 && ` • +${item.addons.map((a) => a.name).join(', ')}`}
-                      </div>
-                    </div>
-                    <div className="text-xs font-mono font-bold text-gray-900 shrink-0">
-                      ₹{item.totalPricePaise ? (item.totalPricePaise / 100).toFixed(2) : (selectedOrder.totalAmountPaise / 100).toFixed(2)}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="py-1.5 text-xs text-gray-500 font-medium">
-                  Standard Tiffin Thali (×{selectedOrder.itemsCount || 1})
-                </div>
+            {/* Primary Action Button */}
+            {selectedOrder.status === "OUT_FOR_DELIVERY" ? (
+              <button
+                onClick={() => handleManualOverride(selectedOrder.id)}
+                disabled={actionLoadingId === selectedOrder.id}
+                className="w-full py-2.5 rounded-xl bg-[#4F46E5] hover:bg-[#4338CA] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+              >
+                <span className="material-symbols-outlined text-[16px]">task_alt</span>
+                <span>Verify Handover OTP</span>
+              </button>
+            ) : selectedOrder.status === "READY_FOR_PICKUP" ? (
+              <button
+                onClick={() => setShowRiderModal(true)}
+                disabled={actionLoadingId === selectedOrder.id}
+                className={`w-full py-2.5 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors ${
+                  selectedOrder.assignedRider.assignmentStatus === "ACCEPTED"
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-amber-500 hover:bg-amber-600"
+                }`}
+              >
+                <span className="material-symbols-outlined text-[16px]">two_wheeler</span>
+                <span>
+                  {selectedOrder.assignedRider.assignmentStatus === "ACCEPTED"
+                    ? "Assigned: Ready for Pickup"
+                    : "Assigning: Waiting for Acceptance"}
+                </span>
+              </button>
+            ) : null}
+
+            {/* Subtle Secondary Links */}
+            <div className="flex items-center justify-between pt-1 border-t border-gray-100 text-[11px]">
+              <button
+                onClick={() => setShowRiderModal(true)}
+                className="font-medium text-gray-500 hover:text-gray-900 transition-colors"
+              >
+                Reassign
+              </button>
+              {selectedOrder.status !== "CANCELLED" && selectedOrder.status !== "DELIVERED" && (
+                <button
+                  onClick={() => {
+                    if (window.confirm("Are you sure you want to cancel this order?")) {
+                      handleTransition(selectedOrder.id, "CANCELLED");
+                    }
+                  }}
+                  className="font-medium text-rose-600 hover:text-rose-700 transition-colors"
+                >
+                  Cancel Order
+                </button>
               )}
             </div>
           </div>
-
-          {/* Clean Order Info & Bill Total */}
-          <div className="pb-2.5 border-b border-gray-100 flex flex-col gap-2 text-xs">
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <div>
-                <span className="text-gray-400 block text-[9px] uppercase font-bold tracking-wider">Time Slot</span>
-                <span className="font-semibold text-gray-800 truncate block">{selectedOrder.slotLabel || 'Standard'}</span>
-              </div>
-              <div>
-                <span className="text-gray-400 block text-[9px] uppercase font-bold tracking-wider">Payment</span>
-                <span className="font-semibold text-gray-800 uppercase">{selectedOrder.paymentMethod || 'COD'}</span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-1.5 border-t border-gray-100 text-xs">
-              <span className="font-bold text-gray-600">Total Billed</span>
-              <span className="font-bold font-mono text-base text-gray-950">
-                ₹{(selectedOrder.totalAmountPaise / 100).toFixed(2)}
-              </span>
-            </div>
-          </div>
-
-          {/* Operational Primary & Secondary Actions */}
-          <div className="flex flex-col gap-2 mt-auto pt-1">
-            {selectedOrder.status === 'PLACED' && (
+        ) : (
+          /* When no rider is assigned yet */
+          <div className="flex flex-col gap-2">
+            {selectedOrder.status === "PLACED" && (
               <button
-                onClick={() => handleTransition(selectedOrder.id, 'ACCEPTED')}
+                onClick={() => handleTransition(selectedOrder.id, "ACCEPTED")}
                 disabled={actionLoadingId === selectedOrder.id}
                 className="w-full py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
               >
                 <span className="material-symbols-outlined text-[16px]">skillet</span>
-                <span>Accept & Start Preparing</span>
+                <span>Accept & Start Cooking</span>
               </button>
             )}
 
-            {(selectedOrder.status === 'ACCEPTED' || selectedOrder.status === 'PREPARING') && (
+            {(selectedOrder.status === "ACCEPTED" || selectedOrder.status === "PREPARING") && (
               <button
-                onClick={() => handleTransition(selectedOrder.id, 'READY_FOR_PICKUP')}
+                onClick={() => handleTransition(selectedOrder.id, "READY_FOR_PICKUP")}
                 disabled={actionLoadingId === selectedOrder.id}
                 className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
               >
@@ -304,122 +344,42 @@ function OrderDetailsPanel({
               </button>
             )}
 
-            {selectedOrder.status === 'READY_FOR_PICKUP' && (
+            {selectedOrder.status === "READY_FOR_PICKUP" && (
               <button
                 onClick={() => setShowRiderModal(true)}
                 disabled={actionLoadingId === selectedOrder.id}
                 className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
               >
                 <span className="material-symbols-outlined text-[16px]">two_wheeler</span>
-                <span>Assign &amp; Dispatch Rider</span>
+                <span>Assign Rider</span>
               </button>
             )}
 
-            {selectedOrder.status === 'OUT_FOR_DELIVERY' && (
-              <button
-                onClick={() => handleManualOverride(selectedOrder.id)}
-                disabled={actionLoadingId === selectedOrder.id}
-                className="w-full py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
-              >
-                <span className="material-symbols-outlined text-[16px]">task_alt</span>
-                <span>Verify OTP &amp; Complete Delivery</span>
-              </button>
-            )}
-
-            {selectedOrder.status === 'DELIVERED' && (
+            {selectedOrder.status === "DELIVERED" && (
               <div className="w-full py-2 rounded-xl bg-emerald-50 text-emerald-800 font-bold text-xs flex items-center justify-center gap-1 border border-emerald-200">
                 <span className="material-symbols-outlined text-[15px]">verified</span>
                 <span>Order Delivered Successfully</span>
               </div>
             )}
 
-            {/* Subtle Secondary Actions */}
-            {selectedOrder.status !== 'CANCELLED' && selectedOrder.status !== 'DELIVERED' && (
-              <div className="flex items-center justify-between pt-1">
-                <button
-                  onClick={() => setShowRiderModal(true)}
-                  className="text-[11px] font-semibold text-gray-500 hover:text-gray-900 flex items-center gap-1 transition-colors"
-                >
-                  <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
-                  <span>Change Rider</span>
-                </button>
-
+            {/* Secondary Cancel */}
+            {selectedOrder.status !== "CANCELLED" && selectedOrder.status !== "DELIVERED" && (
+              <div className="flex justify-end pt-1">
                 <button
                   onClick={() => {
-                    if (window.confirm('Are you sure you want to cancel this order?')) {
-                      handleTransition(selectedOrder.id, 'CANCELLED');
+                    if (window.confirm("Are you sure you want to cancel this order?")) {
+                      handleTransition(selectedOrder.id, "CANCELLED");
                     }
                   }}
-                  className="text-[11px] font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1 transition-colors"
+                  className="text-[11px] font-medium text-rose-600 hover:text-rose-700 transition-colors"
                 >
-                  <span className="material-symbols-outlined text-[14px]">close</span>
-                  <span>Cancel</span>
+                  Cancel Order
                 </button>
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {detailTab === 'CUSTOMER' && (
-        <div className="flex flex-col gap-3 text-xs flex-1 overflow-y-auto">
-          <div className="p-3 bg-stone-50 rounded-xl border border-stone-100 flex flex-col gap-1.5">
-            <span className="font-bold text-gray-900">{selectedOrder.customerName}</span>
-            <span className="text-gray-600 font-mono">Mobile: +91 {selectedOrder.customerPhone}</span>
-            <span className="text-gray-500 text-[11px]">Registered Customer Account</span>
-          </div>
-          <div className="text-[11px] text-gray-500">
-            Full address on file:
-            <div className="text-gray-800 font-medium mt-1 p-2.5 bg-white rounded-lg border border-gray-200">
-              {formatAddress(selectedOrder.deliveryAddress)}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {detailTab === 'TIMELINE' && (
-        <div className="flex flex-col gap-3 text-xs pl-2 flex-1 overflow-y-auto">
-          <div className="flex items-center gap-3">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
-            <div>
-              <div className="font-bold text-gray-900">Order Placed &amp; Authorized</div>
-              <div className="text-[10px] text-gray-400">{formatOrderDate(selectedOrder.createdAt)}</div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className={`w-2.5 h-2.5 rounded-full ${selectedOrder.status !== 'PLACED' ? 'bg-emerald-600' : 'bg-gray-300'}`}></span>
-            <div>
-              <div className="font-bold text-gray-900">Kitchen Preparation</div>
-              <div className="text-[10px] text-gray-400">Cooking on Station #1</div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className={`w-2.5 h-2.5 rounded-full ${selectedOrder.status === 'READY_FOR_PICKUP' || selectedOrder.status === 'OUT_FOR_DELIVERY' || selectedOrder.status === 'DELIVERED' ? 'bg-emerald-600' : 'bg-gray-300'}`}></span>
-            <div>
-              <div className="font-bold text-gray-900">Ready for Dispatch</div>
-              <div className="text-[10px] text-gray-400">Packed in spill-proof warm tray</div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className={`w-2.5 h-2.5 rounded-full ${selectedOrder.status === 'OUT_FOR_DELIVERY' || selectedOrder.status === 'DELIVERED' ? 'bg-emerald-600' : 'bg-gray-300'}`}></span>
-            <div>
-              <div className="font-bold text-gray-900">Out with Delivery Rider</div>
-              <div className="text-[10px] text-gray-400">En route to customer</div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className={`w-2.5 h-2.5 rounded-full ${selectedOrder.status === 'DELIVERED' ? 'bg-emerald-600' : 'bg-gray-300'}`}></span>
-            <div>
-              <div className="font-bold text-gray-900">Delivered</div>
-              <div className="text-[10px] text-gray-400">Handover verified</div>
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -435,7 +395,30 @@ export default function OperationsConsolePage() {
   const [activeFilterTab, setActiveFilterTab] = useState<'ACTIVE' | 'ALL' | 'NEW' | 'PREPARING' | 'READY' | 'DISPATCH' | 'DELIVERED' | 'CANCELLED'>('ACTIVE');
   const [searchQuery, setSearchQuery] = useState('');
   const [audioEnabled, setAudioEnabled] = useState(true);
+  const [refreshIntervalSec, setRefreshIntervalSec] = useState<number>(8);
+  const [isKitchenOpen, setIsKitchenOpen] = useState<boolean>(true);
+  const [autoAcceptOrders, setAutoAcceptOrders] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Filter Pills Sliding Bar Ref & Action
+  const filterPillsRef = useRef<HTMLDivElement>(null);
+  const slidePills = (direction: 'left' | 'right') => {
+    if (filterPillsRef.current) {
+      filterPillsRef.current.scrollBy({
+        left: direction === 'left' ? -220 : 220,
+        behavior: 'smooth',
+      });
+    }
+  };
+
+  // Helper to persist console settings in localStorage
+  const updateSetting = (key: string, value: any) => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('jr_admin_settings') || '{}');
+      saved[key] = value;
+      localStorage.setItem('jr_admin_settings', JSON.stringify(saved));
+    } catch {}
+  };
 
   // View presentation state (Live Kitchen Pipeline vs Condensed Data Table)
   const [orderViewMode, setOrderViewMode] = useState<'TABLE' | 'KITCHEN'>('KITCHEN');
@@ -449,6 +432,17 @@ export default function OperationsConsolePage() {
 
   // Rider assignment modal state
   const [showRiderModal, setShowRiderModal] = useState(false);
+
+  // Add Rider Modal State
+  const [showAddRiderModal, setShowAddRiderModal] = useState(false);
+  const [newRiderName, setNewRiderName] = useState('');
+  const [newRiderPhone, setNewRiderPhone] = useState('');
+  const [newRiderPassword, setNewRiderPassword] = useState('200720');
+  const [newRiderVehicle, setNewRiderVehicle] = useState('MP-09-JR-2026');
+  const [addRiderLoading, setAddRiderLoading] = useState(false);
+  const [addRiderError, setAddRiderError] = useState<string | null>(null);
+  const [togglingRiderId, setTogglingRiderId] = useState<string | null>(null);
+  const [deletingRiderId, setDeletingRiderId] = useState<string | null>(null);
 
   // Customers & Riders State
   const [customers, setCustomers] = useState<AdminCustomer[]>([]);
@@ -591,17 +585,34 @@ export default function OperationsConsolePage() {
     }
   }, []);
 
+  // Hydrate console settings from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('jr_admin_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.audioEnabled === 'boolean') setAudioEnabled(parsed.audioEnabled);
+        if (typeof parsed.refreshIntervalSec === 'number') setRefreshIntervalSec(parsed.refreshIntervalSec);
+        if (typeof parsed.isKitchenOpen === 'boolean') setIsKitchenOpen(parsed.isKitchenOpen);
+        if (typeof parsed.autoAcceptOrders === 'boolean') setAutoAcceptOrders(parsed.autoAcceptOrders);
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     loadOrders();
     loadRiders();
     loadSlots();
 
-    // 1. Resilient polling fallback every 8 seconds when active tab is visible
-    const interval = setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        loadOrders(true);
-      }
-    }, 8000);
+    // 1. Resilient polling fallback based on configured refresh interval
+    let interval: NodeJS.Timeout | null = null;
+    if (refreshIntervalSec > 0) {
+      interval = setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          loadOrders(true);
+        }
+      }, refreshIntervalSec * 1000);
+    }
 
     // 2. Instant sync when browser tab regains focus or visibility
     const handleVisibilityOrFocus = () => {
@@ -612,10 +623,24 @@ export default function OperationsConsolePage() {
     document.addEventListener('visibilitychange', handleVisibilityOrFocus);
     window.addEventListener('focus', handleVisibilityOrFocus);
 
-    // 3. Real-time Server-Sent Events (SSE) for instant sub-second order arrival
+    // 3. Real-time Server-Sent Events (SSE) + Zero-Millisecond BroadcastChannel for Instant Arrival
     let eventSource: EventSource | null = null;
+    let ordersBroadcast: BroadcastChannel | null = null;
+
     try {
-      const streamUrl = '/api/v1/admin/orders/stream?simulated_role=STAFF';
+      ordersBroadcast = new BroadcastChannel('jankirasoi_orders_channel');
+      ordersBroadcast.onmessage = (event) => {
+        if (event.data?.type === 'ORDER_CREATED') {
+          playKitchenOrderChime();
+          showToast(`⚡ New order received: #${event.data.orderNumber || ''}`);
+          loadOrders(true);
+        }
+      };
+    } catch {}
+
+    try {
+      const apiHost = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3000' : '';
+      const streamUrl = `${apiHost}/api/v1/admin/orders/stream?simulated_role=STAFF`;
       eventSource = new EventSource(streamUrl);
 
       eventSource.onmessage = (event) => {
@@ -640,14 +665,17 @@ export default function OperationsConsolePage() {
     }
 
     return () => {
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       window.removeEventListener('focus', handleVisibilityOrFocus);
       if (eventSource) {
         eventSource.close();
       }
+      if (ordersBroadcast) {
+        ordersBroadcast.close();
+      }
     };
-  }, [loadOrders, loadRiders, loadSlots]);
+  }, [loadOrders, loadRiders, loadSlots, refreshIntervalSec]);
 
   useEffect(() => {
     if (mainView === 'CUSTOMERS') loadCustomers();
@@ -657,6 +685,13 @@ export default function OperationsConsolePage() {
       loadSlots();
     }
   }, [mainView, loadCustomers, loadRiders, loadCatalog, loadSlots]);
+
+  // Always refresh live riders when opening the rider assignment modal
+  useEffect(() => {
+    if (showRiderModal) {
+      loadRiders();
+    }
+  }, [showRiderModal, loadRiders]);
 
   // Handle Order Status Transitions
   const handleTransition = async (orderId: string, nextStatus: string) => {
@@ -684,6 +719,63 @@ export default function OperationsConsolePage() {
       showToast(err.message || 'Failed to assign rider');
     } finally {
       setActionLoadingId(null);
+    }
+  };
+
+  // Handle Registering New Delivery Rider
+  const handleCreateRiderSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRiderName.trim() || !newRiderPhone.trim()) {
+      setAddRiderError('Rider name and phone number are required.');
+      return;
+    }
+    setAddRiderLoading(true);
+    setAddRiderError(null);
+    try {
+      await adminApi.createRider({
+        name: newRiderName.trim(),
+        phone: newRiderPhone.trim(),
+        password: newRiderPassword.trim() || undefined,
+        vehicleNumber: newRiderVehicle.trim() || undefined,
+      });
+      showToast('Delivery rider registered successfully');
+      setShowAddRiderModal(false);
+      setNewRiderName('');
+      setNewRiderPhone('');
+      await loadRiders();
+    } catch (err: any) {
+      setAddRiderError(err.message || 'Failed to register rider');
+    } finally {
+      setAddRiderLoading(false);
+    }
+  };
+
+  // Handle Toggle Rider Live Duty Status
+  const handleToggleRiderAvailability = async (riderId: string, currentAvailability: boolean) => {
+    setTogglingRiderId(riderId);
+    try {
+      await adminApi.toggleRiderAvailability(riderId, !currentAvailability);
+      showToast(`Rider availability set to ${!currentAvailability ? 'ON DUTY' : 'OFFLINE'}`);
+      await loadRiders();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update rider duty status');
+    } finally {
+      setTogglingRiderId(null);
+    }
+  };
+
+  // Handle Removing Rider
+  const handleDeleteRider = async (riderId: string, riderName: string) => {
+    if (!confirm(`Are you sure you want to remove rider "${riderName}"?`)) return;
+    setDeletingRiderId(riderId);
+    try {
+      await adminApi.deleteRider(riderId);
+      showToast(`Rider ${riderName} removed successfully`);
+      await loadRiders();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to remove rider');
+    } finally {
+      setDeletingRiderId(null);
     }
   };
 
@@ -724,25 +816,120 @@ export default function OperationsConsolePage() {
     }
   };
 
-  // Quick Preset Authentic Thali Images
-  const PRESET_THALI_IMAGES = [
-    {
-      title: 'Deluxe Shahi Paneer Thali',
-      url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=800&auto=format&fit=crop&q=80',
-    },
-    {
-      title: 'Homestyle Dal & Phulka Thali',
-      url: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&auto=format&fit=crop&q=80',
-    },
-    {
-      title: 'Satvik Pure Veg Thali',
-      url: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=800&auto=format&fit=crop&q=80',
-    },
-    {
-      title: 'Rajasthani / Gujarati Feast',
-      url: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=800&auto=format&fit=crop&q=80',
-    },
+  // Quick Preset Authentic Dish Photos from Supabase Storage
+  const SUPABASE_STORAGE_DISHES_BASE = 'https://yxvwgcjavxeqsttzcbty.supabase.co/storage/v1/object/public/menu/dishes';
+
+  const PRESET_AUTHENTIC_DISHES = [
+    { title: 'Special Thali (भर पेट)', url: `${SUPABASE_STORAGE_DISHES_BASE}/special-thali-bhar-pet.jpg` },
+    { title: 'Dal Bati Thali (दाल-बाटी थाली)', url: `${SUPABASE_STORAGE_DISHES_BASE}/dal-bati-thali.jpg` },
+    { title: 'Sadi Thali (सादी थाली)', url: `${SUPABASE_STORAGE_DISHES_BASE}/sadi-thali.jpg` },
+    { title: 'Shahi Paneer', url: `${SUPABASE_STORAGE_DISHES_BASE}/shahi-paneer.jpg` },
+    { title: 'Paneer Masala', url: `${SUPABASE_STORAGE_DISHES_BASE}/paneer-masala.jpg` },
+    { title: 'Kadhai Paneer', url: `${SUPABASE_STORAGE_DISHES_BASE}/kadhai-paneer.jpg` },
+    { title: 'Matar Paneer', url: `${SUPABASE_STORAGE_DISHES_BASE}/matar-paneer.jpg` },
+    { title: 'Sev Bhaji', url: `${SUPABASE_STORAGE_DISHES_BASE}/sev-bhaji.jpg` },
+    { title: 'Sev Tamatar', url: `${SUPABASE_STORAGE_DISHES_BASE}/sev-tamatar.jpg` },
+    { title: 'Sev Masala', url: `${SUPABASE_STORAGE_DISHES_BASE}/sev-masala.jpg` },
+    { title: 'Dal Tadka', url: `${SUPABASE_STORAGE_DISHES_BASE}/dal-tadka.jpg` },
+    { title: 'Dal Fry', url: `${SUPABASE_STORAGE_DISHES_BASE}/dal-fry.jpg` },
+    { title: 'Jeera Dal', url: `${SUPABASE_STORAGE_DISHES_BASE}/jeera-dal.jpg` },
+    { title: 'Mix Dal', url: `${SUPABASE_STORAGE_DISHES_BASE}/mix-dal.jpg` },
+    { title: 'Urad Chana Dal', url: `${SUPABASE_STORAGE_DISHES_BASE}/urad-chana-dal.jpg` },
+    { title: 'Chana Masala', url: `${SUPABASE_STORAGE_DISHES_BASE}/chana-masala.jpg` },
+    { title: 'Aloo Gobhi', url: `${SUPABASE_STORAGE_DISHES_BASE}/aloo-gobhi.jpg` },
+    { title: 'Aloo Matar', url: `${SUPABASE_STORAGE_DISHES_BASE}/aloo-matar.jpg` },
+    { title: 'Aloo Tamatar', url: `${SUPABASE_STORAGE_DISHES_BASE}/aloo-tamatar.jpg` },
+    { title: 'Mix Sabzi', url: `${SUPABASE_STORAGE_DISHES_BASE}/mix-sabzi.jpg` },
+    { title: 'Aloo Paratha', url: `${SUPABASE_STORAGE_DISHES_BASE}/aloo-paratha.jpg` },
+    { title: 'Paneer Paratha', url: `${SUPABASE_STORAGE_DISHES_BASE}/paneer-paratha.jpg` },
+    { title: 'Gobhi Paratha', url: `${SUPABASE_STORAGE_DISHES_BASE}/gobhi-paratha.jpg` },
+    { title: 'Sev Paratha', url: `${SUPABASE_STORAGE_DISHES_BASE}/sev-paratha.jpg` },
+    { title: 'Plain Paratha', url: `${SUPABASE_STORAGE_DISHES_BASE}/plain-paratha.jpg` },
+    { title: 'Jeera Rice', url: `${SUPABASE_STORAGE_DISHES_BASE}/jeera-rice.jpg` },
+    { title: 'Matar Pulao', url: `${SUPABASE_STORAGE_DISHES_BASE}/matar-pulao.jpg` },
+    { title: 'Plain Rice', url: `${SUPABASE_STORAGE_DISHES_BASE}/plain-rice.jpg` },
+    { title: 'Indori Poha (नाश्ता)', url: `${SUPABASE_STORAGE_DISHES_BASE}/indori-poha-special-nashta.jpg` },
+    { title: 'Gud Ki Chai', url: `${SUPABASE_STORAGE_DISHES_BASE}/gud-ki-chai.jpg` },
+    { title: 'Finger Chips', url: `${SUPABASE_STORAGE_DISHES_BASE}/finger-chips.jpg` },
   ];
+
+  const PRESET_THALI_IMAGES = PRESET_AUTHENTIC_DISHES;
+
+  const DEFAULT_DISH_IMAGES: Record<string, string> = {
+    'aloo-gobhi': `${SUPABASE_STORAGE_DISHES_BASE}/aloo-gobhi.jpg`,
+    'aloo-matar': `${SUPABASE_STORAGE_DISHES_BASE}/aloo-matar.jpg`,
+    'aloo-paratha': `${SUPABASE_STORAGE_DISHES_BASE}/aloo-paratha.jpg`,
+    'aloo-tamatar': `${SUPABASE_STORAGE_DISHES_BASE}/aloo-tamatar.jpg`,
+    'chana-masala': `${SUPABASE_STORAGE_DISHES_BASE}/chana-masala.jpg`,
+    'dal-bati-thali': `${SUPABASE_STORAGE_DISHES_BASE}/dal-bati-thali.jpg`,
+    'dal-fry': `${SUPABASE_STORAGE_DISHES_BASE}/dal-fry.jpg`,
+    'dal-tadka': `${SUPABASE_STORAGE_DISHES_BASE}/dal-tadka.jpg`,
+    'finger-chips': `${SUPABASE_STORAGE_DISHES_BASE}/finger-chips.jpg`,
+    'gobhi-paratha': `${SUPABASE_STORAGE_DISHES_BASE}/gobhi-paratha.jpg`,
+    'gud-ki-chai': `${SUPABASE_STORAGE_DISHES_BASE}/gud-ki-chai.jpg`,
+    'indori-poha-special-nashta': `${SUPABASE_STORAGE_DISHES_BASE}/indori-poha-special-nashta.jpg`,
+    'jeera-dal': `${SUPABASE_STORAGE_DISHES_BASE}/jeera-dal.jpg`,
+    'jeera-rice': `${SUPABASE_STORAGE_DISHES_BASE}/jeera-rice.jpg`,
+    'kadhai-paneer': `${SUPABASE_STORAGE_DISHES_BASE}/kadhai-paneer.jpg`,
+    'matar-paneer': `${SUPABASE_STORAGE_DISHES_BASE}/matar-paneer.jpg`,
+    'matar-pulao': `${SUPABASE_STORAGE_DISHES_BASE}/matar-pulao.jpg`,
+    'mix-dal': `${SUPABASE_STORAGE_DISHES_BASE}/mix-dal.jpg`,
+    'mix-sabzi': `${SUPABASE_STORAGE_DISHES_BASE}/mix-sabzi.jpg`,
+    'paneer-masala': `${SUPABASE_STORAGE_DISHES_BASE}/paneer-masala.jpg`,
+    'paneer-paratha': `${SUPABASE_STORAGE_DISHES_BASE}/paneer-paratha.jpg`,
+    'plain-paratha': `${SUPABASE_STORAGE_DISHES_BASE}/plain-paratha.jpg`,
+    'plain-rice': `${SUPABASE_STORAGE_DISHES_BASE}/plain-rice.jpg`,
+    'sadi-thali': `${SUPABASE_STORAGE_DISHES_BASE}/sadi-thali.jpg`,
+    'sev-bhaji': `${SUPABASE_STORAGE_DISHES_BASE}/sev-bhaji.jpg`,
+    'sev-masala': `${SUPABASE_STORAGE_DISHES_BASE}/sev-masala.jpg`,
+    'sev-paratha': `${SUPABASE_STORAGE_DISHES_BASE}/sev-paratha.jpg`,
+    'sev-tamatar': `${SUPABASE_STORAGE_DISHES_BASE}/sev-tamatar.jpg`,
+    'shahi-paneer': `${SUPABASE_STORAGE_DISHES_BASE}/shahi-paneer.jpg`,
+    'special-thali-bhar-pet': `${SUPABASE_STORAGE_DISHES_BASE}/special-thali-bhar-pet.jpg`,
+    'urad-chana-dal': `${SUPABASE_STORAGE_DISHES_BASE}/urad-chana-dal.jpg`,
+  };
+
+  const compressImageToDataUrl = async (file: File, maxWidth = 900, quality = 0.82): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          if (height > maxWidth) {
+            width = Math.round((width * maxWidth) / height);
+            height = maxWidth;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(e.target?.result as string);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          try {
+            const webp = canvas.toDataURL('image/webp', quality);
+            if (webp && webp.startsWith('data:image/webp')) {
+              resolve(webp);
+              return;
+            }
+          } catch {}
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => reject(new Error('Failed to parse image file'));
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error('Failed to read image file'));
+      reader.readAsDataURL(file);
+    });
+  };
 
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -751,22 +938,30 @@ export default function OperationsConsolePage() {
       setDishFormError('Please select a valid image file (JPG, PNG, or WebP)');
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setDishFormError('Image size exceeds 10MB limit');
+    if (file.size > 15 * 1024 * 1024) {
+      setDishFormError('Image size exceeds 15MB limit');
       return;
     }
     setDishFormError(null);
     setIsUploadingImage(true);
     try {
-      const uploadedUrl = await adminApi.uploadFoodImage(file);
+      let uploadedUrl = '';
+      try {
+        uploadedUrl = await adminApi.uploadFoodImage(file);
+        showToast('Image uploaded via Cloudinary');
+      } catch (uploadErr) {
+        console.warn('Cloudinary upload unavailable, compressing locally:', uploadErr);
+        uploadedUrl = await compressImageToDataUrl(file, 900, 0.82);
+        showToast('Image attached & optimized successfully');
+      }
       setNewDishImageUrl(uploadedUrl);
-      showToast('Image uploaded & compressed via Cloudinary');
     } catch (err: any) {
       console.error('Image upload failed:', err);
       setDishFormError(err.message || 'Image upload failed. Please try again.');
       showToast(err.message || 'Image upload failed');
     } finally {
       setIsUploadingImage(false);
+      e.target.value = '';
     }
   };
 
@@ -844,7 +1039,7 @@ export default function OperationsConsolePage() {
     setEditDishCategory(dish.categoryId || defaultCatId || catalogCategories[0]?.id || '');
     setEditDishPrice(dish.basePricePaise ? (dish.basePricePaise / 100).toString() : '149');
     setEditDishDescription(dish.description || '');
-    setEditDishImageUrl(dish.imageUrl || '');
+    setEditDishImageUrl(dish.imageUrl || DEFAULT_DISH_IMAGES[dish.slug] || '/images/dishes/special-thali-bhar-pet.jpg');
     setEditDishError(null);
     setEditDishSuccess(null);
     setShowEditDishModal(true);
@@ -857,22 +1052,30 @@ export default function OperationsConsolePage() {
       setEditDishError('Please select a valid image file (JPG, PNG, or WebP)');
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setEditDishError('Image size exceeds 10MB limit');
+    if (file.size > 15 * 1024 * 1024) {
+      setEditDishError('Image size exceeds 15MB limit');
       return;
     }
     setEditDishError(null);
     setIsUploadingEditImage(true);
     try {
-      const uploadedUrl = await adminApi.uploadFoodImage(file);
+      let uploadedUrl = '';
+      try {
+        uploadedUrl = await adminApi.uploadFoodImage(file);
+        showToast('Image uploaded via Cloudinary');
+      } catch (uploadErr) {
+        console.warn('Cloudinary upload unavailable, compressing locally:', uploadErr);
+        uploadedUrl = await compressImageToDataUrl(file, 900, 0.82);
+        showToast('Image updated & attached successfully!');
+      }
       setEditDishImageUrl(uploadedUrl);
-      showToast('Image updated & compressed via Cloudinary');
     } catch (err: any) {
       console.error('Image upload failed:', err);
       setEditDishError(err.message || 'Image upload failed. Please try again.');
       showToast(err.message || 'Image upload failed');
     } finally {
       setIsUploadingEditImage(false);
+      e.target.value = '';
     }
   };
 
@@ -969,8 +1172,8 @@ export default function OperationsConsolePage() {
       return true;
     })
     .sort((a, b) => {
-      // Largest elapsed time when ordered: earliest timestamp comes first
-      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      // Newest orders first so newly placed orders appear instantly at the top of the queue
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
   const selectedOrder = orders.find((o) => o.id === selectedOrderId) || filteredOrders[0] || null;
@@ -1151,6 +1354,25 @@ export default function OperationsConsolePage() {
           </a>
         </div>
 
+        {/* Assigned Rider Pill on Kanban Card */}
+        {order.assignedRider && (
+          <div className="flex items-center justify-between text-[11px] pt-1 text-gray-600 border-t border-gray-50">
+            <span className="flex items-center gap-1 truncate font-medium">
+              <span className="material-symbols-outlined text-[13px] text-blue-600">two_wheeler</span>
+              <span className="truncate">{order.assignedRider.name}</span>
+            </span>
+            <span
+              className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md uppercase tracking-wider shrink-0 ${
+                order.assignedRider.assignmentStatus === 'ACCEPTED'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              {order.assignedRider.assignmentStatus === 'ACCEPTED' ? 'Accepted' : 'Assigning...'}
+            </span>
+          </div>
+        )}
+
         {/* Price & Single 1-Tap Action Button */}
         <div className="flex items-center justify-between pt-1.5 border-t border-gray-100 gap-2">
           <div className="flex items-baseline gap-1 shrink-0">
@@ -1186,28 +1408,71 @@ export default function OperationsConsolePage() {
             )}
 
             {isReady && (
-              <button
-                onClick={() => {
-                  setSelectedOrderId(order.id);
-                  setShowRiderModal(true);
-                }}
-                disabled={actionLoadingId === order.id}
-                className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
-              >
-                <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
-                <span>Assign</span>
-              </button>
+              !order.assignedRider ? (
+                <button
+                  onClick={() => {
+                    setSelectedOrderId(order.id);
+                    setShowRiderModal(true);
+                  }}
+                  disabled={actionLoadingId === order.id}
+                  className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
+                  <span>Assign</span>
+                </button>
+              ) : order.assignedRider.assignmentStatus === 'ASSIGNED' ? (
+                <button
+                  onClick={() => {
+                    setSelectedOrderId(order.id);
+                    setShowRiderModal(true);
+                  }}
+                  disabled={actionLoadingId === order.id}
+                  className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors"
+                  title={`Assigned to ${order.assignedRider.name} (Waiting for acceptance). Click to re-assign.`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                  <span>Assigning</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setSelectedOrderId(order.id);
+                    setShowRiderModal(true);
+                  }}
+                  disabled={actionLoadingId === order.id}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
+                  title={`Accepted by ${order.assignedRider.name}. Click to view or change.`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                  <span>Assigned</span>
+                </button>
+              )
             )}
 
             {isDispatch && (
-              <button
-                onClick={() => handleManualOverride(order.id)}
-                disabled={actionLoadingId === order.id}
-                className="px-2.5 py-1 rounded-lg bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
-              >
-                <span className="material-symbols-outlined text-[14px]">task_alt</span>
-                <span>OTP</span>
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    setSelectedOrderId(order.id);
+                    setShowRiderModal(true);
+                  }}
+                  disabled={actionLoadingId === order.id}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
+                  title={order.assignedRider ? `Assigned to ${order.assignedRider.name}` : 'Rider assigned'}
+                >
+                  <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
+                  <span>Assigned</span>
+                </button>
+                <button
+                  onClick={() => handleManualOverride(order.id)}
+                  disabled={actionLoadingId === order.id}
+                  className="px-1.5 py-1 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs flex items-center gap-0.5 shadow-2xs transition-colors"
+                  title="Emergency Manual OTP Override"
+                >
+                  <span className="material-symbols-outlined text-[12px]">dialpad</span>
+                  <span className="text-[10px]">OTP</span>
+                </button>
+              </div>
             )}
 
             {isDelivered && (
@@ -1243,9 +1508,13 @@ export default function OperationsConsolePage() {
 
           {/* Logo & Title */}
           <div className="flex items-center gap-2.5">
-            <span className="w-9 h-9 rounded-xl bg-emerald-700 text-white flex items-center justify-center shadow-xs">
-              <span className="material-symbols-outlined text-[20px]">psychiatry</span>
-            </span>
+            <div className="w-10 h-10 rounded-xl overflow-hidden bg-[#FFF9F0] border border-[#7A1E1E]/20 shadow-xs flex items-center justify-center p-0.5 shrink-0">
+              <img
+                src="/images/logo-avatar.png"
+                alt="Janki Rasoi Logo"
+                className="w-full h-full object-cover rounded-lg"
+              />
+            </div>
             <div>
               <h1 className="font-headline font-bold text-base leading-none text-gray-900">
                 Janki Rasoi
@@ -1388,46 +1657,6 @@ export default function OperationsConsolePage() {
               <span>Settings</span>
             </button>
           </nav>
-
-          {/* Bottom Sidebar: Service Status & Capacity Link (Matching Reference Image) */}
-          <div className="shrink-0 pt-3 border-t border-gray-100 flex flex-col gap-2 mt-auto">
-            {/* Lunch Service Status Card */}
-            <div className="bg-[#fcfdfa] border border-stone-200/80 p-2.5 rounded-xl flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-amber-500 text-[18px]">light_mode</span>
-                <div>
-                  <div className="font-bold text-stone-800 text-[11px] leading-tight">Lunch Service</div>
-                  <div className="text-[10px] text-stone-500">21 Oct PM – 01:30 PM</div>
-                </div>
-              </div>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                OPEN
-              </span>
-            </div>
-
-            {/* Dinner Service Status Card */}
-            <div className="bg-[#fcfdfa] border border-stone-200/80 p-2.5 rounded-xl flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-indigo-500 text-[18px]">dark_mode</span>
-                <div>
-                  <div className="font-bold text-stone-800 text-[11px] leading-tight">Dinner Service</div>
-                  <div className="text-[10px] text-stone-500">07:30 PM – 08:30 PM</div>
-                </div>
-              </div>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                OPEN
-              </span>
-            </div>
-
-            {/* View Kitchen Capacity Button */}
-            <button
-              onClick={() => setMainView('MENU')}
-              className="w-full mt-1 py-2 px-3 rounded-xl border border-gray-200 hover:bg-gray-50 text-[11px] font-semibold text-gray-700 flex items-center justify-between transition-colors shadow-2xs"
-            >
-              <span>View Kitchen Capacity</span>
-              <span className="material-symbols-outlined text-sm text-gray-400">chevron_right</span>
-            </button>
-          </div>
         </aside>
 
         {/* 3. CENTER / WORKSPACE AREA */}
@@ -1545,125 +1774,153 @@ export default function OperationsConsolePage() {
 
               {/* Consolidated Status Filter Ribbon & Operational Summary */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2 sm:p-2.5 rounded-2xl border border-gray-200/90 shadow-2xs">
-                {/* Status Pills with Live Counts and Badges (Hidden Scrollbars) */}
-                <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden py-0.5">
-                  {/* Default Live Active Flow Filter (Hides historical finished orders) */}
+                {/* Status Pills with Live Counts, Visible Sliding Bar & Arrow Controls */}
+                <div className="relative flex items-center min-w-0 flex-1 gap-1">
+                  {/* Left Slide Arrow */}
                   <button
-                    onClick={() => setActiveFilterTab('ACTIVE')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                      activeFilterTab === 'ACTIVE'
-                        ? 'bg-emerald-900 text-white shadow-xs'
-                        : 'bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900 border border-emerald-200/80'
-                    }`}
+                    type="button"
+                    onClick={() => slidePills('left')}
+                    className="shrink-0 w-7 h-7 rounded-lg bg-gray-50 hover:bg-gray-100 active:bg-gray-200 border border-gray-200/80 text-gray-600 flex items-center justify-center transition-colors shadow-2xs"
+                    title="Slide left"
+                    aria-label="Slide filter pills left"
                   >
-                    <span className="material-symbols-outlined text-[14px]">local_fire_department</span>
-                    <span>Live Active</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'ACTIVE' ? 'bg-emerald-800 text-white' : 'bg-emerald-200 text-emerald-900'}`}>
-                      {activeOrdersCount}
-                    </span>
+                    <span className="material-symbols-outlined text-[16px]">chevron_left</span>
                   </button>
 
-                  <button
-                    onClick={() => setActiveFilterTab('NEW')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                      activeFilterTab === 'NEW'
-                        ? 'bg-rose-600 text-white shadow-xs'
-                        : 'bg-rose-50/80 hover:bg-rose-100 text-rose-800 border border-rose-200/80'
-                    }`}
+                  {/* Scrollable Track with Styled Sliding Bar */}
+                  <div
+                    ref={filterPillsRef}
+                    className="custom-pills-slider flex items-center gap-1.5 overflow-x-auto scroll-smooth py-1 px-1 pb-2 min-w-0 flex-1"
                   >
-                    {newCount > 0 && <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>}
-                    <span>New</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'NEW' ? 'bg-rose-700 text-white' : 'bg-rose-200 text-rose-900'}`}>
-                      {newCount}
-                    </span>
-                  </button>
+                    {/* Default Live Active Flow Filter (Hides historical finished orders) */}
+                    <button
+                      onClick={() => setActiveFilterTab('ACTIVE')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        activeFilterTab === 'ACTIVE'
+                          ? 'bg-emerald-900 text-white shadow-xs'
+                          : 'bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900 border border-emerald-200/80'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[14px]">local_fire_department</span>
+                      <span>Live Active</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'ACTIVE' ? 'bg-emerald-800 text-white' : 'bg-emerald-200 text-emerald-900'}`}>
+                        {activeOrdersCount}
+                      </span>
+                    </button>
 
-                  <button
-                    onClick={() => setActiveFilterTab('PREPARING')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                      activeFilterTab === 'PREPARING'
-                        ? 'bg-amber-600 text-white shadow-xs'
-                        : 'bg-amber-50/80 hover:bg-amber-100 text-amber-900 border border-amber-200/80'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[14px]">skillet</span>
-                    <span>Preparing</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'PREPARING' ? 'bg-amber-700 text-white' : 'bg-amber-200 text-amber-900'}`}>
-                      {preparingCount}
-                    </span>
-                  </button>
+                    <button
+                      onClick={() => setActiveFilterTab('NEW')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        activeFilterTab === 'NEW'
+                          ? 'bg-rose-600 text-white shadow-xs'
+                          : 'bg-rose-50/80 hover:bg-rose-100 text-rose-800 border border-rose-200/80'
+                      }`}
+                    >
+                      {newCount > 0 && <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>}
+                      <span>New</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'NEW' ? 'bg-rose-700 text-white' : 'bg-rose-200 text-rose-900'}`}>
+                        {newCount}
+                      </span>
+                    </button>
 
-                  <button
-                    onClick={() => setActiveFilterTab('READY')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                      activeFilterTab === 'READY'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-blue-50/80 hover:bg-blue-100 text-blue-900 border border-blue-200/80'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                    <span>Ready</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'READY' ? 'bg-blue-700 text-white' : 'bg-blue-200 text-blue-900'}`}>
-                      {readyCount}
-                    </span>
-                  </button>
+                    <button
+                      onClick={() => setActiveFilterTab('PREPARING')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        activeFilterTab === 'PREPARING'
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-amber-50/80 hover:bg-amber-100 text-amber-900 border border-amber-200/80'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[14px]">skillet</span>
+                      <span>Preparing</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'PREPARING' ? 'bg-amber-700 text-white' : 'bg-amber-200 text-amber-900'}`}>
+                        {preparingCount}
+                      </span>
+                    </button>
 
-                  <button
-                    onClick={() => setActiveFilterTab('DISPATCH')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                      activeFilterTab === 'DISPATCH'
-                        ? 'bg-purple-600 text-white shadow-xs'
-                        : 'bg-purple-50/80 hover:bg-purple-100 text-purple-900 border border-purple-200/80'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
-                    <span>With Rider</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'DISPATCH' ? 'bg-purple-700 text-white' : 'bg-purple-200 text-purple-900'}`}>
-                      {dispatchCount}
-                    </span>
-                  </button>
+                    <button
+                      onClick={() => setActiveFilterTab('READY')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        activeFilterTab === 'READY'
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-blue-50/80 hover:bg-blue-100 text-blue-900 border border-blue-200/80'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                      <span>Ready</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'READY' ? 'bg-blue-700 text-white' : 'bg-blue-200 text-blue-900'}`}>
+                        {readyCount}
+                      </span>
+                    </button>
 
-                  <button
-                    onClick={() => setActiveFilterTab('DELIVERED')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                      activeFilterTab === 'DELIVERED'
-                        ? 'bg-emerald-700 text-white shadow-xs'
-                        : 'bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[14px]">verified</span>
-                    <span>Delivered</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'DELIVERED' ? 'bg-emerald-800 text-white' : 'bg-emerald-200 text-emerald-900'}`}>
-                      {deliveredCount}
-                    </span>
-                  </button>
+                    <button
+                      onClick={() => setActiveFilterTab('DISPATCH')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        activeFilterTab === 'DISPATCH'
+                          ? 'bg-purple-600 text-white shadow-xs'
+                          : 'bg-purple-50/80 hover:bg-purple-100 text-purple-900 border border-purple-200/80'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
+                      <span>With Rider</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'DISPATCH' ? 'bg-purple-700 text-white' : 'bg-purple-200 text-purple-900'}`}>
+                        {dispatchCount}
+                      </span>
+                    </button>
 
-                  <button
-                    onClick={() => setActiveFilterTab('CANCELLED')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                      activeFilterTab === 'CANCELLED'
-                        ? 'bg-stone-800 text-white shadow-xs'
-                        : 'bg-stone-50 hover:bg-stone-100 text-stone-600 border border-stone-200'
-                    }`}
-                  >
-                    <span>Cancelled</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeFilterTab === 'CANCELLED' ? 'bg-stone-700 text-white' : 'bg-stone-200 text-stone-700'}`}>
-                      {cancelledCount}
-                    </span>
-                  </button>
+                    <button
+                      onClick={() => setActiveFilterTab('DELIVERED')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        activeFilterTab === 'DELIVERED'
+                          ? 'bg-emerald-700 text-white shadow-xs'
+                          : 'bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[14px]">verified</span>
+                      <span>Delivered</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeFilterTab === 'DELIVERED' ? 'bg-emerald-800 text-white' : 'bg-emerald-200 text-emerald-900'}`}>
+                        {deliveredCount}
+                      </span>
+                    </button>
 
+                    <button
+                      onClick={() => setActiveFilterTab('CANCELLED')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        activeFilterTab === 'CANCELLED'
+                          ? 'bg-stone-800 text-white shadow-xs'
+                          : 'bg-stone-50 hover:bg-stone-100 text-stone-600 border border-stone-200'
+                      }`}
+                    >
+                      <span>Cancelled</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeFilterTab === 'CANCELLED' ? 'bg-stone-700 text-white' : 'bg-stone-200 text-stone-700'}`}>
+                        {cancelledCount}
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveFilterTab('ALL')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        activeFilterTab === 'ALL'
+                          ? 'bg-gray-800 text-white shadow-xs'
+                          : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200/80'
+                      }`}
+                    >
+                      <span>All History</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeFilterTab === 'ALL' ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-700'}`}>
+                        {totalOrdersCount}
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Right Slide Arrow */}
                   <button
-                    onClick={() => setActiveFilterTab('ALL')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                      activeFilterTab === 'ALL'
-                        ? 'bg-gray-800 text-white shadow-xs'
-                        : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200/80'
-                    }`}
+                    type="button"
+                    onClick={() => slidePills('right')}
+                    className="shrink-0 w-7 h-7 rounded-lg bg-gray-50 hover:bg-gray-100 active:bg-gray-200 border border-gray-200/80 text-gray-600 flex items-center justify-center transition-colors shadow-2xs"
+                    title="Slide right"
+                    aria-label="Slide filter pills right"
                   >
-                    <span>All History</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeFilterTab === 'ALL' ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-700'}`}>
-                      {totalOrdersCount}
-                    </span>
+                    <span className="material-symbols-outlined text-[16px]">chevron_right</span>
                   </button>
                 </div>
 
@@ -1858,30 +2115,72 @@ export default function OperationsConsolePage() {
                                       )}
 
                                       {isReady && (
-                                        <button
-                                          onClick={() => {
-                                            setSelectedOrderId(order.id);
-                                            setShowRiderModal(true);
-                                          }}
-                                          disabled={actionLoadingId === order.id}
-                                          className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
-                                          title="Assign Rider from Fleet"
-                                        >
-                                          <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
-                                          <span>Assign</span>
-                                        </button>
+                                        !order.assignedRider ? (
+                                          <button
+                                            onClick={() => {
+                                              setSelectedOrderId(order.id);
+                                              setShowRiderModal(true);
+                                            }}
+                                            disabled={actionLoadingId === order.id}
+                                            className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
+                                            title="Assign Rider from Fleet"
+                                          >
+                                            <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
+                                            <span>Assign</span>
+                                          </button>
+                                        ) : order.assignedRider.assignmentStatus === "ASSIGNED" ? (
+                                          <button
+                                            onClick={() => {
+                                              setSelectedOrderId(order.id);
+                                              setShowRiderModal(true);
+                                            }}
+                                            disabled={actionLoadingId === order.id}
+                                            className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors"
+                                            title={"Assigned to " + order.assignedRider.name + " (Waiting for acceptance). Click to change."}
+                                          >
+                                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                                            <span>Assigning</span>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            onClick={() => {
+                                              setSelectedOrderId(order.id);
+                                              setShowRiderModal(true);
+                                            }}
+                                            disabled={actionLoadingId === order.id}
+                                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
+                                            title={"Accepted by " + order.assignedRider.name + ". Click to view or change."}
+                                          >
+                                            <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                                            <span>Assigned</span>
+                                          </button>
+                                        )
                                       )}
 
                                       {isDispatch && (
-                                        <button
-                                          onClick={() => handleManualOverride(order.id)}
-                                          disabled={actionLoadingId === order.id}
-                                          className="px-2.5 py-1 rounded-lg bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
-                                          title="Verify PIN & Complete Delivery"
-                                        >
-                                          <span className="material-symbols-outlined text-[14px]">task_alt</span>
-                                          <span>Verify OTP</span>
-                                        </button>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            onClick={() => {
+                                              setSelectedOrderId(order.id);
+                                              setShowRiderModal(true);
+                                            }}
+                                            disabled={actionLoadingId === order.id}
+                                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
+                                            title={order.assignedRider ? "Assigned to " + order.assignedRider.name : "Rider assigned"}
+                                          >
+                                            <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
+                                            <span>Assigned</span>
+                                          </button>
+                                          <button
+                                            onClick={() => handleManualOverride(order.id)}
+                                            disabled={actionLoadingId === order.id}
+                                            className="px-2 py-1 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
+                                            title="Verify PIN & Complete Delivery"
+                                          >
+                                            <span className="material-symbols-outlined text-[14px]">task_alt</span>
+                                            <span>OTP</span>
+                                          </button>
+                                        </div>
                                       )}
 
                                       <button
@@ -2095,23 +2394,36 @@ export default function OperationsConsolePage() {
           {/* VIEW: RIDERS */}
           {mainView === 'RIDERS' && (
             <main className="p-4 lg:p-6 flex flex-col gap-5 flex-1 max-w-[1600px] w-full mx-auto">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h2 className="text-2xl font-bold font-headline text-gray-900">Riders &amp; Delivery Fleet</h2>
-                  <p className="text-xs text-gray-500">Manage delivery partners and live dispatch availability.</p>
+                  <p className="text-xs text-gray-500">Manage delivery partners and live dispatch availability in Supabase.</p>
                 </div>
-                <button
-                  onClick={loadRiders}
-                  className="px-3.5 py-2 rounded-xl bg-white hover:bg-gray-50 text-xs font-semibold text-gray-700 border border-gray-200 flex items-center gap-1.5 shadow-2xs"
-                >
-                  <span className="material-symbols-outlined text-base text-emerald-800">sync</span>
-                  <span>Reload</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setAddRiderError(null);
+                      setShowAddRiderModal(true);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-xs font-semibold text-white flex items-center gap-1.5 shadow-2xs transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-base">person_add</span>
+                    <span>+ Register Rider</span>
+                  </button>
+                  <button
+                    onClick={loadRiders}
+                    disabled={ridersLoading}
+                    className="px-3.5 py-2 rounded-xl bg-white hover:bg-gray-50 text-xs font-semibold text-gray-700 border border-gray-200 flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <span className={`material-symbols-outlined text-base text-emerald-800 ${ridersLoading ? 'animate-spin' : ''}`}>sync</span>
+                    <span>Reload</span>
+                  </button>
+                </div>
               </div>
 
               <div className="bg-white border border-gray-200/90 rounded-2xl overflow-hidden shadow-2xs">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs min-w-[640px]">
+                  <table className="w-full text-left text-xs min-w-[700px]">
                   <thead className="bg-[#f9faf8] text-gray-600 font-bold uppercase tracking-wider text-[10px] border-b border-gray-200">
                     <tr>
                       <th className="py-3 px-4">Rider</th>
@@ -2119,6 +2431,7 @@ export default function OperationsConsolePage() {
                       <th className="py-3 px-4">Vehicle Number</th>
                       <th className="py-3 px-4">Duty Status</th>
                       <th className="py-3 px-4">Account Status</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -2133,27 +2446,54 @@ export default function OperationsConsolePage() {
                         <td className="py-3 px-4 font-mono text-gray-700">+91 {r.phone}</td>
                         <td className="py-3 px-4 font-mono font-semibold text-amber-900">{r.vehicleNumber}</td>
                         <td className="py-3 px-4">
-                          <span
-                            className={`px-2 py-0.5 rounded-full font-bold text-[10px] inline-flex items-center gap-1 ${
+                          <button
+                            type="button"
+                            onClick={() => handleToggleRiderAvailability(r.id, r.isAvailable)}
+                            disabled={togglingRiderId === r.id}
+                            title="Click to toggle rider duty availability"
+                            className={`px-2.5 py-1 rounded-full font-bold text-[10px] inline-flex items-center gap-1 transition-all ${
                               r.isAvailable
-                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                                : 'bg-rose-50 text-rose-800 border border-rose-200'
-                            }`}
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                                : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
+                            } ${togglingRiderId === r.id ? 'opacity-60 cursor-wait' : ''}`}
                           >
                             <span className={`w-1.5 h-1.5 rounded-full ${r.isAvailable ? 'bg-emerald-600' : 'bg-rose-500'}`}></span>
-                            <span>{r.isAvailable ? 'ON DUTY' : 'OFFLINE'}</span>
-                          </span>
+                            <span>{togglingRiderId === r.id ? 'Updating...' : r.isAvailable ? 'ON DUTY' : 'OFFLINE'}</span>
+                          </button>
                         </td>
                         <td className="py-3 px-4">
                           <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-semibold text-[10px]">
                             {r.isActive ? 'Active' : 'Inactive'}
                           </span>
                         </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleRiderAvailability(r.id, r.isAvailable)}
+                              disabled={togglingRiderId === r.id}
+                              className="px-2 py-1 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 text-[11px] font-semibold transition-colors"
+                            >
+                              {r.isAvailable ? 'Set Offline' : 'Set On Duty'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRider(r.id, r.name)}
+                              disabled={deletingRiderId === r.id}
+                              title="Delete rider from database"
+                              className="w-7 h-7 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">
+                                {deletingRiderId === r.id ? 'hourglass_top' : 'delete'}
+                              </span>
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                     {riders.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="py-10 text-center text-gray-400">
+                        <td colSpan={6} className="py-10 text-center text-gray-400">
                           {ridersLoading ? 'Loading delivery fleet...' : 'No delivery riders registered.'}
                         </td>
                       </tr>
@@ -2204,41 +2544,6 @@ export default function OperationsConsolePage() {
                 </div>
               </div>
 
-              {/* Delivery Windows Banner */}
-              <div className="bg-gradient-to-r from-emerald-50/80 to-stone-50 border border-emerald-200/80 rounded-2xl p-4 shadow-2xs">
-                <div className="flex items-center justify-between mb-3 border-b border-emerald-100 pb-2">
-                  <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[17px] text-emerald-700">schedule</span>
-                    <span>Active Kitchen Delivery Windows</span>
-                  </span>
-                  <span className="text-[11px] font-semibold text-emerald-800">
-                    Operating standard 2-meal daily service
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="bg-white p-3.5 rounded-xl border border-stone-200/80 flex items-center justify-between shadow-2xs">
-                    <div>
-                      <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block">LUNCH WINDOW</span>
-                      <span className="text-[11px] text-gray-500 mt-0.5 block">Delivery: 12:30 PM – 01:30 PM • Cutoff: 11:30 AM IST</span>
-                    </div>
-                    <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                      <span>OPEN</span>
-                    </span>
-                  </div>
-                  <div className="bg-white p-3.5 rounded-xl border border-stone-200/80 flex items-center justify-between shadow-2xs">
-                    <div>
-                      <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block">DINNER WINDOW</span>
-                      <span className="text-[11px] text-gray-500 mt-0.5 block">Delivery: 07:30 PM – 08:30 PM • Cutoff: 06:30 PM IST</span>
-                    </div>
-                    <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                      <span>OPEN</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-
               {/* Dishes Grid */}
               <div className="flex flex-col gap-6">
                 {catalogCategories.map((cat) => (
@@ -2266,9 +2571,13 @@ export default function OperationsConsolePage() {
                             <div>
                               <div className="relative aspect-[16/10] w-full rounded-xl overflow-hidden bg-stone-100 border border-stone-200/60 mb-3 shadow-2xs">
                                 <img
-                                  src={item.imageUrl || PRESET_THALI_IMAGES[0].url}
+                                  src={item.imageUrl || DEFAULT_DISH_IMAGES[item.slug] || PRESET_AUTHENTIC_DISHES[0].url}
                                   alt={item.name}
                                   className="w-full h-full object-cover object-center"
+                                  onError={(e) => {
+                                    e.currentTarget.onerror = null;
+                                    e.currentTarget.src = DEFAULT_DISH_IMAGES[item.slug] || PRESET_AUTHENTIC_DISHES[0].url;
+                                  }}
                                 />
                                 <span className="absolute top-2 left-2 w-4 h-4 rounded-xs border border-green-600 bg-white p-0.5 flex items-center justify-center shadow-xs">
                                   <span className="w-2 h-2 rounded-full bg-green-600"></span>
@@ -2374,81 +2683,212 @@ export default function OperationsConsolePage() {
 
           {/* VIEW: SETTINGS */}
           {mainView === 'SETTINGS' && (
-            <main className="p-4 lg:p-6 flex flex-col gap-5 flex-1 max-w-[1600px] w-full mx-auto">
-              <div>
-                <h2 className="text-2xl font-bold font-headline text-gray-900">Console Settings</h2>
-                <p className="text-xs text-gray-500">Configure station alerts, chime notifications, and operational parameters.</p>
+            <main className="p-4 lg:p-6 flex flex-col gap-4 flex-1 max-w-[1200px] w-full mx-auto">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-200/80 pb-3">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-bold font-headline text-gray-900">Console Settings</h2>
+                  <p className="text-xs text-gray-500">Live kitchen station operations, order dispatch preferences &amp; sound alerts</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${
+                    isKitchenOpen ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${isKitchenOpen ? 'bg-emerald-600 animate-pulse' : 'bg-rose-600'}`}></span>
+                    <span>{isKitchenOpen ? 'Kitchen Accepting Orders' : 'Kitchen Paused'}</span>
+                  </span>
+                </div>
               </div>
 
-              <div className="bg-white p-6 rounded-2xl border border-gray-200/90 shadow-2xs flex flex-col gap-4 max-w-xl">
-                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                  <div>
-                    <div className="font-bold text-sm text-gray-900">Audio Chime Notifications</div>
-                    <div className="text-xs text-gray-500">Play web chime when new incoming order is placed</div>
+              {/* Functional Settings Arranged Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 1. Kitchen Station Controls */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-200/90 shadow-2xs flex flex-col gap-3.5">
+                  <div className="flex items-center gap-2 border-b border-gray-100 pb-2.5 text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    <span className="material-symbols-outlined text-[18px] text-emerald-700">soup_kitchen</span>
+                    <span>Kitchen Operations</span>
                   </div>
-                  <button
-                    onClick={() => {
-                      setAudioEnabled(!audioEnabled);
-                      if (!audioEnabled) playKitchenOrderChime();
-                    }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
-                      audioEnabled ? 'bg-emerald-50 text-emerald-900 border-emerald-300' : 'bg-gray-100 text-gray-600 border-gray-300'
-                    }`}
-                  >
-                    {audioEnabled ? 'Chime ON' : 'Muted'}
-                  </button>
-                </div>
 
-                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                  <div>
-                    <div className="font-bold text-sm text-gray-900">Auto-Refresh Interval</div>
-                    <div className="text-xs text-gray-500">Polling kitchen queue every 5 seconds</div>
-                  </div>
-                  <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                    5s Active
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                  <div>
-                    <div className="font-bold text-sm text-gray-900">Database Connection</div>
-                    <div className="text-xs text-gray-500">Supabase PostgreSQL live instance</div>
-                  </div>
-                  <span className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>Connected</span>
-                  </span>
-                </div>
-
-                {/* Delivery Service Zones & Pincode 454774 Status */}
-                <div className="flex flex-col gap-2.5">
+                  {/* Store Status Toggle */}
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="font-bold text-sm text-gray-900">Active Delivery Zones &amp; Pincodes</div>
-                      <div className="text-xs text-gray-500">Live serviceability area for kitchen fulfillment</div>
+                      <div className="font-bold text-xs text-gray-900">Kitchen Store Status</div>
+                      <div className="text-[11px] text-gray-500">Enable or pause customer ordering on storefront</div>
                     </div>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                      LIVE SERVICE
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !isKitchenOpen;
+                        setIsKitchenOpen(next);
+                        updateSetting('isKitchenOpen', next);
+                        showToast(next ? 'Kitchen opened for storefront orders' : 'Kitchen paused. Storefront orders suspended');
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs border ${
+                        isKitchenOpen
+                          ? 'bg-emerald-700 text-white border-emerald-800'
+                          : 'bg-rose-600 text-white border-rose-700'
+                      }`}
+                    >
+                      {isKitchenOpen ? 'Open (Online)' : 'Paused'}
+                    </button>
+                  </div>
+
+                  {/* Auto-Accept Orders */}
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <div>
+                      <div className="font-bold text-xs text-gray-900">Auto-Confirm New Orders</div>
+                      <div className="text-[11px] text-gray-500">Automatically move placed orders directly to cooking queue</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !autoAcceptOrders;
+                        setAutoAcceptOrders(next);
+                        updateSetting('autoAcceptOrders', next);
+                        showToast(next ? 'Auto-confirmation enabled' : 'Manual chef confirmation enabled');
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs border ${
+                        autoAcceptOrders
+                          ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                          : 'bg-gray-100 text-gray-600 border-gray-200'
+                      }`}
+                    >
+                      {autoAcceptOrders ? 'Auto-Accept ON' : 'Manual'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Audio Chime & Alerts */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-200/90 shadow-2xs flex flex-col gap-3.5">
+                  <div className="flex items-center gap-2 border-b border-gray-100 pb-2.5 text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    <span className="material-symbols-outlined text-[18px] text-amber-600">notifications_active</span>
+                    <span>Sound Alerts &amp; Chimes</span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-xs text-gray-900">Incoming Order Chime</div>
+                      <div className="text-[11px] text-gray-500">Plays bell chime on new order arrival</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playKitchenOrderChime();
+                          showToast('Played test chime sound');
+                        }}
+                        className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs font-semibold flex items-center gap-1 transition-colors"
+                        title="Test sound"
+                      >
+                        <span className="material-symbols-outlined text-[15px]">volume_up</span>
+                        <span className="text-[10px]">Test</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = !audioEnabled;
+                          setAudioEnabled(next);
+                          updateSetting('audioEnabled', next);
+                          if (next) playKitchenOrderChime();
+                          showToast(next ? 'Order chimes turned ON' : 'Order chimes MUTED');
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs border ${
+                          audioEnabled
+                            ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                            : 'bg-gray-100 text-gray-600 border-gray-200'
+                        }`}
+                      >
+                        {audioEnabled ? 'Chime ON' : 'Muted'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Polling Interval Selection */}
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <div>
+                      <div className="font-bold text-xs text-gray-900">Auto-Refresh Interval</div>
+                      <div className="text-[11px] text-gray-500">Live order polling frequency</div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {[5, 8, 15, 30].map((sec) => (
+                        <button
+                          key={sec}
+                          type="button"
+                          onClick={() => {
+                            setRefreshIntervalSec(sec);
+                            updateSetting('refreshIntervalSec', sec);
+                            showToast(`Refresh interval set to ${sec}s`);
+                          }}
+                          className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-colors ${
+                            refreshIntervalSec === sec
+                              ? 'bg-emerald-800 text-white shadow-2xs'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {sec}s
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Delivery Zones & Pincode Status */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-200/90 shadow-2xs flex flex-col gap-3.5">
+                  <div className="flex items-center gap-2 border-b border-gray-100 pb-2.5 text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    <span className="material-symbols-outlined text-[18px] text-blue-600">local_shipping</span>
+                    <span>Delivery Zone &amp; Serviceability</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <div>
+                      <div className="font-bold text-gray-900">Central Hub Kitchen</div>
+                      <div className="text-[11px] text-gray-500">Sagore, Pithampur Industrial Area</div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                      PIN 454774
                     </span>
                   </div>
 
-                  <div className="bg-[#fcfdfa] rounded-xl border border-stone-200/80 p-3.5 flex flex-col gap-2">
-                    <div className="flex items-center justify-between pb-2 border-b border-stone-100">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-                        <span className="text-xs font-bold text-gray-900">Sagore / Pithampur Central Zone</span>
-                      </div>
-                      <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-md border border-emerald-300">
-                        PIN 454774
-                      </span>
+                  <div className="bg-[#fcfdfa] p-2.5 rounded-xl border border-stone-200/80 flex items-center justify-between text-[11px]">
+                    <span className="text-gray-600">Base Sagore Delivery Fee</span>
+                    <span className="font-bold text-emerald-800">₹0 Free</span>
+                  </div>
+                </div>
+
+                {/* 4. System Diagnostics & Cache Actions */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-200/90 shadow-2xs flex flex-col gap-3.5">
+                  <div className="flex items-center gap-2 border-b border-gray-100 pb-2.5 text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    <span className="material-symbols-outlined text-[18px] text-stone-700">database</span>
+                    <span>System &amp; Database</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <div>
+                      <div className="font-bold text-gray-900">PostgreSQL Database</div>
+                      <div className="text-[11px] text-gray-500">Supabase managed cloud DB</div>
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-gray-600">
-                      <span>Delivery Fee: ₹0 (Free Sagore Dispatch)</span>
-                      <span className="text-emerald-700 font-bold flex items-center gap-1">
-                        <span>✓</span>
-                        <span>Serviceable</span>
-                      </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                      <span>Connected</span>
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+                    <div>
+                      <div className="font-bold text-xs text-gray-900">Purge Console Cache</div>
+                      <div className="text-[11px] text-gray-500">Force re-fetch all orders &amp; riders</div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        loadOrders(false);
+                        loadRiders();
+                        showToast('Queue & riders refreshed from server');
+                      }}
+                      className="px-3 py-1.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-bold flex items-center gap-1 shadow-2xs transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-sm">cached</span>
+                      <span>Resync</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2469,9 +2909,13 @@ export default function OperationsConsolePage() {
               {/* Header */}
               <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                 <div className="flex items-center gap-2.5">
-                  <span className="w-8 h-8 rounded-xl bg-emerald-700 text-white flex items-center justify-center shadow-xs">
-                    <span className="material-symbols-outlined text-[18px]">psychiatry</span>
-                  </span>
+                  <div className="w-8 h-8 rounded-xl overflow-hidden bg-[#FFF9F0] border border-[#7A1E1E]/20 shadow-xs flex items-center justify-center p-0.5 shrink-0">
+                    <img
+                      src="/images/logo-avatar.png"
+                      alt="Janki Rasoi Logo"
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                  </div>
                   <div>
                     <div className="font-headline font-bold text-sm text-gray-900 leading-none">Janki Rasoi</div>
                     <div className="text-[10px] text-gray-400 font-medium">Operations Console</div>
@@ -2522,46 +2966,6 @@ export default function OperationsConsolePage() {
                 ))}
               </nav>
             </div>
-
-            {/* Bottom Service Status in Mobile Drawer */}
-            <div className="flex flex-col gap-2 pt-3 border-t border-gray-100">
-              <div className="bg-[#fcfdfa] border border-stone-200/80 p-2.5 rounded-xl flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-amber-500 text-[18px]">light_mode</span>
-                  <div>
-                    <div className="font-bold text-stone-800 text-[11px] leading-tight">Lunch Service</div>
-                    <div className="text-[10px] text-stone-500">12:30 PM – 01:30 PM</div>
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                  OPEN
-                </span>
-              </div>
-
-              <div className="bg-[#fcfdfa] border border-stone-200/80 p-2.5 rounded-xl flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-indigo-500 text-[18px]">dark_mode</span>
-                  <div>
-                    <div className="font-bold text-stone-800 text-[11px] leading-tight">Dinner Service</div>
-                    <div className="text-[10px] text-stone-500">07:30 PM – 08:30 PM</div>
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                  OPEN
-                </span>
-              </div>
-
-              <button
-                onClick={() => {
-                  setMainView('MENU');
-                  setMobileMenuOpen(false);
-                }}
-                className="w-full mt-1 py-2 px-3 rounded-xl border border-gray-200 hover:bg-gray-50 text-[11px] font-semibold text-gray-700 flex items-center justify-between transition-colors shadow-2xs"
-              >
-                <span>View Kitchen Capacity</span>
-                <span className="material-symbols-outlined text-sm text-gray-400">chevron_right</span>
-              </button>
-            </div>
           </aside>
         </div>
       )}
@@ -2595,42 +2999,218 @@ export default function OperationsConsolePage() {
           <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-2xl border border-gray-200 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div>
-                <h3 className="font-bold text-base text-gray-900">Assign Delivery Rider</h3>
+                <h3 className="font-bold text-base text-gray-900 font-headline">Assign Delivery Rider</h3>
                 <p className="text-xs text-gray-500">Select an available rider for order #{selectedOrder.orderNumber}</p>
               </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={loadRiders}
+                  disabled={ridersLoading}
+                  title="Refresh riders from database"
+                  className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition-colors"
+                >
+                  <span className={`material-symbols-outlined text-[16px] ${ridersLoading ? 'animate-spin' : ''}`}>sync</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowRiderModal(false)}
+                  className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-base">close</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 max-h-72 overflow-y-auto">
+              {ridersLoading ? (
+                <div className="py-8 flex flex-col items-center justify-center gap-2 text-gray-500 text-xs">
+                  <span className="w-5 h-5 border-2 border-emerald-700 border-t-transparent rounded-full animate-spin"></span>
+                  <span>Fetching live fleet status...</span>
+                </div>
+              ) : (
+                <>
+                  {riders.map((r) => (
+                    <div
+                      key={r.id}
+                      onClick={() => handleAssignRider(selectedOrder.id, r.id)}
+                      className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                        r.isAvailable
+                          ? 'border-gray-200 hover:border-emerald-600 hover:bg-emerald-50/50'
+                          : 'border-gray-200/80 bg-gray-50/40 hover:bg-gray-100/60'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className={`w-8 h-8 rounded-full flex items-center justify-center ${r.isAvailable ? 'bg-amber-100 text-amber-900' : 'bg-gray-200 text-gray-600'}`}>
+                          <span className="material-symbols-outlined text-[18px]">two_wheeler</span>
+                        </span>
+                        <div>
+                          <div className="font-bold text-xs text-gray-900 flex items-center gap-1.5">
+                            <span>{r.name}</span>
+                            {!r.isAvailable && (
+                              <span className="text-[10px] text-gray-400 font-normal">(Currently Offline)</span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-gray-500 font-mono">+91 {r.phone} • {r.vehicleNumber}</div>
+                        </div>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.isAvailable ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-500'}`}>
+                        {r.isAvailable ? 'ON DUTY' : 'OFFLINE'}
+                      </span>
+                    </div>
+                  ))}
+                  {riders.length === 0 && (
+                    <div className="py-8 text-center flex flex-col items-center justify-center gap-2">
+                      <span className="material-symbols-outlined text-3xl text-gray-300">no_accounts</span>
+                      <p className="text-xs text-gray-500">No registered delivery riders found in database.</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowRiderModal(false);
+                          setAddRiderError(null);
+                          setShowAddRiderModal(true);
+                        }}
+                        className="mt-1 px-3 py-1.5 rounded-xl bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800 transition-colors"
+                      >
+                        + Register First Rider
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="border-t border-gray-100 pt-3 flex items-center justify-between">
               <button
+                type="button"
+                onClick={() => {
+                  setAddRiderError(null);
+                  setShowAddRiderModal(true);
+                }}
+                className="text-xs text-emerald-800 font-bold hover:underline flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-sm">person_add</span>
+                <span>+ Register New Rider</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setShowRiderModal(false)}
-                className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200"
+                className="px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4b. REGISTER NEW RIDER MODAL */}
+      {showAddRiderModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-2xl border border-gray-200 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150 my-auto">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="font-bold text-base text-gray-900 font-headline">Register Delivery Rider</h3>
+                <p className="text-xs text-gray-500">Add a delivery partner to the live fleet database.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddRiderModal(false);
+                  setAddRiderError(null);
+                }}
+                className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition-colors"
               >
                 <span className="material-symbols-outlined text-base">close</span>
               </button>
             </div>
 
-            <div className="flex flex-col gap-2 max-h-72 overflow-y-auto">
-              {riders.map((r) => (
-                <div
-                  key={r.id}
-                  onClick={() => handleAssignRider(selectedOrder.id, r.id)}
-                  className="p-3 rounded-xl border border-gray-200 hover:border-emerald-600 hover:bg-emerald-50/50 cursor-pointer transition-all flex items-center justify-between"
+            {addRiderError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
+                <span className="material-symbols-outlined text-base text-rose-600 shrink-0">error</span>
+                <span>{addRiderError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleCreateRiderSubmit} className="flex flex-col gap-3.5">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Ramesh Kumar"
+                  value={newRiderName}
+                  onChange={(e) => setNewRiderName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs focus:outline-hidden focus:border-emerald-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Phone Number (10 digits)</label>
+                <input
+                  type="tel"
+                  required
+                  placeholder="e.g. 9876543210"
+                  value={newRiderPhone}
+                  onChange={(e) => setNewRiderPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-mono focus:outline-hidden focus:border-emerald-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Login Password</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. 200720"
+                  value={newRiderPassword}
+                  onChange={(e) => setNewRiderPassword(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-mono focus:outline-hidden focus:border-emerald-600"
+                />
+                <span className="text-[10px] text-gray-400 mt-0.5 block">Used by rider to log into the delivery mobile portal.</span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Vehicle License Plate</label>
+                <input
+                  type="text"
+                  placeholder="e.g. MP-09-JR-2026"
+                  value={newRiderVehicle}
+                  onChange={(e) => setNewRiderVehicle(e.target.value.toUpperCase())}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-mono uppercase focus:outline-hidden focus:border-emerald-600"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddRiderModal(false);
+                    setAddRiderError(null);
+                  }}
+                  className="px-3.5 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-8 h-8 rounded-full bg-amber-100 text-amber-900 flex items-center justify-center">
-                      <span className="material-symbols-outlined text-[18px]">two_wheeler</span>
-                    </span>
-                    <div>
-                      <div className="font-bold text-xs text-gray-900">{r.name}</div>
-                      <div className="text-[11px] text-gray-500 font-mono">+91 {r.phone} • {r.vehicleNumber}</div>
-                    </div>
-                  </div>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.isAvailable ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-500'}`}>
-                    {r.isAvailable ? 'ON DUTY' : 'OFFLINE'}
-                  </span>
-                </div>
-              ))}
-              {riders.length === 0 && (
-                <div className="py-6 text-center text-xs text-gray-400">No registered delivery riders available.</div>
-              )}
-            </div>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addRiderLoading}
+                  className="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-xs font-bold text-white shadow-xs flex items-center gap-1.5 transition-colors disabled:opacity-60"
+                >
+                  {addRiderLoading ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      <span>Saving Rider...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-[16px]">check</span>
+                      <span>Save &amp; Activate Rider</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -2805,23 +3385,39 @@ export default function OperationsConsolePage() {
                     />
                   </div>
 
-                  {/* Preset Quick Select */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
-                    <span className="text-[10px] text-gray-500 font-bold shrink-0">Presets:</span>
-                    {PRESET_THALI_IMAGES.map((preset) => (
-                      <button
-                        key={preset.title}
-                        type="button"
-                        onClick={() => setNewDishImageUrl(preset.url)}
-                        className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold whitespace-nowrap border transition-colors ${
-                          newDishImageUrl === preset.url
-                            ? 'bg-emerald-50 text-emerald-900 border-emerald-300 font-bold'
-                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-200'
-                        }`}
-                      >
-                        {preset.title}
-                      </button>
-                    ))}
+                  {/* Authentic Dish Presets */}
+                  <div className="flex flex-col gap-1.5 pt-1">
+                    <div className="flex items-center justify-between text-[11px] text-gray-600 font-bold">
+                      <span>Or Choose Authentic Dish Photo:</span>
+                      <span className="text-emerald-700 font-medium">31 Dishes Available</span>
+                    </div>
+                    <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 no-scrollbar">
+                      {PRESET_AUTHENTIC_DISHES.map((preset) => {
+                        const isSelected = newDishImageUrl === preset.url;
+                        return (
+                          <button
+                            key={preset.title}
+                            type="button"
+                            onClick={() => setNewDishImageUrl(preset.url)}
+                            className={`group flex items-center gap-2 px-2.5 py-1.5 rounded-xl border text-left shrink-0 transition-all ${
+                              isSelected
+                                ? 'bg-emerald-50 text-emerald-950 border-emerald-500 shadow-xs ring-1 ring-emerald-500 font-bold'
+                                : 'bg-white hover:bg-stone-50 text-stone-700 border-stone-200 font-medium'
+                            }`}
+                          >
+                            <img
+                              src={preset.url}
+                              alt={preset.title}
+                              className="w-7 h-7 rounded-lg object-cover border border-stone-200 shrink-0"
+                            />
+                            <span className="text-xs whitespace-nowrap">{preset.title}</span>
+                            {isSelected && (
+                              <span className="material-symbols-outlined text-[15px] text-emerald-700 shrink-0">check_circle</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -3028,23 +3624,39 @@ export default function OperationsConsolePage() {
                     />
                   </div>
 
-                  {/* Presets */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
-                    <span className="text-[10px] text-gray-500 font-bold shrink-0">Presets:</span>
-                    {PRESET_THALI_IMAGES.map((preset) => (
-                      <button
-                        key={preset.title}
-                        type="button"
-                        onClick={() => setEditDishImageUrl(preset.url)}
-                        className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold whitespace-nowrap border transition-colors ${
-                          editDishImageUrl === preset.url
-                            ? 'bg-emerald-50 text-emerald-900 border-emerald-300 font-bold'
-                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-200'
-                        }`}
-                      >
-                        {preset.title}
-                      </button>
-                    ))}
+                  {/* Authentic Dish Presets */}
+                  <div className="flex flex-col gap-1.5 pt-1">
+                    <div className="flex items-center justify-between text-[11px] text-gray-600 font-bold">
+                      <span>Or Choose Authentic Dish Photo:</span>
+                      <span className="text-emerald-700 font-medium">31 Dishes Available</span>
+                    </div>
+                    <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 no-scrollbar">
+                      {PRESET_AUTHENTIC_DISHES.map((preset) => {
+                        const isSelected = editDishImageUrl === preset.url;
+                        return (
+                          <button
+                            key={preset.title}
+                            type="button"
+                            onClick={() => setEditDishImageUrl(preset.url)}
+                            className={`group flex items-center gap-2 px-2.5 py-1.5 rounded-xl border text-left shrink-0 transition-all ${
+                              isSelected
+                                ? 'bg-emerald-50 text-emerald-950 border-emerald-500 shadow-xs ring-1 ring-emerald-500 font-bold'
+                                : 'bg-white hover:bg-stone-50 text-stone-700 border-stone-200 font-medium'
+                            }`}
+                          >
+                            <img
+                              src={preset.url}
+                              alt={preset.title}
+                              className="w-7 h-7 rounded-lg object-cover border border-stone-200 shrink-0"
+                            />
+                            <span className="text-xs whitespace-nowrap">{preset.title}</span>
+                            {isSelected && (
+                              <span className="material-symbols-outlined text-[15px] text-emerald-700 shrink-0">check_circle</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>

@@ -232,7 +232,7 @@ export default function CustomerAuthModal({
   const handleLogout = async () => {
     setLoading(true);
     try {
-      await api.logout();
+      await api.logout('CUSTOMER');
       setCurrentUser(null);
       setPhone('');
       setName('');

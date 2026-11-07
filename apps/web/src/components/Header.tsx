@@ -2,19 +2,17 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { api, UserProfile } from '../lib/api';
-import CustomerAuthModal from './CustomerAuthModal';
 import { useCart } from '../context/CartContext';
 import DeliveryStatusPill from './DeliveryStatusPill';
 import LocationMapModal, { LocationData } from './LocationMapModal';
 
 export default function Header() {
   const pathname = usePathname();
+  const router = useRouter();
   const { totalCount } = useCart();
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [authModalTab, setAuthModalTab] = useState<'PROFILE' | 'ORDERS' | 'EDIT'>('PROFILE');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [locationName, setLocationName] = useState('Sagore, Pithampur');
@@ -94,24 +92,9 @@ export default function Header() {
     };
   }, [isDropdownOpen]);
 
-  const handleProfileClick = () => {
-    if (currentUser) {
-      setIsDropdownOpen((prev) => !prev);
-    } else {
-      setAuthModalTab('PROFILE');
-      setIsAuthOpen(true);
-    }
-  };
-
-  const openProfileModal = (tab: 'PROFILE' | 'ORDERS' | 'EDIT') => {
-    setIsDropdownOpen(false);
-    setAuthModalTab(tab);
-    setIsAuthOpen(true);
-  };
-
   const handleLogout = async () => {
     setIsDropdownOpen(false);
-    await api.logout();
+    await api.logout('CUSTOMER');
     setCurrentUser(null);
     window.dispatchEvent(new Event('storage'));
   };
@@ -125,38 +108,57 @@ export default function Header() {
 
   return (
     <>
-      <header className="fixed top-0 inset-x-0 z-50 bg-surface/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-surface-container-high/60">
-        <div className="max-w-4xl mx-auto h-16 px-margin flex items-center justify-between gap-space-sm">
+      <header className="fixed top-0 inset-x-0 z-50 bg-white/95 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-[#EEE7DC]">
+        <div className="max-w-7xl mx-auto h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3 sm:gap-6">
           {/* Brand Logo & Live Status */}
-          <Link href="/" className="flex items-center gap-space-sm min-w-0 flex-1">
-            <div className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
-              JR
+          <Link href="/" className="flex items-center gap-2.5 sm:gap-3 shrink-0 group">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden bg-[#FFF9F0] border border-[#7A1E1E]/20 shadow-xs shrink-0 flex items-center justify-center p-0.5 group-hover:scale-105 transition-transform">
+              <img
+                src="/images/logo-avatar.png"
+                alt="Janki Rasoi Logo"
+                className="w-full h-full object-cover rounded-full"
+              />
             </div>
             <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-space-xs">
-                <span className="font-title-md text-title-md text-on-surface truncate font-bold font-headline">
+              <div className="flex items-center gap-1.5">
+                <span className="font-title-md text-base sm:text-lg text-[#292D26] truncate font-black font-headline group-hover:text-[#7A1E1E] transition-colors">
                   Janki Rasoi
                 </span>
-                <span className="hidden xs:inline-block font-label-sm text-label-sm px-1.5 py-0.5 rounded-full bg-[#EAF4ED] text-[#38754A] uppercase shrink-0 font-bold border border-[#38754A]/20">
-                  Ghar Ka Swad
+                <span className="hidden xs:inline-block text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-[#FDF2E9] text-[#7A1E1E] uppercase shrink-0 font-bold border border-[#7A1E1E]/20">
+                  स्वाद ऐसा... जो दिल जीत ले
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#38754A] animate-pulse shrink-0"></span>
-                <span className="font-label-sm text-label-sm text-[#38754A] font-semibold truncate">
-                  Lunch Serving Now
+                <span className="text-[11px] sm:text-xs text-[#38754A] font-semibold truncate">
+                  Kitchen Open Now
                 </span>
               </div>
             </div>
           </Link>
 
+          {/* Desktop/Tablet Navigation Links */}
+          <nav className="hidden md:flex items-center gap-6 text-xs sm:text-sm font-bold text-[#292D26]">
+            <Link
+              href="/"
+              className={`hover:text-[#38754A] transition-colors ${pathname === '/' ? 'text-[#38754A]' : 'text-[#77786F]'}`}
+            >
+              Home
+            </Link>
+            <Link
+              href="/menu"
+              className={`hover:text-[#38754A] transition-colors ${pathname === '/menu' ? 'text-[#38754A]' : 'text-[#77786F]'}`}
+            >
+              Today's Menu
+            </Link>
 
+          </nav>
 
           {/* Delivery Location Selector Pill */}
           <button
             type="button"
             onClick={() => setIsLocationModalOpen(true)}
-            className="flex items-center gap-1.5 py-1 px-2.5 sm:px-3 rounded-full bg-[#FFF9F0] hover:bg-[#F5ECE0] border border-[#EEE7DC] text-left transition-all shrink-0 max-w-[150px] xs:max-w-[210px] sm:max-w-[260px] group"
+            className="flex items-center gap-1.5 py-1 px-2.5 sm:px-3 rounded-full bg-[#FFF9F0] hover:bg-[#F5ECE0] border border-[#EEE7DC] text-left transition-all shrink-0 max-w-[140px] xs:max-w-[200px] sm:max-w-[280px] md:max-w-[340px] lg:max-w-[380px] group"
             title="Change delivery location"
           >
             <span className="material-symbols-outlined text-[#E25822] text-[18px] shrink-0 group-hover:scale-110 transition-transform">
@@ -178,15 +180,15 @@ export default function Header() {
           </button>
 
           {/* Cart Icon & Profile Container */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link
               href="/cart"
               aria-label="View Cart"
-              className="relative w-10 h-10 flex items-center justify-center rounded-full text-on-surface hover:bg-surface-container-high transition-colors"
+              className="relative w-10 h-10 flex items-center justify-center rounded-full text-on-surface hover:bg-stone-100 transition-colors"
             >
               <span className="material-symbols-outlined text-[24px]">shopping_bag</span>
               {totalCount > 0 && (
-                <span className="absolute top-0.5 right-0.5 min-w-[18px] h-[18px] px-1 bg-secondary text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-xs">
+                <span className="absolute top-0.5 right-0.5 min-w-[18px] h-[18px] px-1 bg-[#38754A] text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-xs">
                   {totalCount}
                 </span>
               )}
@@ -194,30 +196,37 @@ export default function Header() {
 
             {/* Profile Button & Dropdown Container */}
             <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={handleProfileClick}
-                aria-expanded={isDropdownOpen}
-                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors border border-surface-container-high/80"
-                title={currentUser ? currentUser.name : 'Login / Register'}
-              >
-                {currentUser ? (
+              {currentUser ? (
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen((prev) => !prev)}
+                  aria-expanded={isDropdownOpen}
+                  className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors border border-surface-container-high/80"
+                  title={currentUser.name}
+                >
                   <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-xs shadow-xs">
                     {currentUser.name.charAt(0).toUpperCase()}
                   </div>
-                ) : (
+                </button>
+              ) : (
+                <Link
+                  href="/login"
+                  className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors border border-surface-container-high/80"
+                  title="Login / Register"
+                >
                   <span className="material-symbols-outlined text-[22px] text-on-surface-variant">
                     account_circle
                   </span>
-                )}
-              </button>
+                </Link>
+              )}
 
             {/* THEME-BASED PROFILE DROPDOWN */}
             {isDropdownOpen && currentUser && (
               <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-white rounded-3xl shadow-2xl border border-stone-200/90 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                 {/* 1. Header User Card (Tap to view profile details) */}
-                <button
-                  type="button"
-                  onClick={() => openProfileModal('PROFILE')}
+                <Link
+                  href="/login"
+                  onClick={() => setIsDropdownOpen(false)}
                   className="w-full text-left p-4 bg-gradient-to-r from-emerald-900 via-primary to-emerald-950 text-white flex items-center gap-3 hover:opacity-95 transition-opacity"
                 >
                   <div className="w-11 h-11 rounded-full bg-white/20 flex items-center justify-center font-bold text-lg border border-white/20 shrink-0">
@@ -226,16 +235,16 @@ export default function Header() {
                   <div className="min-w-0 flex-1">
                     <div className="font-bold text-sm truncate leading-tight flex items-center justify-between">
                       <span>{currentUser.name}</span>
-                      <span className="material-symbols-outlined text-sm text-emerald-300">edit</span>
+                      <span className="material-symbols-outlined text-sm text-emerald-300">manage_accounts</span>
                     </div>
                     <div className="text-xs text-emerald-200 font-mono mt-0.5">+91 {currentUser.phone}</div>
                     <div className="mt-1 flex items-center gap-1.5">
                       <span className="px-2 py-0.2 rounded-full bg-white/20 text-[10px] font-bold text-emerald-100">
-                        {currentUser.orderCount || 0} Tiffins Ordered
+                        Manage Account / Switch
                       </span>
                     </div>
                   </div>
-                </button>
+                </Link>
 
                 {/* 2. Ongoing / Recent Order Quick Card (if exists) */}
                 {latestOrder && (
@@ -264,9 +273,9 @@ export default function Header() {
 
                 {/* 3. Action Menu Items */}
                 <div className="p-2 flex flex-col gap-1 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => openProfileModal('ORDERS')}
+                  <Link
+                    href="/orders"
+                    onClick={() => setIsDropdownOpen(false)}
                     className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-stone-100/80 transition-colors text-stone-800 font-semibold text-left"
                   >
                     <span className="w-8 h-8 rounded-xl bg-emerald-50 text-primary flex items-center justify-center shrink-0">
@@ -277,12 +286,12 @@ export default function Header() {
                       <div className="text-[11px] text-stone-500 font-normal">Check status of today's tiffins</div>
                     </div>
                     <span className="material-symbols-outlined text-sm text-stone-400">chevron_right</span>
-                  </button>
+                  </Link>
 
                   {/* Saved Address & Profile Edit */}
-                  <button
-                    type="button"
-                    onClick={() => openProfileModal('EDIT')}
+                  <Link
+                    href="/login"
+                    onClick={() => setIsDropdownOpen(false)}
                     className="w-full flex items-start gap-3 p-2.5 rounded-2xl hover:bg-stone-100/80 transition-colors text-stone-800 text-left"
                   >
                     <span className="w-8 h-8 rounded-xl bg-amber-50 text-amber-800 flex items-center justify-center shrink-0">
@@ -299,7 +308,7 @@ export default function Header() {
                           : 'Add your home or office address'}
                       </div>
                     </div>
-                  </button>
+                  </Link>
 
                   {/* WhatsApp Kitchen Support */}
                   <a
@@ -336,22 +345,6 @@ export default function Header() {
           </div>
         </div>
       </header>
-
-      {/* Login & Profile Management Modal */}
-      <CustomerAuthModal
-        isOpen={isAuthOpen}
-        initialTab={authModalTab}
-        onClose={() => {
-          setIsAuthOpen(false);
-          api.getCurrentUser().then((user) => {
-            if (user && user.role === 'CUSTOMER') setCurrentUser(user);
-          });
-        }}
-        onLoginSuccess={(user) => {
-          setCurrentUser(user);
-          setIsAuthOpen(false);
-        }}
-      />
 
       {/* Delivery Location Selector Modal */}
       <LocationMapModal

@@ -29,8 +29,10 @@ export interface AdminOrder {
   slotLabel: string;
   totalAmountPaise: number;
   assignedRider?: {
+    id?: string;
     name: string;
     phone: string;
+    assignmentStatus?: 'ASSIGNED' | 'ACCEPTED' | string;
   } | null;
   itemsCount: number;
   items?: AdminOrderItem[];
@@ -191,6 +193,55 @@ export const adminApi = {
     return res.json();
   },
 
+  async createRider(data: { name: string; phone: string; password?: string; vehicleNumber?: string }) {
+    const base = getApiBase();
+    const res = await fetch(`${base}/admin/riders`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Simulated-Role': 'STAFF',
+      },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to register rider');
+    }
+    return res.json();
+  },
+
+  async toggleRiderAvailability(riderId: string, isAvailable: boolean) {
+    const base = getApiBase();
+    const res = await fetch(`${base}/admin/riders/${encodeURIComponent(riderId)}/availability`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Simulated-Role': 'STAFF',
+      },
+      body: JSON.stringify({ isAvailable }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to update rider availability');
+    }
+    return res.json();
+  },
+
+  async deleteRider(riderId: string) {
+    const base = getApiBase();
+    const res = await fetch(`${base}/admin/riders/${encodeURIComponent(riderId)}`, {
+      method: 'DELETE',
+      headers: {
+        'X-Simulated-Role': 'STAFF',
+      },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to remove rider');
+    }
+    return res.json();
+  },
+
   // 8. Live Menu & Inventory Inspection
   async getCatalog(): Promise<any> {
     const base = getApiBase();
@@ -304,21 +355,38 @@ export const adminApi = {
   // 11. Fetch Active Delivery Zones
   async getDeliveryZones() {
     const base = getApiBase();
-    try {
-      const res = await fetch(`${base}/delivery-zones`);
-      if (res.ok) return res.json();
-    } catch {
-      // fallback
+    const res = await fetch(`${base}/delivery-zones`, { cache: 'no-store' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to fetch delivery zones');
     }
-    return [
-      { id: 'sagore-454774', name: 'Sagore / Pithampur - Main Kitchen Zone', pincode: '454774', minOrderPaise: 0, deliveryFeePaise: 0, isActive: true },
-      { id: '1', name: 'South Delhi - Malviya Nagar & Saket', pincode: '110017', minOrderPaise: 9900, deliveryFeePaise: 3000, isActive: true },
-    ];
+    return res.json();
   },
 
-  // 12. Upload Food Image to Cloudinary via backend-signed signature
+  // 12. Upload Food Image directly to Supabase Storage (with Cloudinary fallback)
   async uploadFoodImage(file: File): Promise<string> {
     const base = getApiBase();
+
+    // 1. Try Supabase Storage direct upload via backend
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${base}/admin/uploads/food-image`, {
+        method: 'POST',
+        headers: {
+          'X-Simulated-Role': 'STAFF',
+        },
+        body: formData,
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.url) return json.url;
+      }
+    } catch (e) {
+      console.warn('Supabase backend upload failed, trying Cloudinary signature:', e);
+    }
+
+    // 2. Cloudinary signed upload fallback
     const sigRes = await fetch(`${base}/admin/uploads/signature?folder=jankirasoi/menu`, {
       headers: {
         'X-Simulated-Role': 'STAFF',

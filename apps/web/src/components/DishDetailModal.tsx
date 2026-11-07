@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { MenuItem, PortionVariant, DEFAULT_FOOD_IMAGE } from '../lib/api';
+import { MenuItem, PortionVariant, DEFAULT_FOOD_IMAGE, resolveDishImageUrl, DEFAULT_DISH_IMAGES } from '../lib/api';
 import { useCart } from '../context/CartContext';
 
 interface DishDetailModalProps {
@@ -52,7 +52,7 @@ export default function DishDetailModal({ dish, onClose }: DishDetailModalProps)
       productId: dish.id,
       name: dish.name,
       pricePaise: currentPricePaise,
-      imageUrl: dish.imageUrl || DEFAULT_FOOD_IMAGE,
+      imageUrl: resolveDishImageUrl(dish),
       variantId: selectedVariant?.id,
       variantName: selectedVariant?.name,
       quantity: 1,
@@ -98,12 +98,13 @@ export default function DishDetailModal({ dish, onClose }: DishDetailModalProps)
         {/* Large Bleed Hero Image */}
         <div className="relative w-full h-64 sm:h-72 bg-[#FFF9F0] shrink-0 overflow-hidden">
           <img
-            src={dish.imageUrl || DEFAULT_FOOD_IMAGE}
+            src={resolveDishImageUrl(dish)}
             alt={dish.name}
             className="w-full h-full object-cover"
             onError={(e) => {
               e.currentTarget.onerror = null;
-              e.currentTarget.src = DEFAULT_FOOD_IMAGE;
+              const fallback = (dish.slug && DEFAULT_DISH_IMAGES[dish.slug]) || DEFAULT_FOOD_IMAGE;
+              e.currentTarget.src = fallback;
             }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div>

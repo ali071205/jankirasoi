@@ -149,15 +149,44 @@ export interface TrackOrderResponse {
   paymentStatus?: string;
   serviceDate: string;
   deliverySlot: string;
+  subtotalPaise?: number;
+  taxPaise?: number;
+  deliveryFeePaise?: number;
+  packagingFeePaise?: number;
+  discountPaise?: number;
   totalAmountPaise: number;
   items: Array<{
     name: string;
     variant?: string;
     quantity: number;
+    unitPricePaise?: number;
+    totalPricePaise?: number;
   }>;
   deliveryOtp?: string; // Zero-cost in-app verbal handover PIN when OUT_FOR_DELIVERY
   riderName?: string;
   riderPhone?: string;
+  rider?: {
+    name: string;
+    phone: string;
+    vehicleNumber?: string;
+    location?: {
+      latitude: number;
+      longitude: number;
+      heading?: number;
+      speed?: number;
+      updatedAt?: string;
+    };
+  } | null;
+  coordinates?: {
+    latitude: number;
+    longitude: number;
+  };
+  kitchenCoordinates?: {
+    latitude: number;
+    longitude: number;
+    name?: string;
+    address?: string;
+  };
   customerName?: string;
   maskedPhone?: string;
   deliveryAddress?: {
@@ -222,6 +251,7 @@ export interface RiderDelivery {
   orderId: string;
   orderNumber: string;
   status: string;
+  assignmentStatus?: 'ASSIGNED' | 'ACCEPTED' | 'COMPLETED' | 'CANCELLED';
   customerName: string;
   customerPhone: string;
   deliveryAddress: string;
@@ -237,10 +267,72 @@ export interface RiderDelivery {
   itemsSummary: string;
 }
 
-export const DEFAULT_FOOD_IMAGE = 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80';
+export const SUPABASE_STORAGE_DISHES_BASE = 'https://yxvwgcjavxeqsttzcbty.supabase.co/storage/v1/object/public/menu/dishes';
+export const DEFAULT_FOOD_IMAGE = `${SUPABASE_STORAGE_DISHES_BASE}/special-thali-bhar-pet.jpg`;
+
+export const DEFAULT_DISH_IMAGES: Record<string, string> = {
+  'aloo-gobhi': `${SUPABASE_STORAGE_DISHES_BASE}/aloo-gobhi.jpg`,
+  'aloo-matar': `${SUPABASE_STORAGE_DISHES_BASE}/aloo-matar.jpg`,
+  'aloo-paratha': `${SUPABASE_STORAGE_DISHES_BASE}/aloo-paratha.jpg`,
+  'aloo-tamatar': `${SUPABASE_STORAGE_DISHES_BASE}/aloo-tamatar.jpg`,
+  'chana-masala': `${SUPABASE_STORAGE_DISHES_BASE}/chana-masala.jpg`,
+  'dal-bati-thali': `${SUPABASE_STORAGE_DISHES_BASE}/dal-bati-thali.jpg`,
+  'dal-fry': `${SUPABASE_STORAGE_DISHES_BASE}/dal-fry.jpg`,
+  'dal-tadka': `${SUPABASE_STORAGE_DISHES_BASE}/dal-tadka.jpg`,
+  'finger-chips': `${SUPABASE_STORAGE_DISHES_BASE}/finger-chips.jpg`,
+  'gobhi-paratha': `${SUPABASE_STORAGE_DISHES_BASE}/gobhi-paratha.jpg`,
+  'gud-ki-chai': `${SUPABASE_STORAGE_DISHES_BASE}/gud-ki-chai.jpg`,
+  'indori-poha-special-nashta': `${SUPABASE_STORAGE_DISHES_BASE}/indori-poha-special-nashta.jpg`,
+  'jeera-dal': `${SUPABASE_STORAGE_DISHES_BASE}/jeera-dal.jpg`,
+  'jeera-rice': `${SUPABASE_STORAGE_DISHES_BASE}/jeera-rice.jpg`,
+  'kadhai-paneer': `${SUPABASE_STORAGE_DISHES_BASE}/kadhai-paneer.jpg`,
+  'matar-paneer': `${SUPABASE_STORAGE_DISHES_BASE}/matar-paneer.jpg`,
+  'matar-pulao': `${SUPABASE_STORAGE_DISHES_BASE}/matar-pulao.jpg`,
+  'mix-dal': `${SUPABASE_STORAGE_DISHES_BASE}/mix-dal.jpg`,
+  'mix-sabzi': `${SUPABASE_STORAGE_DISHES_BASE}/mix-sabzi.jpg`,
+  'paneer-masala': `${SUPABASE_STORAGE_DISHES_BASE}/paneer-masala.jpg`,
+  'paneer-paratha': `${SUPABASE_STORAGE_DISHES_BASE}/paneer-paratha.jpg`,
+  'plain-paratha': `${SUPABASE_STORAGE_DISHES_BASE}/plain-paratha.jpg`,
+  'plain-rice': `${SUPABASE_STORAGE_DISHES_BASE}/plain-rice.jpg`,
+  'sadi-thali': `${SUPABASE_STORAGE_DISHES_BASE}/sadi-thali.jpg`,
+  'sev-bhaji': `${SUPABASE_STORAGE_DISHES_BASE}/sev-bhaji.jpg`,
+  'sev-masala': `${SUPABASE_STORAGE_DISHES_BASE}/sev-masala.jpg`,
+  'sev-paratha': `${SUPABASE_STORAGE_DISHES_BASE}/sev-paratha.jpg`,
+  'sev-tamatar': `${SUPABASE_STORAGE_DISHES_BASE}/sev-tamatar.jpg`,
+  'shahi-paneer': `${SUPABASE_STORAGE_DISHES_BASE}/shahi-paneer.jpg`,
+  'special-thali-bhar-pet': `${SUPABASE_STORAGE_DISHES_BASE}/special-thali-bhar-pet.jpg`,
+  'urad-chana-dal': `${SUPABASE_STORAGE_DISHES_BASE}/urad-chana-dal.jpg`,
+  // Common legacy seeds
+  'executive-north-indian-thali': `${SUPABASE_STORAGE_DISHES_BASE}/special-thali-bhar-pet.jpg`,
+  'homestyle-dal-khichdi-bowl': `${SUPABASE_STORAGE_DISHES_BASE}/mix-dal.jpg`,
+  'janaki-special-full-thali': `${SUPABASE_STORAGE_DISHES_BASE}/special-thali-bhar-pet.jpg`,
+  'regular-home-thali': `${SUPABASE_STORAGE_DISHES_BASE}/sadi-thali.jpg`,
+  'roti-sabzi-duo': `${SUPABASE_STORAGE_DISHES_BASE}/mix-sabzi.jpg`,
+};
+
+export function resolveDishImageUrl(dish?: { imageUrl?: string | null; slug?: string; name?: string }): string {
+  if (!dish) return DEFAULT_FOOD_IMAGE;
+  const img = dish.imageUrl?.trim();
+  if (img && img !== DEFAULT_FOOD_IMAGE) {
+    return img;
+  }
+  if (dish.slug && DEFAULT_DISH_IMAGES[dish.slug]) {
+    return DEFAULT_DISH_IMAGES[dish.slug];
+  }
+  if (dish.name) {
+    const norm = dish.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    for (const [slug, url] of Object.entries(DEFAULT_DISH_IMAGES)) {
+      if (norm.includes(slug) || slug.includes(norm)) {
+        return url;
+      }
+    }
+  }
+  return DEFAULT_FOOD_IMAGE;
+}
 
 // In-memory + SessionStorage cache for instant zero-latency client transitions without re-fetching
 const memoryCache = new Map<string, { data: any; expiry: number }>();
+const CACHE_PREFIX = 'jr_v5_cache_';
 
 function getCached<T>(key: string): T | null {
   const item = memoryCache.get(key);
@@ -254,14 +346,14 @@ function getCached<T>(key: string): T | null {
   // Cross-refresh fallback from sessionStorage
   if (typeof window !== 'undefined') {
     try {
-      const stored = window.sessionStorage.getItem(`jr_cache_${key}`);
+      const stored = window.sessionStorage.getItem(`${CACHE_PREFIX}${key}`);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Date.now() <= parsed.expiry) {
           memoryCache.set(key, parsed);
           return parsed.data as T;
         } else {
-          window.sessionStorage.removeItem(`jr_cache_${key}`);
+          window.sessionStorage.removeItem(`${CACHE_PREFIX}${key}`);
         }
       }
     } catch {
@@ -277,7 +369,7 @@ function setCached<T>(key: string, data: T, ttlMs = 180000): T {
   memoryCache.set(key, { data, expiry });
   if (typeof window !== 'undefined') {
     try {
-      window.sessionStorage.setItem(`jr_cache_${key}`, JSON.stringify({ data, expiry }));
+      window.sessionStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify({ data, expiry }));
     } catch {
       // Ignore quota issues
     }
@@ -298,110 +390,27 @@ const getApiBase = () => {
   return '/api/v1';
 };
 
-export const FALLBACK_CATALOG: CatalogResponse = {
-  serviceDate: new Date().toISOString().split('T')[0],
-  categories: [
-    {
-      id: 'cat-thalis',
-      name: 'Homestyle Thalis',
-      slug: 'homestyle-thalis',
-      displayOrder: 1,
-      items: [
-        {
-          id: '09f67dad-2306-49b7-88c7-cae050592f14',
-          name: 'Janaki Special Full Thali',
-          slug: 'janaki-special-full-thali',
-          description: '4 Soft Rotis, 1 Paneer Sabzi, 1 Seasonal Sabzi, Dal Tadka, Jeera Rice, Curd & Sweet.',
-          dietaryType: 'VEG',
-          imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDS9UZxeQL2XEwyu0K3PCfLt6xcAGFdQTQk0Ms6V2E_dNfemHxFYbIONpeD6RzRRoWWDyO18R_xwGBdtSE7xBHjmyObtY6kkODeMHHLUBjBohji3E4P1D7CsA6o0vz6TtyD5iFo0-ftcqqVkGA5aPZ6gqonSl0tiLeWavjPSF7RoRAjy-R35op1kvBkcA6DHoxU8eSbBL0OcSYbkU4Gi0pIkUstEckNKwAK8RsxyMFSxFnUKcwd2Fok',
-          basePricePaise: 18000,
-          taxRatePercent: 5,
-          isSoldOut: false,
-          variants: [
-            { id: 'd897e546-e669-4f5f-8f98-dd2db0308313', name: 'Full Thali (Standard)', priceModifierPaise: 0, isDefault: true },
-            { id: 'var-royal', name: 'Royal Portion (+Extra Sweet)', priceModifierPaise: 3500, isDefault: false },
-          ],
-          addonGroups: [],
-        },
-        {
-          id: 'cd02708b-cf9d-460a-878d-3597115602b7',
-          name: 'Regular Home Thali',
-          slug: 'regular-home-thali',
-          description: '4 Rotis, Seasonal Veg Sabzi, Dal Fry, Steamed Rice, Pickle & Salad.',
-          dietaryType: 'VEG',
-          imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBTHONkUFMlDOhbV8ZAksbZ3MFW81rMV0imOKG7b6sJsRN2StBpZW54kblxWOMQylv1X4vOJzgSkTy4gM3Z1ypQAk3U9TjdYZiZpd2e4RLirD0HL58J8DokQiAG_gm6CX5lrfbRwel5UXuvUoP3AD4f9T_s8Buuq22rghfLWtl-gHYATlEEnfvUW1xXaDUHTd2ri-3nRNvGFfssW_Zka0tU0w_egIYYxQTa--nhGHmHOM0tD0QbDU9C',
-          basePricePaise: 13000,
-          taxRatePercent: 5,
-          isSoldOut: false,
-          variants: [
-            { id: '7ee248f8-545a-46ba-b790-03a4e79cde96', name: 'Standard Thali', priceModifierPaise: 0, isDefault: true },
-          ],
-          addonGroups: [],
-        },
-        {
-          id: 'dal-bati-thali-01',
-          name: 'Dal Bati Churma Thali',
-          slug: 'dal-bati-thali',
-          description: '2 Ghee Baati, Panchmel Daal, Red Rajasthani Lahsun Chutney, Salad & Gulab Jamun Sweet.',
-          dietaryType: 'VEG',
-          imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80',
-          basePricePaise: 26500,
-          taxRatePercent: 5,
-          isSoldOut: false,
-          variants: [
-            { id: 'db-var-std', name: 'Standard Portion', priceModifierPaise: 0, isDefault: true },
-            { id: 'db-var-extra', name: 'Extra Baati (+2 Pcs)', priceModifierPaise: 5000, isDefault: false },
-          ],
-          addonGroups: [],
-        },
-      ],
-    },
-    {
-      id: 'cat-combos',
-      name: 'Roti & Rice Combos',
-      slug: 'roti-rice-combos',
-      displayOrder: 2,
-      items: [
-        {
-          id: 'a1c1e8ff-8f9e-4a82-98f3-876bd6f9e0f3',
-          name: 'Roti & Sabzi Duo',
-          slug: 'roti-sabzi-duo',
-          description: '4 Phulkas with spiced, fresh cottage cheese Paneer Bhurji & pickled salad.',
-          dietaryType: 'VEG',
-          imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD7FyfUzzLfU1zFeV9Kj0MuGwv3uOnBcOQnd59q3rdLwp86vcmEMSGNPqMzXfDxESKSt57aby9gMNqThGtOkZzquiH8qAUb7Q4LWqTabE2_IWIAegP4TTTbmASnzNA2PcgQXre_ZQX-PJSiJaIgicviQpj0iPuITd_o1l0YYcymiDaTeFNel4PUpcf2khbY4suRtZ6_PBLoP87PJ02DZFeDKOYWiT7pAPJI2hs4AakxWt8Ry9pUsjMS',
-          basePricePaise: 9500,
-          taxRatePercent: 5,
-          isSoldOut: false,
-          variants: [
-            { id: 'var-4phulka', name: '4 Phulkas + Bhurji', priceModifierPaise: 0, isDefault: true },
-            { id: 'var-6phulka', name: '6 Phulkas + Bhurji', priceModifierPaise: 3000, isDefault: false },
-          ],
-          addonGroups: [],
-        },
-        {
-          id: 'moong-khichdi-bowl',
-          name: 'Moong Dal Khichdi Bowl',
-          slug: 'moong-dal-khichdi',
-          description: 'Soothing yellow moong daal & rice khichdi tempered with cumin, pure cow ghee & curd.',
-          dietaryType: 'VEG',
-          imageUrl: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80',
-          basePricePaise: 11000,
-          taxRatePercent: 5,
-          isSoldOut: false,
-          variants: [
-            { id: 'kh-var-std', name: 'Regular Bowl (500ml)', priceModifierPaise: 0, isDefault: true },
-          ],
-          addonGroups: [],
-        },
-      ],
-    },
-  ],
-};
-
-export function optimizeImageUrl(url?: string): string {
+export function optimizeImageUrl(url?: string, width = 400): string {
   if (!url) return '';
+  if (url.startsWith('/images/dishes/') || url.startsWith('/images/')) {
+    return url.includes('?') ? url : `${url}?v=20261106_v2`;
+  }
   if (url.includes('cloudinary.com') && url.includes('/upload/') && !url.includes('/f_auto')) {
-    return url.replace('/upload/', '/upload/f_auto,q_auto,w_1200,c_limit/');
+    return url.replace('/upload/', `/upload/f_auto,q_auto,w_${width},c_limit/`);
+  }
+  if (url.includes('images.unsplash.com')) {
+    try {
+      const u = new URL(url);
+      u.searchParams.set('auto', 'format');
+      u.searchParams.set('fit', 'crop');
+      if (!u.searchParams.has('w') || parseInt(u.searchParams.get('w') || '0', 10) > width) {
+        u.searchParams.set('w', width.toString());
+      }
+      u.searchParams.set('q', '75');
+      return u.toString();
+    } catch (e) {
+      return url;
+    }
   }
   return url;
 }
@@ -410,7 +419,7 @@ export function optimizeImageUrl(url?: string): string {
 export const api = {
   // Synchronous cache accessors for zero-flicker instant hydration
   getCachedCatalog(serviceDate?: string): CatalogResponse | null {
-    return getCached<CatalogResponse>(`catalog_${serviceDate || 'today'}`) || FALLBACK_CATALOG;
+    return getCached<CatalogResponse>(`catalog_${serviceDate || 'today'}`);
   },
 
   getCachedSlots(date?: string): SlotsResponse | null {
@@ -422,7 +431,7 @@ export const api = {
     return getCached<PincodeCheckResponse>(`pin_${pincode}`);
   },
 
-  // 1. Live Catalog with Instant SWR Refresh & Resilient Fallback
+  // 1. Live Catalog with Instant SWR Refresh
   async getCatalog(serviceDate?: string, forceRefresh = false): Promise<CatalogResponse> {
     const cacheKey = `catalog_${serviceDate || 'today'}`;
     if (!forceRefresh) {
@@ -430,26 +439,22 @@ export const api = {
       if (cached) return cached;
     }
 
-    try {
-      const base = getApiBase();
-      const url = serviceDate ? `${base}/catalog?service_date=${encodeURIComponent(serviceDate)}` : `${base}/catalog`;
-      const res = await fetch(url, { cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.categories?.length) {
-          data.categories.forEach((cat: any) => {
-            cat.items?.forEach((it: any) => {
-              if (it.imageUrl) it.imageUrl = optimizeImageUrl(it.imageUrl);
-            });
-          });
-          return setCached(cacheKey, data, 10000); // 10s fresh cache
-        }
-      }
-    } catch {
-      // Backend not running on local/remote port, seamlessly use fallback
+    const base = getApiBase();
+    const url = serviceDate ? `${base}/catalog?service_date=${encodeURIComponent(serviceDate)}` : `${base}/catalog`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to fetch catalog from server');
     }
-
-    return setCached(cacheKey, FALLBACK_CATALOG, 10000);
+    const data = await res.json();
+    if (data?.categories?.length) {
+      data.categories.forEach((cat: any) => {
+        cat.items?.forEach((it: any) => {
+          if (it.imageUrl) it.imageUrl = optimizeImageUrl(it.imageUrl);
+        });
+      });
+    }
+    return setCached(cacheKey, data, 60000); // 60s fresh cache
   },
 
   // Real-time listener for cross-tab and cross-window menu changes
@@ -461,7 +466,11 @@ export const api = {
       channel = new BroadcastChannel('jankirasoi_menu_channel');
       channel.onmessage = () => {
         memoryCache.delete('catalog_today');
-        try { window.sessionStorage.removeItem('jr_cache_catalog_today'); } catch {}
+        try { 
+          window.sessionStorage.removeItem(`${CACHE_PREFIX}catalog_today`);
+          window.sessionStorage.removeItem('jr_v3_cache_catalog_today');
+          window.sessionStorage.removeItem('jr_cache_catalog_today');
+        } catch {}
         callback();
       };
     } catch {}
@@ -469,14 +478,22 @@ export const api = {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'jr_menu_timestamp') {
         memoryCache.delete('catalog_today');
-        try { window.sessionStorage.removeItem('jr_cache_catalog_today'); } catch {}
+        try { 
+          window.sessionStorage.removeItem(`${CACHE_PREFIX}catalog_today`);
+          window.sessionStorage.removeItem('jr_v3_cache_catalog_today');
+          window.sessionStorage.removeItem('jr_cache_catalog_today');
+        } catch {}
         callback();
       }
     };
 
     const handleFocus = () => {
       memoryCache.delete('catalog_today');
-      try { window.sessionStorage.removeItem('jr_cache_catalog_today'); } catch {}
+      try { 
+        window.sessionStorage.removeItem(`${CACHE_PREFIX}catalog_today`);
+        window.sessionStorage.removeItem('jr_v3_cache_catalog_today');
+        window.sessionStorage.removeItem('jr_cache_catalog_today');
+      } catch {}
       callback();
     };
 
@@ -500,24 +517,18 @@ export const api = {
     if (cached) return cached;
 
     const base = getApiBase();
+    let url = `${base}/delivery-zones/check?pincode=${encodeURIComponent(cleanPin)}`;
+    if (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)) {
+      url += `&lat=${lat}&lng=${lng}`;
+    }
     try {
-      let url = `${base}/delivery-zones/check?pincode=${encodeURIComponent(cleanPin)}`;
-      if (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)) {
-        url += `&lat=${lat}&lng=${lng}`;
-      }
       const res = await fetch(url);
       if (res.ok) {
-        const data = await res.json();
+        const data: PincodeCheckResponse = await res.json();
         return setCached(cacheKey, data, 300000);
       }
-      const err = await res.json().catch(() => ({}));
-      if (err.message) {
-        throw new Error(err.message);
-      }
-    } catch (fetchErr: any) {
-      if (fetchErr.message && !fetchErr.message.includes('fetch') && !fetchErr.message.includes('NetworkError') && !fetchErr.message.includes('Failed to fetch')) {
-        throw fetchErr;
-      }
+    } catch {
+      // Fall through to client-side distance heuristics
     }
 
     // Client-side fallback for Sagore kitchen (5km Free Delivery, max 15km boundary)
@@ -660,6 +671,20 @@ export const api = {
     return res.json();
   },
 
+  // 6b. Get Customer Order History by Phone
+  async getCustomerOrders(phone: string): Promise<any[]> {
+    const cleanPhone = phone.trim().replace(/\D/g, '').slice(-10);
+    if (!cleanPhone || cleanPhone.length < 10) return [];
+    const base = getApiBase();
+    try {
+      const res = await fetch(base + '/orders/customer/' + encodeURIComponent(cleanPhone), { cache: 'no-store' });
+      if (!res.ok) return [];
+      return res.json();
+    } catch {
+      return [];
+    }
+  },
+
   // 7. Kitchen KDS Admin Orders
   async getAdminOrders(): Promise<AdminOrdersResponse> {
     const base = getApiBase();
@@ -775,269 +800,250 @@ export const api = {
   async getRiderDeliveries(signal?: AbortSignal): Promise<{ deliveries: RiderDelivery[] }> {
     const base = getApiBase();
     const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
-    try {
-      const res = await fetch(`${base}/rider/deliveries`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        credentials: 'include',
-        cache: 'no-store',
-        signal,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && Array.isArray(data.deliveries)) {
-          return data;
-        }
-      }
-    } catch {
-      // Backend unavailable or request aborted
+    const res = await fetch(`${base}/rider/deliveries`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
+      cache: 'no-store',
+      signal,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to fetch rider deliveries queue');
     }
+    const data = await res.json();
+    return { deliveries: Array.isArray(data?.deliveries) ? data.deliveries : (Array.isArray(data) ? data : []) };
+  },
 
-    return { deliveries: [] };
+  // 10b. Rider Accept Delivery Assignment
+  async acceptRiderDelivery(orderId: string) {
+    const base = getApiBase();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
+    const res = await fetch(`${base}/rider/deliveries/${encodeURIComponent(orderId)}/accept`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to accept delivery assignment');
+    }
+    return res.json();
   },
 
   // 11. Rider Mark Out for Delivery (generates customer PIN)
   async markRiderOutForDelivery(orderId: string) {
     const base = getApiBase();
     const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
-    try {
-      const res = await fetch(`${base}/rider/deliveries/${encodeURIComponent(orderId)}/out-for-delivery`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        credentials: 'include',
-      });
-      if (res.ok) {
-        return res.json();
-      }
-    } catch {
-      // Offline fallback
+    const res = await fetch(`${base}/rider/deliveries/${encodeURIComponent(orderId)}/out-for-delivery`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to transition delivery to OUT_FOR_DELIVERY');
     }
-
-    throw new Error('Unable to update delivery trip status. Please check backend connection.');
+    return res.json();
   },
 
   // 12. Rider Verify Delivery OTP PIN
   async verifyRiderDeliveryOtp(orderId: string, code: string) {
     const base = getApiBase();
     const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
-    try {
-      const res = await fetch(`${base}/rider/deliveries/${encodeURIComponent(orderId)}/verify-otp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        credentials: 'include',
-        body: JSON.stringify({ code }),
-      });
-      if (res.ok) {
-        return res.json();
-      }
+    const res = await fetch(`${base}/rider/deliveries/${encodeURIComponent(orderId)}/verify-otp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+      body: JSON.stringify({ code }),
+    });
+    if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      if (res.status === 400 && err.message) {
-        throw new Error(err.message);
-      }
-    } catch (err: any) {
-      if (err.message && !err.message.includes('fetch') && !err.message.includes('NetworkError') && !err.message.includes('Failed to fetch')) {
-        throw err;
-      }
+      throw new Error(err.message || 'Failed to verify delivery OTP');
     }
+    return res.json();
+  },
 
-    throw new Error('PIN verification failed. Please enter the valid 6-digit delivery PIN provided by the customer.');
+  // 12b. Update Rider Duty Availability Status
+  async updateRiderDutyStatus(isAvailable: boolean) {
+    const base = getApiBase();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
+    const res = await fetch(`${base}/rider/deliveries/duty-status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+      body: JSON.stringify({ isAvailable }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to update duty status');
+    }
+    return res.json();
+  },
+
+  // 12c. Rider Update Real-time GPS Location Telemetry
+  async updateRiderLocation(coords: { latitude: number; longitude: number; heading?: number; speed?: number }) {
+    const base = getApiBase();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
+    const res = await fetch(`${base}/rider/deliveries/location`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+      body: JSON.stringify(coords),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to update rider location');
+    }
+    return res.json();
   },
 
   // 13. Customer Phone Login / Registration
   async loginCustomer(phone: string, name?: string, address?: any): Promise<AuthSessionResponse> {
     const base = getApiBase();
-    try {
-      const res = await fetch(`${base}/auth/customer/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, name, address }),
-        credentials: 'include',
-      });
-      if (res.ok) {
-        const data: AuthSessionResponse = await res.json();
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('jr_session_token', data.sessionToken);
-          localStorage.setItem('jr_user_profile', JSON.stringify(data.user));
-          localStorage.setItem('jr_customer_phone', phone);
-          if (name) localStorage.setItem('jr_customer_name', name);
-          if (address) localStorage.setItem('jr_customer_address', JSON.stringify(address));
-        }
-        return data;
-      }
+    const res = await fetch(`${base}/auth/customer/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, name, address }),
+      credentials: 'include',
+    });
+    if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      if (err.message) throw new Error(err.message);
-    } catch (err: any) {
-      if (err.message && !err.message.includes('fetch') && !err.message.includes('NetworkError') && !err.message.includes('Failed to fetch')) {
-        throw err;
-      }
+      throw new Error(err.message || 'Failed to log in customer');
     }
-
-    // Offline / resilient fallback session so customer is never blocked
-    const fallbackUser: UserProfile = {
-      id: 'cust_' + phone,
-      name: name || 'Customer',
-      phone,
-      role: 'CUSTOMER',
-      savedAddress: address,
-    };
-    const fallbackSession: AuthSessionResponse = {
-      user: fallbackUser,
-      sessionToken: 'session_' + Date.now(),
-      expiresAt: new Date(Date.now() + 86400000).toISOString(),
-    };
+    const data: AuthSessionResponse = await res.json();
     if (typeof window !== 'undefined') {
-      localStorage.setItem('jr_session_token', fallbackSession.sessionToken);
-      localStorage.setItem('jr_user_profile', JSON.stringify(fallbackUser));
+      localStorage.setItem('jr_session_token', data.sessionToken);
+      localStorage.setItem('jr_user_profile', JSON.stringify(data.user));
       localStorage.setItem('jr_customer_phone', phone);
       if (name) localStorage.setItem('jr_customer_name', name);
       if (address) localStorage.setItem('jr_customer_address', JSON.stringify(address));
     }
-    return fallbackSession;
+    return data;
   },
 
   // 14. Rider Login
   async loginRider(phone: string, password: string): Promise<AuthSessionResponse> {
     const base = getApiBase();
-    try {
-      const res = await fetch(`${base}/rider/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, password }),
-        credentials: 'include',
-      });
-      if (res.ok) {
-        const data: AuthSessionResponse = await res.json();
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('jr_rider_token', data.sessionToken);
-          localStorage.setItem('jr_rider_profile', JSON.stringify(data.user));
-        }
-        return data;
-      }
+    const res = await fetch(`${base}/rider/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: phone.trim(), password }),
+      credentials: 'include',
+    });
+    if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      if (res.status === 401 && err.message) {
-        throw new Error(err.message);
-      }
-    } catch (fetchErr: any) {
-      if (fetchErr.message && !fetchErr.message.includes('fetch') && !fetchErr.message.includes('NetworkError') && !fetchErr.message.includes('Failed to fetch')) {
-        throw fetchErr;
-      }
+      throw new Error(err.message || 'Invalid rider credentials.');
     }
-
-    throw new Error('Invalid rider credentials or backend offline. Please verify registered rider mobile number and shift password.');
+    const data: AuthSessionResponse = await res.json();
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('jr_rider_token', data.sessionToken);
+      localStorage.setItem('jr_rider_profile', JSON.stringify(data.user));
+    }
+    return data;
   },
 
   // 14b. Admin Login
   async loginAdmin(email: string, password: string): Promise<AuthSessionResponse> {
     const base = getApiBase();
-    try {
-      const res = await fetch(`${base}/admin/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password }),
-        credentials: 'include',
-      });
-      if (res.ok) {
-        const data: AuthSessionResponse = await res.json();
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('jr_admin_token', data.sessionToken);
-          localStorage.setItem('jr_admin_profile', JSON.stringify(data.user));
-        }
-        return data;
-      }
+    const res = await fetch(`${base}/admin/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim(), password }),
+      credentials: 'include',
+    });
+    if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      if (err.message) {
-        throw new Error(err.message);
-      }
-    } catch (fetchErr: any) {
-      if (fetchErr.message && !fetchErr.message.includes('fetch') && !fetchErr.message.includes('NetworkError') && !fetchErr.message.includes('Failed to fetch')) {
-        throw fetchErr;
-      }
+      throw new Error(err.message || 'Invalid admin email or password.');
     }
-
-    // Demo admin fallback for local dev
-    if (email.toLowerCase().includes('admin')) {
-      const demoAdmin: UserProfile = {
-        id: 'admin-super-01',
-        name: 'Janki Rasoi Admin',
-        phone: '9876543210',
-        role: 'ADMIN',
-      };
-      const mockSession: AuthSessionResponse = {
-        user: demoAdmin,
-        sessionToken: 'demo_admin_session_' + Date.now(),
-        expiresAt: new Date(Date.now() + 86400000).toISOString(),
-      };
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('jr_admin_token', mockSession.sessionToken);
-        localStorage.setItem('jr_admin_profile', JSON.stringify(demoAdmin));
-      }
-      return mockSession;
+    const data: AuthSessionResponse = await res.json();
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('jr_admin_token', data.sessionToken);
+      localStorage.setItem('jr_admin_profile', JSON.stringify(data.user));
     }
-
-    throw new Error('Invalid admin email or password.');
+    return data;
   },
 
   // 15. Get Current User Profile (Customer / Rider)
-  async getCurrentUser(): Promise<UserProfile | null> {
+  async getCurrentUser(role: 'CUSTOMER' | 'RIDER' = 'CUSTOMER'): Promise<UserProfile | null> {
     if (typeof window === 'undefined') return null;
-    const token = localStorage.getItem('jr_session_token') || localStorage.getItem('jr_rider_token');
+    const token = role === 'CUSTOMER'
+      ? localStorage.getItem('jr_session_token')
+      : localStorage.getItem('jr_rider_token');
+
     const base = getApiBase();
-    try {
-      const res = await fetch(`${base}/auth/me`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        credentials: 'include',
-        cache: 'no-store',
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.authenticated && data.user) {
-          localStorage.setItem('jr_user_profile', JSON.stringify(data.user));
-          if (data.user.phone) localStorage.setItem('jr_customer_phone', data.user.phone);
-          if (data.user.name) localStorage.setItem('jr_customer_name', data.user.name);
-          if (data.user.savedAddress) localStorage.setItem('jr_customer_address', JSON.stringify(data.user.savedAddress));
-          return data.user;
+    if (token) {
+      try {
+        const res = await fetch(`${base}/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.authenticated && data.user) {
+            // Verify role matches requested context to avoid cross-role profile bleed
+            if (role === 'CUSTOMER' && data.user.role === 'CUSTOMER') {
+              localStorage.setItem('jr_user_profile', JSON.stringify(data.user));
+              if (data.user.phone) localStorage.setItem('jr_customer_phone', data.user.phone);
+              if (data.user.name) localStorage.setItem('jr_customer_name', data.user.name);
+              if (data.user.savedAddress) localStorage.setItem('jr_customer_address', JSON.stringify(data.user.savedAddress));
+              return data.user;
+            } else if (role === 'RIDER' && data.user.role === 'RIDER') {
+              localStorage.setItem('jr_rider_profile', JSON.stringify(data.user));
+              return data.user;
+            }
+          }
         }
+      } catch {
+        // Fallback to cache
       }
-    } catch {
-      // Fallback
     }
 
-    const cached = localStorage.getItem('jr_user_profile');
-    if (cached) {
-      try { return JSON.parse(cached); } catch {}
-    }
-
-    const savedPhone = localStorage.getItem('jr_customer_phone');
-    const savedName = localStorage.getItem('jr_customer_name');
-    const savedAddrRaw = localStorage.getItem('jr_customer_address') || localStorage.getItem('jr_selected_address');
-    if (savedPhone) {
-      let savedAddress: any = undefined;
-      if (savedAddrRaw) {
-        try { savedAddress = JSON.parse(savedAddrRaw); } catch {}
+    if (role === 'CUSTOMER') {
+      const cached = localStorage.getItem('jr_user_profile');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed?.role === 'CUSTOMER') return parsed;
+        } catch {}
       }
-      const restoredUser: UserProfile = {
-        id: 'cust_' + savedPhone,
-        name: savedName || 'Customer',
-        phone: savedPhone,
-        role: 'CUSTOMER',
-        savedAddress,
-      };
-      localStorage.setItem('jr_user_profile', JSON.stringify(restoredUser));
-      return restoredUser;
+    } else if (role === 'RIDER') {
+      const cached = localStorage.getItem('jr_rider_profile');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed?.role === 'RIDER') return parsed;
+        } catch {}
+      }
     }
-
     return null;
   },
 
-  // 16. Logout
-  async logout(): Promise<void> {
+  // 16. Logout (Role-isolated to prevent customer session clearing on rider actions)
+  async logout(role: 'CUSTOMER' | 'RIDER' | 'ALL' = 'CUSTOMER'): Promise<void> {
     const base = getApiBase();
-    const token = typeof window !== 'undefined' ? (localStorage.getItem('jr_session_token') || localStorage.getItem('jr_rider_token')) : null;
+    let token: string | null = null;
+    if (typeof window !== 'undefined') {
+      if (role === 'CUSTOMER') token = localStorage.getItem('jr_session_token');
+      else if (role === 'RIDER') token = localStorage.getItem('jr_rider_token');
+      else token = localStorage.getItem('jr_session_token') || localStorage.getItem('jr_rider_token');
+    }
+
     try {
       await fetch(`${base}/auth/logout`, {
         method: 'POST',
@@ -1047,11 +1053,16 @@ export const api = {
     } catch {
       // ignore
     }
+
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('jr_session_token');
-      localStorage.removeItem('jr_user_profile');
-      localStorage.removeItem('jr_rider_token');
-      localStorage.removeItem('jr_rider_profile');
+      if (role === 'CUSTOMER' || role === 'ALL') {
+        localStorage.removeItem('jr_session_token');
+        localStorage.removeItem('jr_user_profile');
+      }
+      if (role === 'RIDER' || role === 'ALL') {
+        localStorage.removeItem('jr_rider_token');
+        localStorage.removeItem('jr_rider_profile');
+      }
     }
   },
 };

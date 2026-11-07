@@ -33,20 +33,18 @@ export class PaymentsService {
   async verifyPayment(dto: VerifyPaymentDto) {
     const secret = this.configService.get<string>('RAZORPAY_KEY_SECRET');
     if (!secret) {
-      this.logger.warn('RAZORPAY_KEY_SECRET not set; running in mock signature mode.');
+      throw new BadRequestException('RAZORPAY_KEY_SECRET is not configured on the server.');
     }
 
-    if (secret) {
-      const generatedSignature = createHmac('sha256', secret)
-        .update(`${dto.razorpayOrderId}|${dto.razorpayPaymentId}`)
-        .digest('hex');
+    const generatedSignature = createHmac('sha256', secret)
+      .update(`${dto.razorpayOrderId}|${dto.razorpayPaymentId}`)
+      .digest('hex');
 
-      if (generatedSignature !== dto.razorpaySignature) {
-        throw new BadRequestException({
-          code: 'PAYMENT_SIGNATURE_MISMATCH',
-          message: 'Razorpay cryptographic payment signature verification failed.',
-        });
-      }
+    if (generatedSignature !== dto.razorpaySignature) {
+      throw new BadRequestException({
+        code: 'PAYMENT_SIGNATURE_MISMATCH',
+        message: 'Razorpay cryptographic payment signature verification failed.',
+      });
     }
 
     // Atomically update Order and PaymentAttempt
@@ -199,8 +197,11 @@ export class PaymentsService {
       throw new BadRequestException('Cannot refund order without captured online payment');
     }
 
-    let rzpRefundId = 'rfnd_mock_' + Date.now();
-    if (this.razorpayClient && paymentAttempt?.providerPaymentId) {
+    let rzpRefundId: string;
+    if (order.paymentMethod === 'RAZORPAY') {
+      if (!this.razorpayClient || !paymentAttempt?.providerPaymentId) {
+        throw new BadRequestException('Cannot process Razorpay refund: gateway not initialized or missing payment ID');
+      }
       try {
         const rzpRefund = await this.razorpayClient.payments.refund(paymentAttempt.providerPaymentId, {
           amount: dto.amountPaise,
@@ -211,6 +212,8 @@ export class PaymentsService {
         this.logger.error(`Razorpay refund failed: ${(err as Error).message}`);
         throw new BadRequestException(`Provider refund failed: ${(err as Error).message}`);
       }
+    } else {
+      rzpRefundId = 'COD_REFUND_' + Date.now();
     }
 
     return this.prisma.$transaction(async (tx) => {

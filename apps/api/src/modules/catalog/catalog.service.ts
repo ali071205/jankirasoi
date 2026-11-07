@@ -15,10 +15,65 @@ interface CachedCatalog {
 export function optimizeCloudinaryUrl(url?: string): string | undefined {
   if (!url) return url;
   if (url.includes('cloudinary.com') && url.includes('/upload/') && !url.includes('/f_auto')) {
-    return url.replace('/upload/', '/upload/f_auto,q_auto,w_1200,c_limit/');
+    return url.replace('/upload/', '/upload/f_auto,q_auto,w_600,c_limit/');
+  }
+  if (url.includes('images.unsplash.com')) {
+    try {
+      const u = new URL(url);
+      u.searchParams.set('auto', 'format');
+      u.searchParams.set('fit', 'crop');
+      if (!u.searchParams.has('w') || parseInt(u.searchParams.get('w') || '0', 10) > 600) {
+        u.searchParams.set('w', '600');
+      }
+      u.searchParams.set('q', '75');
+      return u.toString();
+    } catch (e) {
+      return url;
+    }
   }
   return url;
 }
+
+export const SUPABASE_STORAGE_DISHES_BASE = 'https://yxvwgcjavxeqsttzcbty.supabase.co/storage/v1/object/public/menu/dishes';
+
+export const DEFAULT_DISH_IMAGES: Record<string, string> = {
+  'aloo-gobhi': `${SUPABASE_STORAGE_DISHES_BASE}/aloo-gobhi.jpg`,
+  'aloo-matar': `${SUPABASE_STORAGE_DISHES_BASE}/aloo-matar.jpg`,
+  'aloo-paratha': `${SUPABASE_STORAGE_DISHES_BASE}/aloo-paratha.jpg`,
+  'aloo-tamatar': `${SUPABASE_STORAGE_DISHES_BASE}/aloo-tamatar.jpg`,
+  'chana-masala': `${SUPABASE_STORAGE_DISHES_BASE}/chana-masala.jpg`,
+  'dal-bati-thali': `${SUPABASE_STORAGE_DISHES_BASE}/dal-bati-thali.jpg`,
+  'dal-fry': `${SUPABASE_STORAGE_DISHES_BASE}/dal-fry.jpg`,
+  'dal-tadka': `${SUPABASE_STORAGE_DISHES_BASE}/dal-tadka.jpg`,
+  'finger-chips': `${SUPABASE_STORAGE_DISHES_BASE}/finger-chips.jpg`,
+  'gobhi-paratha': `${SUPABASE_STORAGE_DISHES_BASE}/gobhi-paratha.jpg`,
+  'gud-ki-chai': `${SUPABASE_STORAGE_DISHES_BASE}/gud-ki-chai.jpg`,
+  'indori-poha-special-nashta': `${SUPABASE_STORAGE_DISHES_BASE}/indori-poha-special-nashta.jpg`,
+  'jeera-dal': `${SUPABASE_STORAGE_DISHES_BASE}/jeera-dal.jpg`,
+  'jeera-rice': `${SUPABASE_STORAGE_DISHES_BASE}/jeera-rice.jpg`,
+  'kadhai-paneer': `${SUPABASE_STORAGE_DISHES_BASE}/kadhai-paneer.jpg`,
+  'matar-paneer': `${SUPABASE_STORAGE_DISHES_BASE}/matar-paneer.jpg`,
+  'matar-pulao': `${SUPABASE_STORAGE_DISHES_BASE}/matar-pulao.jpg`,
+  'mix-dal': `${SUPABASE_STORAGE_DISHES_BASE}/mix-dal.jpg`,
+  'mix-sabzi': `${SUPABASE_STORAGE_DISHES_BASE}/mix-sabzi.jpg`,
+  'paneer-masala': `${SUPABASE_STORAGE_DISHES_BASE}/paneer-masala.jpg`,
+  'paneer-paratha': `${SUPABASE_STORAGE_DISHES_BASE}/paneer-paratha.jpg`,
+  'plain-paratha': `${SUPABASE_STORAGE_DISHES_BASE}/plain-paratha.jpg`,
+  'plain-rice': `${SUPABASE_STORAGE_DISHES_BASE}/plain-rice.jpg`,
+  'sadi-thali': `${SUPABASE_STORAGE_DISHES_BASE}/sadi-thali.jpg`,
+  'sev-bhaji': `${SUPABASE_STORAGE_DISHES_BASE}/sev-bhaji.jpg`,
+  'sev-masala': `${SUPABASE_STORAGE_DISHES_BASE}/sev-masala.jpg`,
+  'sev-paratha': `${SUPABASE_STORAGE_DISHES_BASE}/sev-paratha.jpg`,
+  'sev-tamatar': `${SUPABASE_STORAGE_DISHES_BASE}/sev-tamatar.jpg`,
+  'shahi-paneer': `${SUPABASE_STORAGE_DISHES_BASE}/shahi-paneer.jpg`,
+  'special-thali-bhar-pet': `${SUPABASE_STORAGE_DISHES_BASE}/special-thali-bhar-pet.jpg`,
+  'urad-chana-dal': `${SUPABASE_STORAGE_DISHES_BASE}/urad-chana-dal.jpg`,
+  'executive-north-indian-thali': `${SUPABASE_STORAGE_DISHES_BASE}/special-thali-bhar-pet.jpg`,
+  'homestyle-dal-khichdi-bowl': `${SUPABASE_STORAGE_DISHES_BASE}/mix-dal.jpg`,
+  'janaki-special-full-thali': `${SUPABASE_STORAGE_DISHES_BASE}/special-thali-bhar-pet.jpg`,
+  'regular-home-thali': `${SUPABASE_STORAGE_DISHES_BASE}/sadi-thali.jpg`,
+  'roti-sabzi-duo': `${SUPABASE_STORAGE_DISHES_BASE}/mix-sabzi.jpg`,
+};
 
 /**
  * Normalizes dates to Indian Standard Time (IST / Asia/Kolkata) calendar day
@@ -40,7 +95,7 @@ function getNormalizedServiceDate(serviceDateString?: string): { dateObj: Date; 
 @Injectable()
 export class CatalogService {
   private readonly catalogCache = new Map<string, CachedCatalog>();
-  private readonly CACHE_TTL_MS = 5_000; // 5s short in-memory cache for high-concurrency surge protection
+  private readonly CACHE_TTL_MS = 60_000; // 60s in-memory cache for high-concurrency surge protection
 
   constructor(
     private readonly prisma: PrismaService,
@@ -112,7 +167,7 @@ export class CatalogService {
             slug: p.slug,
             description: p.description,
             dietaryType: p.dietaryType,
-            imageUrl: optimizeCloudinaryUrl(p.imageUrl),
+            imageUrl: optimizeCloudinaryUrl(p.imageUrl?.trim() || DEFAULT_DISH_IMAGES[p.slug] || '/images/dishes/special-thali-bhar-pet.jpg'),
             basePricePaise: p.basePricePaise,
             taxRatePercent: p.taxRatePercent,
             isSoldOut,

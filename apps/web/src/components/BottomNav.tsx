@@ -135,20 +135,20 @@ export default function BottomNav() {
             <span className="text-xs font-semibold">Home</span>
           </Link>
 
-          {/* 2. Orders (Live Track) */}
+          {/* 2. Orders */}
           <Link
-            href="/track"
+            href="/orders"
             className={`flex flex-col items-center justify-center gap-0.5 min-w-[72px] h-14 transition-colors ${
-              pathname === '/track'
+              pathname === '/orders' || pathname === '/track'
                 ? 'text-[#38754A] font-bold'
                 : 'text-[#77786F] hover:text-[#292D26]'
             }`}
           >
             <span
               className="material-symbols-outlined text-[26px]"
-              style={pathname === '/track' ? { fontVariationSettings: "'FILL' 1" } : undefined}
+              style={pathname === '/orders' || pathname === '/track' ? { fontVariationSettings: "'FILL' 1" } : undefined}
             >
-              moped
+              receipt_long
             </span>
             <span className="text-xs font-semibold">Orders</span>
           </Link>

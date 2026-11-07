@@ -72,7 +72,7 @@ export class DeliveryOtpService {
       });
       if (riderProfile) {
         const assignment = await this.prisma.riderAssignment.findFirst({
-          where: { orderId, riderId: riderProfile.id, status: 'ASSIGNED' },
+          where: { orderId, riderId: riderProfile.id, status: { in: ['ASSIGNED', 'ACCEPTED'] } },
         });
         if (!assignment) {
           throw new ForbiddenException({
@@ -144,6 +144,12 @@ export class DeliveryOtpService {
       const updatedOrder = await tx.order.update({
         where: { id: orderId },
         data: { status: 'DELIVERED' },
+      });
+
+      // Mark assigned rider delivery completed
+      await tx.riderAssignment.updateMany({
+        where: { orderId, status: { in: ['ASSIGNED', 'ACCEPTED'] } },
+        data: { status: 'COMPLETED' },
       });
 
       await tx.orderStatusEvent.create({

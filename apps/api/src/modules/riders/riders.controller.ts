@@ -1,7 +1,7 @@
 import { Controller, Get, Patch, Post, Param, Body, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { RidersService } from './riders.service';
-import { VerifyOtpDto, DeliveryExceptionDto } from './dto/riders.dto';
+import { VerifyOtpDto, DeliveryExceptionDto, UpdateDutyStatusDto, UpdateLocationDto } from './dto/riders.dto';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Request } from 'express';
@@ -13,11 +13,32 @@ import { Request } from 'express';
 export class RidersController {
   constructor(private readonly ridersService: RidersService) {}
 
+  @Post('location')
+  @ApiOperation({ summary: 'Update rider live GPS location and heading' })
+  async updateLocation(@Body() dto: UpdateLocationDto, @Req() req: Request) {
+    const riderUserId = (req as any).user?.id;
+    return this.ridersService.updateLocation(riderUserId, dto);
+  }
+
+  @Patch('duty-status')
+  @ApiOperation({ summary: 'Update rider online/offline duty availability status' })
+  async updateDutyStatus(@Body() dto: UpdateDutyStatusDto, @Req() req: Request) {
+    const riderUserId = (req as any).user?.id;
+    return this.ridersService.updateDutyStatus(riderUserId, dto.isAvailable);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get deliveries assigned to logged-in rider' })
   async getDeliveries(@Req() req: Request) {
     const riderUserId = (req as any).user?.id;
     return this.ridersService.getAssignedDeliveries(riderUserId);
+  }
+
+  @Patch(':id/accept')
+  @ApiOperation({ summary: 'Rider accepts assigned delivery batch' })
+  async acceptDelivery(@Param('id') orderId: string, @Req() req: Request) {
+    const riderUserId = (req as any).user?.id;
+    return this.ridersService.acceptDelivery(orderId, riderUserId);
   }
 
   @Patch(':id/out-for-delivery')

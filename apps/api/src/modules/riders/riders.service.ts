@@ -42,33 +42,15 @@ export class RidersService {
       return { deliveries: [] };
     }
 
-    // Auto-assign any active unassigned orders to available rider so riders can immediately deliver
-    if (riderProfileId) {
-      const unassignedOrders = await this.prisma.order.findMany({
-        where: {
-          status: { in: ['READY_FOR_PICKUP'] },
-          riderAssignments: {
-            none: { status: 'ASSIGNED' },
-          },
-        },
-        take: 10,
-      });
-
-      for (const unassigned of unassignedOrders) {
-        await this.prisma.riderAssignment.create({
-          data: {
-            orderId: unassigned.id,
-            riderId: riderProfileId,
-            status: 'ASSIGNED',
-          },
-        }).catch(() => {});
-      }
-    }
-
     const assignments = await this.prisma.riderAssignment.findMany({
       where: {
-        status: 'ASSIGNED',
         ...(riderProfileId ? { riderId: riderProfileId } : {}),
+        OR: [
+          { status: 'ASSIGNED' },
+          { status: 'ACCEPTED' },
+          { status: 'COMPLETED' },
+          { order: { status: 'DELIVERED' } },
+        ],
       },
       include: {
         order: {
@@ -79,12 +61,21 @@ export class RidersService {
         },
       },
       orderBy: { assignedAt: 'desc' },
+      take: 50,
     });
 
-    const ordersToDisplay = assignments.map((a) => a.order);
+    // Deduplicate orders by ID to prevent duplicate deliveries from reassigned/multi-attempt records
+    const seenOrderIds = new Set<string>();
+    const ordersToDisplay: { order: (typeof assignments)[0]['order']; assignmentStatus: string }[] = [];
+    for (const a of assignments) {
+      if (a.order && !seenOrderIds.has(a.order.id)) {
+        seenOrderIds.add(a.order.id);
+        ordersToDisplay.push({ order: a.order, assignmentStatus: a.status });
+      }
+    }
 
     return {
-      deliveries: ordersToDisplay.map((o) => {
+      deliveries: ordersToDisplay.map(({ order: o, assignmentStatus }) => {
         const addr = (o.deliveryAddress as any) || {};
         const rawLat = Number(addr.latitude);
         const rawLng = Number(addr.longitude);
@@ -117,6 +108,7 @@ export class RidersService {
           orderId: o.id,
           orderNumber: o.orderNumber,
           status: o.status,
+          assignmentStatus,
           customerName: o.customerName,
           customerPhone: o.customerPhone,
           deliveryAddress: `${addr.flat || ''}, ${addr.street || ''}, ${addr.pincode || ''}`.replace(/^,\s*|,\s*$/g, ''),
@@ -129,6 +121,50 @@ export class RidersService {
           itemsSummary: o.items.map((i) => `${i.quantity}x ${i.productName}`).join(', '),
         };
       }),
+    };
+  }
+
+  async acceptDelivery(orderId: string, riderUserId?: string) {
+    let riderProfileId: string | undefined = undefined;
+    if (riderUserId) {
+      const profile = await this.prisma.riderProfile.findFirst({
+        where: { OR: [{ id: riderUserId }, { userId: riderUserId }] },
+      });
+      if (profile) riderProfileId = profile.id;
+    }
+
+    const assignment = await this.prisma.riderAssignment.findFirst({
+      where: {
+        orderId,
+        ...(riderProfileId ? { riderId: riderProfileId } : {}),
+        status: 'ASSIGNED',
+      },
+      orderBy: { assignedAt: 'desc' },
+    });
+
+    if (!assignment) {
+      const existing = await this.prisma.riderAssignment.findFirst({
+        where: {
+          orderId,
+          ...(riderProfileId ? { riderId: riderProfileId } : {}),
+          status: 'ACCEPTED',
+        },
+      });
+      if (existing) {
+        return { success: true, assignment: existing, message: 'Delivery already accepted' };
+      }
+      throw new NotFoundException('Pending delivery assignment not found');
+    }
+
+    const updated = await this.prisma.riderAssignment.update({
+      where: { id: assignment.id },
+      data: { status: 'ACCEPTED' },
+    });
+
+    return {
+      success: true,
+      assignment: updated,
+      message: 'Delivery assignment accepted successfully',
     };
   }
 
@@ -150,6 +186,12 @@ export class RidersService {
       await tx.order.update({
         where: { id: orderId },
         data: { status: 'OUT_FOR_DELIVERY' },
+      });
+
+      // Ensure assignment moves to ACCEPTED if it was still pending in ASSIGNED
+      await tx.riderAssignment.updateMany({
+        where: { orderId, status: 'ASSIGNED' },
+        data: { status: 'ACCEPTED' },
       });
 
       // Record status event atomically with the update
@@ -252,5 +294,82 @@ export class RidersService {
         message: 'Delivery exception successfully recorded. Kitchen manager notified.',
       };
     });
+  }
+
+  async updateDutyStatus(riderUserId: string, isAvailable: boolean) {
+    let profile = await this.prisma.riderProfile.findFirst({
+      where: {
+        OR: [{ id: riderUserId }, { userId: riderUserId }],
+      },
+    });
+
+    if (!profile) {
+      profile = await this.prisma.riderProfile.create({
+        data: {
+          userId: riderUserId,
+          vehicleNumber: 'MP-09-JR-2026',
+          isAvailable,
+        },
+      });
+    } else {
+      profile = await this.prisma.riderProfile.update({
+        where: { id: profile.id },
+        data: { isAvailable },
+      });
+    }
+
+    return {
+      success: true,
+      isAvailable: profile.isAvailable,
+      message: profile.isAvailable ? 'Rider marked ON DUTY' : 'Rider marked OFFLINE',
+    };
+  }
+
+  // In-Memory Ephemeral Geospatial Cache (Zero SQL Disk Thrashing - Swiggy/Zomato style)
+  private static riderLocations = new Map<string, {
+    latitude: number;
+    longitude: number;
+    heading?: number;
+    speed?: number;
+    updatedAt: string;
+  }>();
+
+  async updateLocation(riderUserId: string, dto: { latitude: number; longitude: number; heading?: number; speed?: number }) {
+    const lat = Number(dto.latitude);
+    const lng = Number(dto.longitude);
+    if (isNaN(lat) || isNaN(lng)) {
+      throw new BadRequestException('Invalid GPS coordinates');
+    }
+
+    const payload = {
+      latitude: lat,
+      longitude: lng,
+      heading: dto.heading ?? 0,
+      speed: dto.speed ?? 0,
+      updatedAt: new Date().toISOString(),
+    };
+
+    RidersService.riderLocations.set(riderUserId, payload);
+
+    try {
+      const profile = await this.prisma.riderProfile.findFirst({
+        where: { OR: [{ userId: riderUserId }, { id: riderUserId }] },
+        select: { id: true, userId: true },
+      });
+      if (profile) {
+        RidersService.riderLocations.set(profile.id, payload);
+        RidersService.riderLocations.set(profile.userId, payload);
+      }
+    } catch {}
+
+    return {
+      success: true,
+      location: payload,
+    };
+  }
+
+  static getRiderLocation(riderIdOrUserId?: string) {
+    if (!riderIdOrUserId) return null;
+    return RidersService.riderLocations.get(riderIdOrUserId) || null;
   }
 }

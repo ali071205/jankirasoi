@@ -5,7 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AdminLoginDto, RiderLoginDto, CustomerLoginDto } from './dto/auth.dto';
+import { AdminLoginDto, RiderLoginDto, CustomerLoginDto, CreateRiderDto, ToggleRiderAvailabilityDto } from './dto/auth.dto';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 
@@ -327,6 +327,7 @@ export class AuthService {
       include: {
         riderProfile: true,
       },
+      orderBy: { createdAt: 'desc' },
     });
 
     const result = await Promise.all(
@@ -337,7 +338,7 @@ export class AuthService {
             profile = await this.prisma.riderProfile.create({
               data: {
                 userId: r.id,
-                vehicleNumber: 'DL-01-AB-1234',
+                vehicleNumber: 'MP-09-JR-2026',
                 isAvailable: true,
               },
             });
@@ -350,7 +351,7 @@ export class AuthService {
           userId: r.id,
           name: r.name,
           phone: r.phone,
-          vehicleNumber: profile?.vehicleNumber || 'DL-01-AB-1234',
+          vehicleNumber: profile?.vehicleNumber || 'MP-09-JR-2026',
           isAvailable: profile?.isAvailable ?? true,
           isActive: r.isActive,
         };
@@ -360,6 +361,104 @@ export class AuthService {
     return {
       riders: result,
     };
+  }
+
+  async createAdminRider(dto: CreateRiderDto) {
+    const phone = dto.phone.trim().replace(/\D/g, '');
+    if (!phone) {
+      throw new BadRequestException('Valid phone number is required');
+    }
+
+    const existing = await this.prisma.user.findUnique({ where: { phone } });
+    if (existing) {
+      throw new BadRequestException(`A user with phone number ${phone} is already registered`);
+    }
+
+    const password = dto.password?.trim() || '200720';
+    const passwordHash = await this.hashPassword(password);
+    const vehicleNumber = dto.vehicleNumber?.trim() || 'MP-09-JR-2026';
+
+    const user = await this.prisma.user.create({
+      data: {
+        name: dto.name.trim(),
+        phone,
+        passwordHash,
+        role: 'RIDER',
+        isActive: true,
+        riderProfile: {
+          create: {
+            vehicleNumber,
+            isAvailable: true,
+          },
+        },
+      },
+      include: { riderProfile: true },
+    });
+
+    return {
+      success: true,
+      rider: {
+        id: user.riderProfile?.id || user.id,
+        userId: user.id,
+        name: user.name,
+        phone: user.phone,
+        vehicleNumber: user.riderProfile?.vehicleNumber,
+        isAvailable: user.riderProfile?.isAvailable,
+        isActive: user.isActive,
+      },
+    };
+  }
+
+  async toggleAdminRiderAvailability(riderId: string, isAvailable: boolean) {
+    const profile = await this.prisma.riderProfile.findFirst({
+      where: {
+        OR: [{ id: riderId }, { userId: riderId }],
+      },
+    });
+
+    if (!profile) {
+      throw new BadRequestException(`Rider profile ${riderId} not found`);
+    }
+
+    const updated = await this.prisma.riderProfile.update({
+      where: { id: profile.id },
+      data: { isAvailable },
+      include: { user: true },
+    });
+
+    return {
+      success: true,
+      rider: {
+        id: updated.id,
+        userId: updated.userId,
+        name: updated.user.name,
+        phone: updated.user.phone,
+        vehicleNumber: updated.vehicleNumber,
+        isAvailable: updated.isAvailable,
+        isActive: updated.user.isActive,
+      },
+    };
+  }
+
+  async deleteAdminRider(riderId: string) {
+    const profile = await this.prisma.riderProfile.findFirst({
+      where: {
+        OR: [{ id: riderId }, { userId: riderId }],
+      },
+      include: { user: true },
+    });
+
+    if (!profile) {
+      throw new BadRequestException(`Rider profile ${riderId} not found`);
+    }
+
+    // Delete active sessions and assignments for this rider
+    await this.prisma.session.deleteMany({ where: { userId: profile.userId } });
+    await this.prisma.riderAssignment.deleteMany({ where: { riderId: profile.id } });
+    await this.prisma.riderProfile.delete({ where: { id: profile.id } });
+    await this.prisma.user.delete({ where: { id: profile.userId } });
+
+    return { success: true, message: 'Rider deleted successfully' };
   }
 
   async logout(token: string) {

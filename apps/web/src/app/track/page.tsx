@@ -9,10 +9,13 @@ import React, {
 } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { api, TrackOrderResponse, CatalogResponse, DEFAULT_FOOD_IMAGE } from '../../lib/api';
 import { getActiveTrackingIdentifier } from '../../lib/orderStorage';
 import LakhanAvatar from '../../components/LakhanAvatar';
 import TrackingRoadMap from '../../components/TrackingRoadMap';
+
+const LiveDeliveryMap = dynamic(() => import('../../components/LiveDeliveryMap'), { ssr: false });
 
 // ── Delivery timeline steps ─────────────────────────────────────────────────
 const TIMELINE_STEPS = [
@@ -319,22 +322,34 @@ function DeliveryDetailsCard({ order }: { order: TrackOrderResponse }) {
 
         {showItems && (
           <div className="mt-3 flex flex-col gap-2 pt-2 border-t border-slate-100">
-            {order.items?.map((it, idx) => (
-              <div key={idx} className="flex items-center justify-between text-xs py-1">
-                <span className="font-semibold text-slate-800">
-                  {it.quantity}x {it.name}
-                </span>
-                {it.variant && <span className="text-slate-500 text-[11px]">{it.variant}</span>}
+            {order.items?.map((it, idx) => {
+              const itemTotal = (it.totalPricePaise ?? (it.unitPricePaise ? it.unitPricePaise * it.quantity : 0)) / 100;
+              return (
+                <div key={idx} className="flex items-center justify-between text-xs py-1">
+                  <span className="font-semibold text-slate-800">
+                    {it.quantity}x {it.name}
+                    {it.variant && <span className="text-slate-500 text-[11px] ml-1">({it.variant})</span>}
+                  </span>
+                  {itemTotal > 0 && <span className="font-mono font-bold text-slate-900">₹{itemTotal.toFixed(0)}</span>}
+                </div>
+              );
+            })}
+            <div className="flex flex-col gap-1 pt-2 border-t border-slate-100 text-xs">
+              <div className="flex justify-between text-[11px] text-slate-500">
+                <span>Items Subtotal</span>
+                <span>₹{((order.subtotalPaise ?? (order.totalAmountPaise - (order.taxPaise || 0))) / 100).toFixed(0)}</span>
               </div>
-            ))}
-            <div className="flex justify-between text-xs font-extrabold text-slate-900 pt-2 border-t border-slate-100">
-              <span>Total Bill</span>
-              <span className="text-emerald-700">
-                ₹{(order.totalAmountPaise / 100).toFixed(0)}
-              </span>
-            </div>
-            <div className="text-[11px] text-slate-500">
-              Payment mode: {order.paymentMethod === 'COD' ? '💵 Cash on Delivery' : '💳 Online Payment'}
+              <div className="flex justify-between text-[11px] text-slate-500">
+                <span>GST (5%)</span>
+                <span className="text-emerald-700 font-semibold">+₹{((order.taxPaise ?? Math.round(order.totalAmountPaise * 0.05 / 1.05)) / 100).toFixed(0)}</span>
+              </div>
+              <div className="flex justify-between text-xs font-black text-slate-900 pt-1 border-t border-slate-100">
+                <span>Total with GST</span>
+                <span className="text-emerald-700">₹{(order.totalAmountPaise / 100).toFixed(0)}</span>
+              </div>
+              <div className="text-[11px] text-slate-500 mt-1">
+                Payment mode: {order.paymentMethod === 'COD' ? '💵 Cash on Delivery' : '💳 Online Payment'}
+              </div>
             </div>
           </div>
         )}

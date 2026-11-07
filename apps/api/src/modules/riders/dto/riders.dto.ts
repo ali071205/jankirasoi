@@ -20,3 +20,25 @@ export class DeliveryExceptionDto {
   @IsNotEmpty()
   notes: string;
 }
+
+export class UpdateDutyStatusDto {
+  @ApiProperty({ example: true })
+  @IsNotEmpty()
+  isAvailable: boolean;
+}
+
+export class UpdateLocationDto {
+  @ApiProperty({ example: 22.6288, description: 'GPS Latitude' })
+  @IsNotEmpty()
+  latitude: number;
+
+  @ApiProperty({ example: 75.5684, description: 'GPS Longitude' })
+  @IsNotEmpty()
+  longitude: number;
+
+  @ApiProperty({ example: 45, required: false, description: 'Heading in degrees' })
+  heading?: number;
+
+  @ApiProperty({ example: 25, required: false, description: 'Speed in km/h' })
+  speed?: number;
+}

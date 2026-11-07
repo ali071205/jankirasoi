@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { OrderStatus } from '@prisma/client';
 import { randomInt, createHmac } from 'crypto';
 import { OrdersEventsService } from '../events/orders-events.service';
+import { RidersService } from '../riders/riders.service';
 
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   AWAITING_PAYMENT: ['PLACED', 'CANCELLED'],
@@ -54,21 +55,21 @@ export class OrdersService {
       orderBy: { createdAt: 'desc' },
       include: {
         deliverySlot: true,
+        riderAssignments: {
+          where: { status: { in: ['ASSIGNED', 'ACCEPTED'] } },
+          orderBy: { assignedAt: 'desc' },
+          take: 1,
+          include: {
+            rider: {
+              include: { user: { select: { id: true, name: true, phone: true } } },
+            },
+          },
+        },
         items: {
           include: { addons: true },
         },
         statusHistory: {
           orderBy: { createdAt: 'asc' },
-        },
-        riderAssignments: {
-          where: { status: { in: ['ASSIGNED', 'ACCEPTED'] } },
-          include: {
-            rider: {
-              include: { user: true },
-            },
-          },
-          orderBy: { assignedAt: 'desc' },
-          take: 1,
         },
       },
     });
@@ -122,9 +123,43 @@ export class OrdersService {
         }
         otpExpiresAt = activeOtp.expiresAt.toISOString();
       }
+    }
 
-      // If no existing active OTP (e.g. first tracking load before rider dispatched),
-      // we do NOT auto-generate one here — OTP creation is triggered only by rider dispatch.
+    // Parse destination coordinates (from address JSON)
+    const addr = (order.deliveryAddress as any) || {};
+    const rawLat = Number(addr.latitude);
+    const rawLng = Number(addr.longitude);
+    const hasValidLocalCoords =
+      !isNaN(rawLat) &&
+      !isNaN(rawLng) &&
+      rawLat >= 22.0 &&
+      rawLat <= 23.5 &&
+      rawLng >= 75.0 &&
+      rawLng <= 76.5;
+
+    const destLat = hasValidLocalCoords ? rawLat : 22.6312;
+    const destLng = hasValidLocalCoords ? rawLng : 75.5715;
+
+    // Attach assigned rider and live in-memory telemetry
+    const assigned = (order as any).riderAssignments?.[0]?.rider;
+    let riderData: any = null;
+    if (assigned) {
+      const liveLoc =
+        RidersService.getRiderLocation(assigned.id) ||
+        RidersService.getRiderLocation(assigned.userId);
+
+      riderData = {
+        name: assigned.user?.name || 'Assigned Delivery Partner',
+        phone: assigned.user?.phone || '',
+        vehicleNumber: assigned.vehicleNumber || 'MP-09-JR-2026',
+        location: liveLoc || {
+          latitude: 22.6288,
+          longitude: 75.5684,
+          heading: 0,
+          speed: 0,
+          updatedAt: new Date().toISOString(),
+        },
+      };
     }
 
     return {
@@ -144,6 +179,14 @@ export class OrdersService {
       riderPhone,
       deliveryOtp,
       otpExpiresAt,
+      rider: riderData,
+      coordinates: { latitude: destLat, longitude: destLng },
+      kitchenCoordinates: {
+        latitude: 22.6288,
+        longitude: 75.5684,
+        name: 'Janki Rasoi Cloud Kitchen',
+        address: 'Main Bazar, Sagore, Pithampur',
+      },
       items: order.items.map((i) => ({
         name: i.productName,
         variant: i.variantName,
@@ -156,6 +199,41 @@ export class OrdersService {
         reason: h.reason,
       })),
     };
+  }
+
+  async getCustomerOrders(phone: string) {
+    const cleanPhone = phone.trim().replace(/\D/g, '').slice(-10);
+    if (!cleanPhone || cleanPhone.length < 10) return [];
+
+    const orders = await this.prisma.order.findMany({
+      where: {
+        customerPhone: { endsWith: cleanPhone },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      include: {
+        deliverySlot: true,
+        items: true,
+      },
+    });
+
+    return orders.map((o) => ({
+      id: o.orderNumber,
+      orderNumber: o.orderNumber,
+      trackingToken: o.trackingToken,
+      status: o.status,
+      totalAmountPaise: o.totalAmountPaise,
+      paymentMethod: o.paymentMethod,
+      createdAt: o.createdAt.toISOString(),
+      itemsSummary: o.items.map((i) => i.quantity + 'x ' + i.productName).join(' • ') || 'Homestyle Pure Veg Meal',
+      deliveryAddress: o.deliveryAddress,
+      items: o.items.map((i) => ({
+        name: i.productName,
+        quantity: i.quantity,
+        variant: i.variantName,
+        pricePaise: i.unitPricePaise,
+      })),
+    }));
   }
 
   async getAdminOrders(status?: OrderStatus, serviceDateString?: string, page = 1, limit = 25) {
@@ -172,7 +250,9 @@ export class OrdersService {
         include: {
           deliverySlot: true,
           riderAssignments: {
-            where: { status: 'ASSIGNED' },
+            where: { status: { in: ['ASSIGNED', 'ACCEPTED'] } },
+            orderBy: { assignedAt: 'desc' },
+            take: 1,
             include: {
               rider: {
                 include: { user: { select: { id: true, name: true, phone: true } } },
@@ -207,6 +287,7 @@ export class OrdersService {
               id: o.riderAssignments[0].rider.id,
               name: o.riderAssignments[0].rider.user.name,
               phone: o.riderAssignments[0].rider.user.phone,
+              assignmentStatus: o.riderAssignments[0].status,
             }
           : null,
         itemsCount: o.items.reduce((sum, it) => sum + it.quantity, 0),
@@ -338,7 +419,7 @@ export class OrdersService {
 
       // 2. Mark previous assignments cancelled
       await tx.riderAssignment.updateMany({
-        where: { orderId, status: 'ASSIGNED' },
+        where: { orderId, status: { in: ['ASSIGNED', 'ACCEPTED'] } },
         data: { status: 'CANCELLED' },
       });
 
@@ -434,6 +515,11 @@ export class OrdersService {
       const updated = await tx.order.update({
         where: { id: orderId },
         data: { status: 'DELIVERED' },
+      });
+
+      await tx.riderAssignment.updateMany({
+        where: { orderId, status: { in: ['ASSIGNED', 'ACCEPTED'] } },
+        data: { status: 'COMPLETED' },
       });
 
       await tx.orderStatusEvent.create({

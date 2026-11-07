@@ -424,25 +424,26 @@ export default function LocationMapModal({
               )}
             </div>
 
-            {/* 3. Three Action Cards Row (Exact Match with Reference 1) */}
-            <div className="grid grid-cols-3 gap-2.5 px-4 pt-2 pb-3 shrink-0">
+            {/* 3. Action Cards Row: Use Current Location & Add New Address */}
+            <div className="grid grid-cols-2 gap-3 px-4 pt-2 pb-3 shrink-0">
               
-              {/* Card 1: Turn on Location */}
+              {/* Card 1: Current Location */}
               <button
                 type="button"
                 onClick={handleUseCurrentLocation}
                 disabled={isGpsLoading}
-                className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-all flex flex-col items-start justify-between min-h-[96px] text-left group active:scale-98"
+                className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-2xs hover:border-[#38754A] transition-all flex flex-col items-start justify-between min-h-[96px] text-left group active:scale-98 cursor-pointer"
               >
-                {/* Toggle switch icon */}
-                <div className="w-8 h-4 rounded-full bg-slate-300 p-0.5 flex items-center group-hover:bg-emerald-600 transition-colors">
-                  <div className={`w-3 h-3 rounded-full bg-white shadow-xs transition-transform ${isGpsLoading ? 'translate-x-4 animate-pulse' : 'translate-x-0'}`} />
+                <div className="w-8 h-8 rounded-xl bg-[#EAF4ED] text-[#38754A] flex items-center justify-center font-bold">
+                  <span className={`material-symbols-outlined text-[18px] ${isGpsLoading ? 'animate-spin' : ''}`}>
+                    {isGpsLoading ? 'progress_activity' : 'my_location'}
+                  </span>
                 </div>
                 <div>
-                  <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight block">
-                    {isGpsLoading ? 'Locating...' : 'Turn on'}
+                  <span className="text-xs font-bold text-slate-800 leading-tight block">
+                    {isGpsLoading ? 'Locating...' : 'Use Current'}
                   </span>
-                  <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight block">
+                  <span className="text-xs font-bold text-slate-800 leading-tight block">
                     Location
                   </span>
                 </div>
@@ -452,39 +453,16 @@ export default function LocationMapModal({
               <button
                 type="button"
                 onClick={() => setViewMode('MAP_PINPOINT')}
-                className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-all flex flex-col items-start justify-between min-h-[96px] text-left active:scale-98"
+                className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-2xs hover:border-[#E25822] transition-all flex flex-col items-start justify-between min-h-[96px] text-left active:scale-98 cursor-pointer"
               >
-                {/* Orange plus in rounded square */}
-                <div className="w-6 h-6 rounded-md border-2 border-[#E25822] text-[#E25822] flex items-center justify-center font-black text-sm">
+                <div className="w-8 h-8 rounded-xl bg-[#FFF1DC] text-[#E25822] flex items-center justify-center font-black text-base">
                   +
                 </div>
                 <div>
-                  <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight block">
+                  <span className="text-xs font-bold text-slate-800 leading-tight block">
                     Add New
                   </span>
-                  <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight block">
-                    Address
-                  </span>
-                </div>
-              </button>
-
-              {/* Card 3: Request Address */}
-              <button
-                type="button"
-                onClick={handleRequestAddress}
-                className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-all flex flex-col items-start justify-between min-h-[96px] text-left active:scale-98"
-              >
-                {/* WhatsApp Green Icon */}
-                <div className="w-6 h-6 rounded-full bg-[#25D366] text-white flex items-center justify-center shadow-xs">
-                  <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                    <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.312.045-.694.072-2.127-.521-1.834-.759-2.999-2.616-3.09-2.738-.09-.122-.738-.983-.738-1.874 0-.891.467-1.328.633-1.508.167-.179.364-.224.486-.224.122 0 .243.002.35.007.113.005.263-.043.412.315.153.369.524 1.278.57 1.37.045.09.076.197.015.318-.061.121-.092.197-.183.303-.09.106-.19.237-.272.318-.09.09-.184.188-.079.369.106.182.47 1.774 1.731 2.451.342.184.629.24.846.307.218.067.416.058.572.035.174-.026.545-.223.621-.438z"/>
-                  </svg>
-                </div>
-                <div>
-                  <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight block">
-                    Request
-                  </span>
-                  <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight block">
+                  <span className="text-xs font-bold text-slate-800 leading-tight block">
                     Address
                   </span>
                 </div>
