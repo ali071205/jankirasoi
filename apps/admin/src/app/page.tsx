@@ -189,43 +189,90 @@ function OrderDetailsPanel({
       {/* 3. Order Items & Compact Bill Summary */}
       <div className="py-2.5 border-t border-b border-gray-100 flex flex-col gap-2 text-xs">
         <div className="flex items-center justify-between text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-          <span>Order items</span>
+          <span>Order items &amp; Prices</span>
           <span>{selectedOrder.slotLabel ? selectedOrder.slotLabel.split("(")[0].trim() : "Standard"}</span>
         </div>
 
-        <div className="divide-y divide-gray-50 max-h-36 overflow-y-auto pr-1">
+        <div className="divide-y divide-gray-50 max-h-48 overflow-y-auto pr-1">
           {selectedOrder.items && selectedOrder.items.length > 0 ? (
-            selectedOrder.items.map((item, idx) => (
-              <div key={item.id || idx} className="py-1 flex items-center justify-between text-xs">
-                <div className="min-w-0 pr-2 truncate">
-                  <span className="font-semibold text-gray-900">
-                    <span className="font-bold text-emerald-800 mr-1">{item.quantity}×</span>
-                    {item.productName}
+            selectedOrder.items.map((item, idx) => {
+              const itemTotal = (item.totalPricePaise ?? (item.unitPricePaise ? item.unitPricePaise * item.quantity : 0)) / 100;
+              return (
+                <div key={item.id || idx} className="py-1 flex items-center justify-between text-xs">
+                  <div className="min-w-0 pr-2 truncate">
+                    <span className="font-semibold text-gray-900">
+                      <span className="font-bold text-emerald-800 mr-1">{item.quantity}×</span>
+                      {item.productName}
+                    </span>
+                    {item.variantName && item.variantName !== "Standard" && (
+                      <span className="text-[10px] text-gray-400 ml-1">({item.variantName})</span>
+                    )}
+                  </div>
+                  <span className="font-bold font-mono text-gray-900 shrink-0">
+                    ₹{itemTotal.toFixed(0)}
                   </span>
-                  {item.variantName && item.variantName !== "Standard" && (
-                    <span className="text-[10px] text-gray-400 ml-1">({item.variantName})</span>
-                  )}
                 </div>
-                <span className="font-bold font-mono text-gray-900 shrink-0">
-                  ₹{item.totalPricePaise ? (item.totalPricePaise / 100).toFixed(0) : (selectedOrder.totalAmountPaise / 100).toFixed(0)}
-                </span>
-              </div>
-            ))
+              );
+            })
           ) : (
             <div className="py-1 text-xs text-gray-600 font-medium">Standard Tiffin Thali (×1)</div>
           )}
         </div>
 
-        <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
-          <div>
-            <span className="font-semibold text-gray-600 block text-[11px]">Total payment</span>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-              {selectedOrder.paymentMethod || "COD"} • {selectedOrder.paymentStatus || "PENDING"}
+        {/* GST & Financial Breakdown */}
+        <div className="pt-2 border-t border-gray-100 flex flex-col gap-1 text-[11px]">
+          <div className="flex items-center justify-between text-gray-600">
+            <span>Items Subtotal</span>
+            <span className="font-mono font-medium text-gray-900">
+              ₹{((selectedOrder.subtotalPaise ?? (selectedOrder.totalAmountPaise - (selectedOrder.taxPaise || 0))) / 100).toFixed(2)}
             </span>
           </div>
-          <span className="font-bold font-mono text-base text-gray-950">
-            ₹{(selectedOrder.totalAmountPaise / 100).toFixed(2)}
-          </span>
+
+          <div className="flex items-center justify-between text-gray-600">
+            <span>GST / Tax (5%)</span>
+            <span className="font-mono font-semibold text-emerald-700">
+              +₹{((selectedOrder.taxPaise ?? Math.round((selectedOrder.subtotalPaise || selectedOrder.totalAmountPaise) * 0.05)) / 100).toFixed(2)}
+            </span>
+          </div>
+
+          {selectedOrder.packagingFeePaise ? selectedOrder.packagingFeePaise > 0 && (
+            <div className="flex items-center justify-between text-gray-600">
+              <span>Packaging Fee</span>
+              <span className="font-mono font-medium text-gray-900">
+                +₹{(selectedOrder.packagingFeePaise / 100).toFixed(2)}
+              </span>
+            </div>
+          ) : null}
+
+          {selectedOrder.deliveryFeePaise ? selectedOrder.deliveryFeePaise > 0 && (
+            <div className="flex items-center justify-between text-gray-600">
+              <span>Delivery Fee</span>
+              <span className="font-mono font-medium text-gray-900">
+                +₹{(selectedOrder.deliveryFeePaise / 100).toFixed(2)}
+              </span>
+            </div>
+          ) : null}
+
+          {selectedOrder.discountPaise ? selectedOrder.discountPaise > 0 && (
+            <div className="flex items-center justify-between text-emerald-600 font-medium">
+              <span>Discount</span>
+              <span className="font-mono">
+                -₹{(selectedOrder.discountPaise / 100).toFixed(2)}
+              </span>
+            </div>
+          ) : null}
+
+          <div className="pt-1.5 mt-0.5 border-t border-gray-200 flex items-center justify-between">
+            <div>
+              <span className="font-bold text-gray-900 block text-xs">Total with GST</span>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                {selectedOrder.paymentMethod || "COD"} • {selectedOrder.paymentStatus || "PENDING"}
+              </span>
+            </div>
+            <span className="font-black font-mono text-base text-gray-950">
+              ₹{(selectedOrder.totalAmountPaise / 100).toFixed(2)}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -651,6 +698,11 @@ export default function OperationsConsolePage() {
             playKitchenOrderChime();
             showToast(`New order received: #${payload.orderNumber || ''}`);
           }
+          if (payload.type === 'ORDER_UPDATED' && payload.orderId && payload.status) {
+            setOrders((prev) =>
+              prev.map((o) => (o.id === payload.orderId ? { ...o, status: payload.status } : o))
+            );
+          }
           loadOrders(true);
         } catch {
           loadOrders(true);
@@ -696,12 +748,17 @@ export default function OperationsConsolePage() {
   // Handle Order Status Transitions
   const handleTransition = async (orderId: string, nextStatus: string) => {
     setActionLoadingId(orderId);
+    // Instant optimistic update so the order card immediately moves to the new column / stage
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus as any } : o))
+    );
     try {
       await adminApi.updateOrderStatus(orderId, nextStatus);
-      showToast(`Order status updated to ${nextStatus}`);
+      showToast(`Order status updated to ${nextStatus.replace(/_/g, ' ')}`);
       await loadOrders(true);
     } catch (err: any) {
       showToast(err.message || 'Status transition failed');
+      await loadOrders(true);
     } finally {
       setActionLoadingId(null);
     }
@@ -1304,27 +1361,35 @@ export default function OperationsConsolePage() {
           )}
         </div>
 
-        {/* Minimalist Typographic Food Items */}
-        <div className="space-y-1">
+        {/* Minimalist Typographic Food Items with Item Prices */}
+        <div className="space-y-1.5 py-1">
           {order.items && order.items.length > 0 ? (
-            order.items.slice(0, 3).map((it, idx) => (
-              <div key={idx} className="flex items-center justify-between text-xs leading-snug">
-                <span className="font-medium text-gray-800 truncate pr-1">
-                  <span className="font-bold text-emerald-800 font-mono mr-1">{it.quantity}×</span>
-                  {it.productName}
-                </span>
-              </div>
-            ))
+            order.items.map((it, idx) => {
+              const itemTotal = (it.totalPricePaise ?? (it.unitPricePaise ? it.unitPricePaise * it.quantity : 0)) / 100;
+              return (
+                <div key={idx} className="flex items-center justify-between text-xs leading-snug">
+                  <span className="font-medium text-gray-800 truncate pr-2">
+                    <span className="font-bold text-emerald-800 font-mono mr-1">{it.quantity}×</span>
+                    {it.productName}
+                    {it.variantName && it.variantName !== 'Standard' && (
+                      <span className="text-[10px] text-gray-400 ml-1">({it.variantName})</span>
+                    )}
+                  </span>
+                  <span className="font-bold font-mono text-gray-900 shrink-0 text-xs">
+                    ₹{itemTotal > 0 ? itemTotal.toFixed(0) : '-'}
+                  </span>
+                </div>
+              );
+            })
           ) : (
-            <div className="text-xs text-gray-700 font-medium leading-snug">
-              <span className="font-bold text-emerald-800 font-mono mr-1">{totalItems}×</span>
-              Standard Tiffin
-            </div>
-          )}
-
-          {order.items && order.items.length > 3 && (
-            <div className="text-[10px] text-gray-400 font-medium">
-              +{order.items.length - 3} more item(s)...
+            <div className="flex items-center justify-between text-xs text-gray-700 font-medium leading-snug">
+              <span>
+                <span className="font-bold text-emerald-800 font-mono mr-1">{totalItems}×</span>
+                Standard Tiffin
+              </span>
+              <span className="font-bold font-mono text-gray-900">
+                ₹{(order.totalAmountPaise / 100).toFixed(0)}
+              </span>
             </div>
           )}
 
@@ -1375,13 +1440,18 @@ export default function OperationsConsolePage() {
 
         {/* Price & Single 1-Tap Action Button */}
         <div className="flex items-center justify-between pt-1.5 border-t border-gray-100 gap-2">
-          <div className="flex items-baseline gap-1 shrink-0">
-            <span className="font-bold font-mono text-gray-900 text-xs">
-              ₹{(order.totalAmountPaise / 100).toFixed(0)}
-            </span>
-            <span className="text-[9px] uppercase font-bold text-gray-400">
-              {order.paymentMethod || 'COD'}
-            </span>
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-bold font-mono text-gray-950 text-sm">
+                ₹{(order.totalAmountPaise / 100).toFixed(0)}
+              </span>
+              <span className="text-[9px] uppercase font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 shrink-0">
+                {order.paymentMethod || 'COD'}
+              </span>
+            </div>
+            <div className="text-[10px] text-gray-500 font-medium truncate">
+              Items: ₹{((order.subtotalPaise ?? (order.totalAmountPaise - (order.taxPaise || Math.round(order.totalAmountPaise * 0.05 / 1.05)))) / 100).toFixed(0)} + GST (5%): ₹{((order.taxPaise ?? Math.round(order.totalAmountPaise * 0.05 / 1.05)) / 100).toFixed(0)}
+            </div>
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -2025,10 +2095,10 @@ export default function OperationsConsolePage() {
                                     </div>
                                     <div
                                       className="text-[10px] text-gray-500 truncate max-w-[140px]"
-                                      title={order.items?.map((i) => `${i.productName} (x${i.quantity})`).join(', ')}
+                                      title={order.items?.map((i) => `${i.productName} (x${i.quantity}) - ₹${(((i.totalPricePaise ?? ((i.unitPricePaise || 0) * i.quantity))) / 100).toFixed(0)}`).join(', ')}
                                     >
                                       {order.items && order.items.length > 0
-                                        ? order.items.map((i) => i.productName).join(', ')
+                                        ? order.items.map((i) => `${i.quantity}x ${i.productName} (₹${(((i.totalPricePaise ?? ((i.unitPricePaise || 0) * i.quantity))) / 100).toFixed(0)})`).join(', ')
                                         : 'Wholesome Meal'}
                                     </div>
                                   </td>
@@ -2047,6 +2117,9 @@ export default function OperationsConsolePage() {
                                   <td className="py-2.5 px-3 whitespace-nowrap">
                                     <div className="font-bold text-gray-900 font-mono text-xs">
                                       ₹{(order.totalAmountPaise / 100).toFixed(2)}
+                                    </div>
+                                    <div className="text-[10px] text-gray-500 font-medium">
+                                      Incl. GST: ₹{((order.taxPaise ?? Math.round(order.totalAmountPaise * 0.05 / 1.05)) / 100).toFixed(0)}
                                     </div>
                                     <span className="inline-block px-1.5 py-0.2 rounded text-[9px] font-bold bg-gray-100 text-gray-600 mt-0.5 uppercase">
                                       {order.paymentMethod || 'COD'}

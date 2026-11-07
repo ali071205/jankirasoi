@@ -149,11 +149,18 @@ export interface TrackOrderResponse {
   paymentStatus?: string;
   serviceDate: string;
   deliverySlot: string;
+  subtotalPaise?: number;
+  taxPaise?: number;
+  deliveryFeePaise?: number;
+  packagingFeePaise?: number;
+  discountPaise?: number;
   totalAmountPaise: number;
   items: Array<{
     name: string;
     variant?: string;
     quantity: number;
+    unitPricePaise?: number;
+    totalPricePaise?: number;
   }>;
   deliveryOtp?: string; // Zero-cost in-app verbal handover PIN when OUT_FOR_DELIVERY
   riderName?: string;

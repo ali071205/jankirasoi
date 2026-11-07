@@ -322,30 +322,46 @@ function OrderDetailsCard({ order }: { order: TrackOrderResponse }) {
         <div className="px-4 pb-4 pt-0 border-t border-[#EEE7DC] flex flex-col gap-2">
           {/* Items list */}
           <div className="flex flex-col divide-y divide-[#EEE7DC] mt-2">
-            {order.items.map((item, idx) => (
-              <div key={idx} className="py-2 flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-[#292D26]">{item.quantity}x {item.name}</span>
-                  {item.variant && (
-                    <span className="text-[10px] text-[#77786F] block">{item.variant}</span>
+            {order.items.map((item, idx) => {
+              const itemTotal = (item.totalPricePaise ?? (item.unitPricePaise ? item.unitPricePaise * item.quantity : 0)) / 100;
+              return (
+                <div key={idx} className="py-2 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="font-bold text-[#292D26]">{item.quantity}x {item.name}</span>
+                    {item.variant && (
+                      <span className="text-[10px] text-[#77786F] block">{item.variant}</span>
+                    )}
+                  </div>
+                  {itemTotal > 0 && (
+                    <span className="font-mono font-bold text-[#292D26]">₹{itemTotal.toFixed(0)}</span>
                   )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Bill summary */}
           <div className="flex flex-col gap-1 border-t border-[#EEE7DC] pt-2">
             <div className="flex justify-between text-[11px] text-[#77786F]">
-              <span>Item Total</span>
-              <span>₹{(order.totalAmountPaise / 100).toFixed(0)}</span>
+              <span>Items Total</span>
+              <span>₹{((order.subtotalPaise ?? (order.totalAmountPaise - (order.taxPaise || 0))) / 100).toFixed(0)}</span>
             </div>
+            <div className="flex justify-between text-[11px] text-[#77786F]">
+              <span>GST (5%)</span>
+              <span className="text-[#38754A] font-semibold">+₹{((order.taxPaise ?? Math.round(order.totalAmountPaise * 0.05 / 1.05)) / 100).toFixed(0)}</span>
+            </div>
+            {order.packagingFeePaise ? order.packagingFeePaise > 0 && (
+              <div className="flex justify-between text-[11px] text-[#77786F]">
+                <span>Packaging Fee</span>
+                <span>+₹{(order.packagingFeePaise / 100).toFixed(0)}</span>
+              </div>
+            ) : null}
             <div className="flex justify-between text-[11px] text-[#77786F]">
               <span>Delivery Fee</span>
               <span className="text-[#38754A] font-bold">FREE</span>
             </div>
             <div className="flex justify-between text-xs font-extrabold text-[#292D26] pt-1 border-t border-[#EEE7DC]">
-              <span>Total Paid</span>
+              <span>Total with GST</span>
               <span className="text-[#38754A]">₹{(order.totalAmountPaise / 100).toFixed(0)}</span>
             </div>
             <div className="flex justify-between text-[11px] text-[#77786F]">
