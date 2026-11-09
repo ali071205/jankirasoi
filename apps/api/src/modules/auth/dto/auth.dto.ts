@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsEmail, MinLength, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsEmail, MinLength, IsOptional, IsNumber } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class AdminLoginDto {
@@ -67,5 +67,34 @@ export class ToggleRiderAvailabilityDto {
   @ApiProperty({ example: true })
   @IsNotEmpty()
   isAvailable: boolean;
+}
+
+export class BanCustomerDto {
+  @ApiProperty({ example: 'Customer unreachable / fake order / refused COD', required: false })
+  @IsString()
+  @IsOptional()
+  reason?: string;
+
+  @ApiProperty({ example: 25000, required: false, description: 'Loss or penalty amount in paise' })
+  @IsNumber()
+  @IsOptional()
+  penaltyAmountPaise?: number;
+}
+
+export class PayUnbanPenaltyDto {
+  @ApiProperty({ example: '8319618102', description: '10-digit customer phone number' })
+  @IsString()
+  @IsNotEmpty()
+  phone: string;
+
+  @ApiProperty({ example: 'UPI', required: false })
+  @IsString()
+  @IsOptional()
+  paymentMethod?: string;
+
+  @ApiProperty({ example: 'TXN_UNBAN_123456', required: false })
+  @IsString()
+  @IsOptional()
+  transactionRef?: string;
 }
 

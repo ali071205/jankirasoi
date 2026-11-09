@@ -91,6 +91,15 @@ module.exports = {
         "label-md": ["Inter", "sans-serif"],
         "label-sm": ["Inter", "sans-serif"],
       },
+      animation: {
+        'spin-reverse': 'spin-reverse 1s linear infinite',
+      },
+      keyframes: {
+        'spin-reverse': {
+          from: { transform: 'rotate(0deg)' },
+          to: { transform: 'rotate(-360deg)' },
+        },
+      },
     },
   },
   plugins: [],

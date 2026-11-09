@@ -39,6 +39,55 @@ export default function RiderPage() {
 
   const SAGORE_KITCHEN_COORDS = { lat: 22.6288, lng: 75.5684 };
 
+  const formatOrderTime = (isoString?: string): string => {
+    if (!isoString) return '';
+    try {
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return '';
+      const now = new Date();
+      const isToday =
+        d.getDate() === now.getDate() &&
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear();
+
+      let hours = d.getHours();
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      const timeStr = `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+
+      if (isToday) {
+        return `Today, ${timeStr}`;
+      }
+      const day = d.getDate();
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const month = months[d.getMonth()];
+      return `${day} ${month}, ${timeStr}`;
+    } catch {
+      return '';
+    }
+  };
+
+  const formatRelativeTime = (isoString?: string): string => {
+    if (!isoString) return '';
+    try {
+      const diffMs = Date.now() - new Date(isoString).getTime();
+      if (isNaN(diffMs) || diffMs < 0) return 'Just now';
+      const diffMins = Math.floor(diffMs / 60000);
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      const diffHours = Math.floor(diffMins / 60);
+      const remMins = diffMins % 60;
+      if (diffHours < 24) {
+        return remMins > 0 ? `${diffHours}h ${remMins}m ago` : `${diffHours}h ago`;
+      }
+      const diffDays = Math.floor(diffHours / 24);
+      return `${diffDays}d ago`;
+    } catch {
+      return '';
+    }
+  };
+
   const calculateDistanceKm = useCallback((lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371;
     const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -50,6 +99,48 @@ export default function RiderPage() {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return Math.round(R * c * 10) / 10;
   }, []);
+
+  // ponytail: calculate actual local delivery distance & ETA (kitni der lagegi)
+  const getDeliveryDistanceAndEta = useCallback(
+    (del: RiderDelivery) => {
+      const destLat = del.coordinates?.latitude || 22.6312;
+      const destLng = del.coordinates?.longitude || 75.5715;
+
+      let startLat = SAGORE_KITCHEN_COORDS.lat;
+      let startLng = SAGORE_KITCHEN_COORDS.lng;
+      let isLiveRiderLocation = false;
+
+      if (riderGps) {
+        const distFromKitchen = calculateDistanceKm(
+          riderGps.lat,
+          riderGps.lng,
+          SAGORE_KITCHEN_COORDS.lat,
+          SAGORE_KITCHEN_COORDS.lng
+        );
+        // If rider GPS is within 15 km of Sagore kitchen, use live rider location
+        if (distFromKitchen <= 15) {
+          startLat = riderGps.lat;
+          startLng = riderGps.lng;
+          isLiveRiderLocation = true;
+        }
+      }
+
+      let distKm = calculateDistanceKm(startLat, startLng, destLat, destLng);
+      if (distKm <= 0.1) {
+        distKm = 1.6;
+      }
+
+      // Local two-wheeler speed: ~20 km/h (3.2 mins/km) + 3 mins traffic + 2 mins doorstep handover
+      const etaMins = Math.max(5, Math.round(distKm * 3.2 + 3));
+
+      return {
+        distanceKm: distKm,
+        etaMins,
+        isLiveRiderLocation,
+      };
+    },
+    [riderGps, calculateDistanceKm]
+  );
 
   const showRiderToast = (msg: string) => {
     setToastMsg(msg);
@@ -220,21 +311,52 @@ export default function RiderPage() {
     }
   };
 
-  // Fetch Assigned Deliveries
-  // FIX #15: Accept an AbortSignal so in-flight fetches can be cancelled on unmount
-  // or when the interval fires before the previous request completes.
+  const prevDeliveriesCountRef = React.useRef(0);
+
+  // Synthesizer Web Audio API chime for new delivery alerts
+  const playRiderNotificationChime = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15); // A5
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.4);
+    } catch {}
+  }, []);
+
+  // Fetch Assigned Deliveries with Real-Time Delta Detection
   const loadDeliveries = useCallback(async (isBackground = false, signal?: AbortSignal) => {
     if (!isBackground) setLoading(true);
     setIsRefreshing(true);
     try {
       const data = await api.getRiderDeliveries(signal);
-      // Guard against setting state after abort/unmount
       if (signal?.aborted) return;
       if (data && data.deliveries) {
+        const activeTrips = data.deliveries.filter((d) => d.status !== 'DELIVERED');
+        if (isBackground && activeTrips.length > prevDeliveriesCountRef.current) {
+          playRiderNotificationChime();
+          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate([150, 70, 150]);
+          }
+          const latest = activeTrips[0];
+          setToastMsg(`⚡ Naya Order Assign Hua: #${latest?.orderNumber || 'Order'}`);
+          setTimeout(() => setToastMsg(null), 4000);
+        }
+        prevDeliveriesCountRef.current = activeTrips.length;
         setDeliveries(data.deliveries);
       }
     } catch (err: any) {
-      if (err.name === 'AbortError') return; // expected on cleanup — suppress
+      if (err.name === 'AbortError') return;
       console.warn('Rider deliveries fetch notice:', err.message);
     } finally {
       if (!signal?.aborted) {
@@ -242,27 +364,80 @@ export default function RiderPage() {
         setIsRefreshing(false);
       }
     }
-  }, []);
+  }, [playRiderNotificationChime]);
 
+  // Real-Time Delivery Stream (BroadcastChannel + SSE + 3s Auto-Poll)
   useEffect(() => {
-    if (riderUser) {
-      // FIX #15: Use an AbortController so that when the component unmounts or
-      // a new interval tick fires, any in-flight fetch is cleanly cancelled.
-      const controller = new AbortController();
-      loadDeliveries(false, controller.signal);
-
-      const interval = setInterval(() => {
-        const tickController = new AbortController();
-        loadDeliveries(true, tickController.signal);
-      }, 10000);
-
-      return () => {
-        controller.abort();
-        clearInterval(interval);
-      };
-    } else {
+    if (!riderUser) {
       setLoading(false);
+      return;
     }
+
+    // 1. Initial Load
+    loadDeliveries(false);
+
+    // 2. High-Frequency Resilient Polling (every 3 seconds for instant updates)
+    const interval = setInterval(() => {
+      loadDeliveries(true);
+    }, 3000);
+
+    // 3. Tab Visibility & Window Focus Auto-Refresh
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        loadDeliveries(true);
+      }
+    };
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    // 4. Cross-Tab Zero-Latency BroadcastChannel (0ms real-time from Admin tab)
+    let ordersBroadcast: BroadcastChannel | null = null;
+    try {
+      ordersBroadcast = new BroadcastChannel('jankirasoi_orders_channel');
+      ordersBroadcast.onmessage = (event) => {
+        if (event.data?.type === 'RIDER_ASSIGNED' || event.data?.type === 'ORDER_CREATED' || event.data?.type === 'ORDER_UPDATED') {
+          loadDeliveries(true);
+        }
+      };
+    } catch {}
+
+    // 5. Server-Sent Events (SSE) Real-Time Stream from API
+    let eventSource: EventSource | null = null;
+    try {
+      const apiHost = typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3000' : '';
+      const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
+      const riderPhone = riderUser?.phone || '';
+      const streamUrl = `${apiHost}/api/v1/rider/deliveries/stream?simulated_role=RIDER${token ? `&token=${token}` : ''}${riderPhone ? `&rider_phone=${encodeURIComponent(riderPhone)}` : ''}`;
+      eventSource = new EventSource(streamUrl);
+
+      eventSource.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.type === 'PING') return;
+          loadDeliveries(true);
+        } catch {
+          loadDeliveries(true);
+        }
+      };
+
+      eventSource.onerror = () => {
+        // Automatically reconnects; fallback interval will handle updates
+      };
+    } catch (e) {
+      console.warn('Rider SSE stream connection fallback:', e);
+    }
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      if (ordersBroadcast) {
+        ordersBroadcast.close();
+      }
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
   }, [loadDeliveries, riderUser]);
 
   // Handle Accept Assigned Delivery
@@ -448,9 +623,14 @@ export default function RiderPage() {
                 title="Refresh deliveries"
                 className="w-8 h-8 rounded-full bg-white border border-[#EEE7DC] flex items-center justify-center text-[#77786F] hover:text-[#292D26] shadow-2xs active:scale-95 transition-all shrink-0"
               >
-                <span className={`material-symbols-outlined text-[17px] ${isRefreshing ? 'animate-spin' : ''}`}>
-                  refresh
-                </span>
+                <svg
+                  className={`w-[17px] h-[17px] text-[#77786F] transition-transform ${isRefreshing ? 'animate-spin' : ''}`}
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z" />
+                </svg>
               </button>
 
               {/* End Shift / Sign out */}
@@ -634,7 +814,14 @@ export default function RiderPage() {
                     onClick={() => loadDeliveries()}
                     className="mt-2 px-4 py-2 rounded-full bg-[#38754A] hover:bg-[#285C38] font-bold text-xs text-white flex items-center gap-1.5 shadow-xs transition-colors"
                   >
-                    <span className="material-symbols-outlined text-[16px]">sync</span>
+                    <svg
+                      className={`w-4 h-4 text-white transition-transform ${isRefreshing ? 'animate-spin' : ''}`}
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z" />
+                    </svg>
                     Check for New Batches
                   </button>
                 )}
@@ -654,14 +841,34 @@ export default function RiderPage() {
                   >
                     {/* Order Header */}
                     <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
-                      <div>
-                        <span className="text-[11px] font-mono font-bold text-[#38754A] block">
-                          #{del.orderNumber}
-                        </span>
-                        <span className="text-xs font-semibold text-[#77786F]">{del.slotLabel}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[12px] font-mono font-bold text-[#38754A]">
+                            #{del.orderNumber}
+                          </span>
+                          {del.createdAt && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
+                              <span className="material-symbols-outlined text-[13px] text-[#38754A]">schedule</span>
+                              {formatOrderTime(del.createdAt)}
+                            </span>
+                          )}
+                          {del.createdAt && (
+                            <span className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200/60 px-1.5 py-0.5 rounded">
+                              {formatRelativeTime(del.createdAt)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs font-medium text-[#77786F] mt-1 flex-wrap">
+                          <span>{del.slotLabel}</span>
+                          {del.assignedAt && (
+                            <span className="text-[10px] text-slate-400">
+                              • Assigned {formatOrderTime(del.assignedAt)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <span
-                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold shrink-0 ${
                           isDelivered
                             ? 'bg-[#EAF4ED] text-[#38754A] border border-[#38754A]/30'
                             : isOutOfDelivery
@@ -740,17 +947,21 @@ export default function RiderPage() {
                             <span className="text-[10px] font-bold text-[#77786F] uppercase tracking-wider">
                               Drop Location
                             </span>
-                            <span className="text-[10px] font-bold text-[#38754A] flex items-center gap-0.5">
-                              <span className="material-symbols-outlined text-[12px]">near_me</span>
-                              ~{del.coordinates
-                                ? calculateDistanceKm(
-                                    riderGps ? riderGps.lat : SAGORE_KITCHEN_COORDS.lat,
-                                    riderGps ? riderGps.lng : SAGORE_KITCHEN_COORDS.lng,
-                                    del.coordinates.latitude,
-                                    del.coordinates.longitude
-                                  )
-                                : 2.5} km {riderGps ? '(from you)' : '(from kitchen)'}
-                            </span>
+                            {(() => {
+                              const { distanceKm, etaMins, isLiveRiderLocation } = getDeliveryDistanceAndEta(del);
+                              return (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[10px] font-bold text-[#38754A] flex items-center gap-0.5 bg-[#EAF4ED] border border-[#38754A]/30 px-1.5 py-0.5 rounded-md">
+                                    <span className="material-symbols-outlined text-[12px]">schedule</span>
+                                    <span>~{etaMins} mins</span>
+                                  </span>
+                                  <span className="text-[10px] font-semibold text-slate-600 flex items-center gap-0.5">
+                                    <span className="material-symbols-outlined text-[12px] text-slate-400">near_me</span>
+                                    <span>~{distanceKm} km {isLiveRiderLocation ? '(live from you)' : '(from kitchen)'}</span>
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </div>
                           <p className="leading-snug font-medium text-slate-800">{del.deliveryAddress}</p>
                           {del.landmark && (
@@ -761,6 +972,43 @@ export default function RiderPage() {
                           )}
                         </div>
                       </div>
+
+                      {/* Customer Delivery Instructions & Preferences */}
+                      {del.deliveryNotes && (
+                        <div className="text-xs bg-[#FFFDF5] p-2.5 rounded-xl border border-amber-200/90 shadow-2xs">
+                          <div className="flex items-center gap-1.5 mb-1.5 text-amber-900">
+                            <span className="material-symbols-outlined text-amber-700 text-[16px]">
+                              speaker_notes
+                            </span>
+                            <span className="text-[10px] font-black uppercase tracking-wider text-amber-800">
+                              Customer Delivery Instructions
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {del.deliveryNotes.split(/\s*(?:•|\.|\n|;)\s*/).filter(Boolean).map((note, idx) => {
+                              const trimmedNote = note.trim();
+                              const lower = trimmedNote.toLowerCase();
+                              let icon = 'info';
+                              if (lower.includes('door')) icon = 'meeting_room';
+                              else if (lower.includes('call')) icon = 'phone_paused';
+                              else if (lower.includes('bell')) icon = 'notifications_paused';
+                              else if (lower.includes('cutlery')) icon = 'flatware';
+                              else if (lower.includes('direction')) icon = 'alt_route';
+                              else if (lower.includes('cooking')) icon = 'soup_kitchen';
+
+                              return (
+                                <span
+                                  key={idx}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-100/70 border border-amber-300 text-amber-950 font-bold text-[11px]"
+                                >
+                                  <span className="material-symbols-outlined text-[13px] text-amber-800">{icon}</span>
+                                  <span>{trimmedNote}</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions */}
@@ -849,6 +1097,23 @@ export default function RiderPage() {
                   Ask customer for the <strong className="text-[#38754A]">6-digit handover PIN</strong> displayed on their
                   live tracking screen.
                 </p>
+
+                {/* Customer Instructions in PIN Modal */}
+                {selectedOrder.deliveryNotes && (
+                  <div className="p-2.5 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-950 text-xs">
+                    <div className="flex items-center gap-1 font-bold text-amber-900 text-[10px] uppercase tracking-wider mb-1">
+                      <span className="material-symbols-outlined text-[14px]">speaker_notes</span>
+                      <span>Customer Delivery Instructions:</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedOrder.deliveryNotes.split(/\s*(?:•|\.|\n|;)\s*/).filter(Boolean).map((note, idx) => (
+                        <span key={idx} className="bg-white border border-amber-300 text-amber-900 font-bold px-2 py-0.5 rounded text-[10px]">
+                          {note.trim()}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* 6 PIN Display Boxes */}
                 <div className="flex items-center justify-center gap-2 py-2">
@@ -959,7 +1224,17 @@ export default function RiderPage() {
                 {/* Real-time Interactive Route & Live Driver Map (Swiggy/Zomato style) */}
                 <div className="w-full shrink-0">
                   <LiveDeliveryMap
-                    driverLocation={riderGps ? { latitude: riderGps.lat, longitude: riderGps.lng } : null}
+                    driverLocation={
+                      riderGps &&
+                      calculateDistanceKm(
+                        riderGps.lat,
+                        riderGps.lng,
+                        SAGORE_KITCHEN_COORDS.lat,
+                        SAGORE_KITCHEN_COORDS.lng
+                      ) <= 15
+                        ? { latitude: riderGps.lat, longitude: riderGps.lng }
+                        : { latitude: SAGORE_KITCHEN_COORDS.lat, longitude: SAGORE_KITCHEN_COORDS.lng }
+                    }
                     customerLocation={{
                       latitude: activeMapDelivery.coordinates?.latitude || 22.6312,
                       longitude: activeMapDelivery.coordinates?.longitude || 75.5715,
@@ -1014,6 +1289,21 @@ export default function RiderPage() {
                         <span className="text-[11px] text-[#38754A] font-semibold block mt-0.5">
                           Landmark: {activeMapDelivery.landmark}
                         </span>
+                      )}
+                      {activeMapDelivery.deliveryNotes && (
+                        <div className="mt-2 p-2 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-950 text-xs">
+                          <div className="flex items-center gap-1 font-bold text-amber-900 text-[10px] uppercase tracking-wider mb-1">
+                            <span className="material-symbols-outlined text-[13px]">speaker_notes</span>
+                            <span>Customer Delivery Instructions:</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {activeMapDelivery.deliveryNotes.split(/\s*(?:•|\.|\n|;)\s*/).filter(Boolean).map((note, idx) => (
+                              <span key={idx} className="bg-white border border-amber-300 text-amber-900 font-bold px-1.5 py-0.5 rounded text-[10px]">
+                                {note.trim()}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>

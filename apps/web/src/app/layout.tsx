@@ -4,6 +4,8 @@ import { CartProvider } from '../context/CartContext';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import BottomNav from '../components/BottomNav';
+import CustomerBanLockModal from '../components/CustomerBanLockModal';
+import CookieConsentBanner from '../components/CookieConsentBanner';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -87,9 +89,11 @@ export default function RootLayout({
       <body className="bg-[#FFF9F0] font-body text-[#292D26] flex flex-col min-h-screen">
         <CartProvider>
           <Header />
+          <CustomerBanLockModal />
           <div className="flex-1 flex flex-col">{children}</div>
           <Footer />
           <BottomNav />
+          <CookieConsentBanner />
         </CartProvider>
       </body>
     </html>

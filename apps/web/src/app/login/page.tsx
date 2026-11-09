@@ -100,6 +100,16 @@ function LoginContent() {
         router.push(redirectUrl);
       }, 700);
     } catch (err: any) {
+      if (
+        err.message?.toLowerCase().includes('restricted') ||
+        err.message?.toLowerCase().includes('blocked') ||
+        err.message?.toLowerCase().includes('ban')
+      ) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('jr_customer_phone', cleanPhone);
+          window.dispatchEvent(new CustomEvent('jr_customer_banned'));
+        }
+      }
       setError(err.message || 'Login failed. Please check your phone number and try again.');
     } finally {
       setLoading(false);

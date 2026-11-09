@@ -1,7 +1,7 @@
-import { Controller, Post, Get, Patch, Delete, Param, Body, Res, Req, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Param, Body, Res, Req, Query, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { AdminLoginDto, RiderLoginDto, CustomerLoginDto, CreateRiderDto, ToggleRiderAvailabilityDto } from './dto/auth.dto';
+import { AdminLoginDto, RiderLoginDto, CustomerLoginDto, CreateRiderDto, ToggleRiderAvailabilityDto, BanCustomerDto, PayUnbanPenaltyDto } from './dto/auth.dto';
 import { Response, Request } from 'express';
 
 @ApiTags('Authentication')
@@ -54,10 +54,75 @@ export class AuthController {
     }
   }
 
+  @Get('auth/customer/status')
+  @ApiOperation({ summary: 'Check customer ban and penalty status' })
+  async getCustomerBanStatus(@Query('phone') phone?: string, @Req() req?: Request) {
+    let checkPhone = phone;
+    if (!checkPhone && req) {
+      const headerToken = req.headers?.authorization?.replace('Bearer ', '');
+      const cookieToken = req.cookies?.customer_session_token || req.cookies?.session_token;
+      const token = headerToken || cookieToken;
+      if (token) {
+        try {
+          const user = await this.authService.validateSessionToken(token);
+          if (user?.phone) checkPhone = user.phone;
+        } catch {}
+      }
+    }
+    return this.authService.getCustomerBanStatus(checkPhone || '');
+  }
+
+  @Post('auth/customer/pay-unban-penalty')
+  @ApiOperation({ summary: 'Customer pays penalty to immediately unban account' })
+  async payUnbanPenalty(
+    @Body() dto: PayUnbanPenaltyDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.payUnbanPenalty(dto);
+    if (result.sessionToken) {
+      res.cookie('customer_session_token', result.sessionToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        path: '/',
+      });
+      res.cookie('session_token', result.sessionToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        path: '/',
+      });
+    }
+    return result;
+  }
+
   @Get('admin/customers')
   @ApiOperation({ summary: 'Admin list all registered customers and delivery addresses' })
   async getCustomers() {
     return this.authService.getAdminCustomers();
+  }
+
+  @Post('admin/customers/:phone/ban')
+  @ApiOperation({ summary: 'Admin block/ban customer from placing orders' })
+  async banCustomer(
+    @Param('phone') phone: string,
+    @Body() dto: BanCustomerDto,
+  ) {
+    return this.authService.banCustomer(phone, dto);
+  }
+
+  @Post('admin/customers/:phone/unban')
+  @ApiOperation({ summary: 'Admin unban customer' })
+  async unbanCustomer(@Param('phone') phone: string) {
+    return this.authService.unbanCustomer(phone);
+  }
+
+  @Get('admin/customers/:phone/orders')
+  @ApiOperation({ summary: 'Admin view complete order history of a customer' })
+  async getCustomerOrders(@Param('phone') phone: string) {
+    return this.authService.getCustomerOrders(phone);
   }
 
   @Get('admin/riders')

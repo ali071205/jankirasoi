@@ -3,11 +3,14 @@ import { Subject, Observable, interval, merge } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 export interface OrderStreamEvent {
-  type: 'ORDER_CREATED' | 'ORDER_UPDATED' | 'RIDER_ASSIGNED' | 'PING' | 'CATALOG_UPDATED';
+  type: 'ORDER_CREATED' | 'ORDER_UPDATED' | 'RIDER_ASSIGNED' | 'PING' | 'CATALOG_UPDATED' | 'CUSTOMER_UNBANNED';
   orderId?: string;
   orderNumber?: string;
   status?: string;
   riderId?: string;
+  phone?: string;
+  customerName?: string;
+  penaltyAmount?: number;
   timestamp: number;
 }
 
@@ -23,9 +26,14 @@ export class OrdersEventsService {
       orderNumber: payload.orderNumber,
       status: payload.status,
       riderId: payload.riderId,
+      phone: payload.phone,
+      customerName: payload.customerName,
+      penaltyAmount: payload.penaltyAmount,
       timestamp: Date.now(),
     };
-    this.logger.log(`⚡ Real-time Event Emitted: ${type} for order ${payload.orderNumber || payload.orderId}`);
+    this.logger.log(
+      `⚡ Real-time Event Emitted: ${type} ${payload.phone ? `for customer ${payload.phone}` : `for order ${payload.orderNumber || payload.orderId}`}`
+    );
     this.stream$.next({ data: event });
   }
 

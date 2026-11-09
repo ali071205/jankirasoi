@@ -18,10 +18,38 @@ export class RidersService {
     private readonly otpService: DeliveryOtpService,
   ) {}
 
-  async getAssignedDeliveries(riderUserId?: string) {
-    // If riderUserId is given, find or create their rider profile
+  async getAssignedDeliveries(riderUserId?: string, riderPhone?: string, riderId?: string) {
     let riderProfileId: string | undefined = undefined;
-    if (riderUserId) {
+
+    // 1. Direct rider profile ID or user ID lookup
+    if (riderId) {
+      const profile = await this.prisma.riderProfile.findFirst({
+        where: { OR: [{ id: riderId }, { userId: riderId }] },
+      });
+      if (profile) {
+        riderProfileId = profile.id;
+      }
+    }
+
+    // 2. Rider phone number lookup (matches exact logged-in rider in portal)
+    if (!riderProfileId && riderPhone) {
+      const cleanPhone = riderPhone.replace(/\D/g, '').slice(-10);
+      const user = await this.prisma.user.findFirst({
+        where: { phone: { endsWith: cleanPhone }, role: 'RIDER' },
+        include: { riderProfile: true },
+      });
+      if (user?.riderProfile) {
+        riderProfileId = user.riderProfile.id;
+      } else if (user) {
+        const createdProfile = await this.prisma.riderProfile.create({
+          data: { userId: user.id, vehicleNumber: 'MP-09-JR-2026', isAvailable: true },
+        });
+        riderProfileId = createdProfile.id;
+      }
+    }
+
+    // 3. User ID lookup from validated session token
+    if (!riderProfileId && riderUserId && riderUserId !== 'simulated_staff_id') {
       let profile = await this.prisma.riderProfile.findUnique({
         where: { userId: riderUserId },
       });
@@ -29,12 +57,25 @@ export class RidersService {
         const user = await this.prisma.user.findUnique({ where: { id: riderUserId } });
         if (user && user.role === 'RIDER') {
           profile = await this.prisma.riderProfile.create({
-            data: { userId: riderUserId, vehicleNumber: 'MP-09-AB-1234', isAvailable: true },
+            data: { userId: riderUserId, vehicleNumber: 'MP-09-JR-2026', isAvailable: true },
           });
         }
       }
       if (profile) {
         riderProfileId = profile.id;
+      }
+    }
+
+    // 4. Fallback if still unassigned (only if no specific rider was queried)
+    if (!riderProfileId && !riderPhone && !riderId) {
+      const activeProfile =
+        (await this.prisma.riderProfile.findFirst({
+          where: { isAvailable: true },
+        })) || (await this.prisma.riderProfile.findFirst());
+      if (activeProfile) {
+        riderProfileId = activeProfile.id;
+      } else {
+        return { deliveries: [] };
       }
     }
 
@@ -44,7 +85,7 @@ export class RidersService {
 
     const assignments = await this.prisma.riderAssignment.findMany({
       where: {
-        ...(riderProfileId ? { riderId: riderProfileId } : {}),
+        riderId: riderProfileId,
         OR: [
           { status: 'ASSIGNED' },
           { status: 'ACCEPTED' },
@@ -66,16 +107,24 @@ export class RidersService {
 
     // Deduplicate orders by ID to prevent duplicate deliveries from reassigned/multi-attempt records
     const seenOrderIds = new Set<string>();
-    const ordersToDisplay: { order: (typeof assignments)[0]['order']; assignmentStatus: string }[] = [];
+    const ordersToDisplay: {
+      order: (typeof assignments)[0]['order'];
+      assignmentStatus: string;
+      assignedAt?: Date;
+    }[] = [];
     for (const a of assignments) {
       if (a.order && !seenOrderIds.has(a.order.id)) {
         seenOrderIds.add(a.order.id);
-        ordersToDisplay.push({ order: a.order, assignmentStatus: a.status });
+        ordersToDisplay.push({
+          order: a.order,
+          assignmentStatus: a.status,
+          assignedAt: a.assignedAt,
+        });
       }
     }
 
     return {
-      deliveries: ordersToDisplay.map(({ order: o, assignmentStatus }) => {
+      deliveries: ordersToDisplay.map(({ order: o, assignmentStatus, assignedAt }) => {
         const addr = (o.deliveryAddress as any) || {};
         const rawLat = Number(addr.latitude);
         const rawLng = Number(addr.longitude);
@@ -113,29 +162,51 @@ export class RidersService {
           customerPhone: o.customerPhone,
           deliveryAddress: `${addr.flat || ''}, ${addr.street || ''}, ${addr.pincode || ''}`.replace(/^,\s*|,\s*$/g, ''),
           landmark: addr.landmark,
+          deliveryNotes: o.deliveryNotes || undefined,
           coordinates: { latitude: lat, longitude: lng },
           navigationUrl,
           slotLabel: o.deliverySlot.label,
           paymentMethod: o.paymentMethod,
           cashDuePaise: o.paymentMethod === 'COD' && o.paymentStatus !== 'CAPTURED' ? o.totalAmountPaise : 0,
           itemsSummary: o.items.map((i) => `${i.quantity}x ${i.productName}`).join(', '),
+          createdAt: o.createdAt ? o.createdAt.toISOString() : undefined,
+          assignedAt: assignedAt ? assignedAt.toISOString() : undefined,
         };
       }),
     };
   }
 
-  async acceptDelivery(orderId: string, riderUserId?: string) {
+  async acceptDelivery(orderId: string, riderUserId?: string, riderPhone?: string, riderId?: string) {
     let riderProfileId: string | undefined = undefined;
-    if (riderUserId) {
+    if (riderId) {
+      const profile = await this.prisma.riderProfile.findFirst({
+        where: { OR: [{ id: riderId }, { userId: riderId }] },
+      });
+      if (profile) riderProfileId = profile.id;
+    }
+    if (!riderProfileId && riderPhone) {
+      const cleanPhone = riderPhone.replace(/\D/g, '').slice(-10);
+      const user = await this.prisma.user.findFirst({
+        where: { phone: { contains: cleanPhone } },
+        include: { riderProfile: true },
+      });
+      if (user?.riderProfile) riderProfileId = user.riderProfile.id;
+    }
+    if (!riderProfileId && riderUserId && !riderUserId.startsWith('simulated_')) {
       const profile = await this.prisma.riderProfile.findFirst({
         where: { OR: [{ id: riderUserId }, { userId: riderUserId }] },
       });
       if (profile) riderProfileId = profile.id;
     }
 
+    const order = await this.prisma.order.findFirst({
+      where: { OR: [{ id: orderId }, { orderNumber: orderId }] },
+    });
+    const actualOrderId = order ? order.id : orderId;
+
     const assignment = await this.prisma.riderAssignment.findFirst({
       where: {
-        orderId,
+        orderId: actualOrderId,
         ...(riderProfileId ? { riderId: riderProfileId } : {}),
         status: 'ASSIGNED',
       },
@@ -145,7 +216,7 @@ export class RidersService {
     if (!assignment) {
       const existing = await this.prisma.riderAssignment.findFirst({
         where: {
-          orderId,
+          orderId: actualOrderId,
           ...(riderProfileId ? { riderId: riderProfileId } : {}),
           status: 'ACCEPTED',
         },
@@ -168,12 +239,15 @@ export class RidersService {
     };
   }
 
-  async markOutForDelivery(orderId: string, riderUserId?: string) {
+  async markOutForDelivery(orderId: string, riderUserId?: string, riderPhone?: string, riderId?: string) {
     // FIX #3: Wrap status update + status event + OTP generation in a single atomic transaction.
     // Also validates the state transition before committing anything.
     return this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({ where: { id: orderId } });
+      const order = await tx.order.findFirst({
+        where: { OR: [{ id: orderId }, { orderNumber: orderId }] },
+      });
       if (!order) throw new NotFoundException('Order not found');
+      const actualOrderId = order.id;
 
       if (!PICKUP_ALLOWED_STATUSES.includes(order.status as any)) {
         throw new BadRequestException(
@@ -184,20 +258,20 @@ export class RidersService {
 
       // Update order status
       await tx.order.update({
-        where: { id: orderId },
+        where: { id: actualOrderId },
         data: { status: 'OUT_FOR_DELIVERY' },
       });
 
       // Ensure assignment moves to ACCEPTED if it was still pending in ASSIGNED
       await tx.riderAssignment.updateMany({
-        where: { orderId, status: 'ASSIGNED' },
+        where: { orderId: actualOrderId, status: 'ASSIGNED' },
         data: { status: 'ACCEPTED' },
       });
 
       // Record status event atomically with the update
       await tx.orderStatusEvent.create({
         data: {
-          orderId,
+          orderId: actualOrderId,
           fromStatus: order.status,
           toStatus: 'OUT_FOR_DELIVERY',
           actorId: riderUserId,
@@ -208,7 +282,7 @@ export class RidersService {
 
       // Invalidate any existing OTPs and create a fresh one — all inside the transaction
       await tx.deliveryOtp.updateMany({
-        where: { orderId, isUsed: false },
+        where: { orderId: actualOrderId, isUsed: false },
         data: { isUsed: true, usedAt: new Date() },
       });
 
@@ -221,7 +295,7 @@ export class RidersService {
 
       await tx.deliveryOtp.create({
         data: {
-          orderId,
+          orderId: actualOrderId,
           phone: order.customerPhone,
           otpCode: null,        // FIX #1: never persist plaintext OTP
           hashedVerifier,
@@ -234,7 +308,7 @@ export class RidersService {
       await tx.outboxMessage.create({
         data: {
           eventType: 'DELIVERY_OTP_GENERATED',
-          payload: { orderId, phone: order.customerPhone, otp: plainOtp, channel: 'WEB_DISPLAY' },
+          payload: { orderId: actualOrderId, phone: order.customerPhone, otp: plainOtp, channel: 'WEB_DISPLAY' },
           status: 'PENDING',
         },
       });
@@ -245,7 +319,8 @@ export class RidersService {
           : order.customerPhone;
 
       return {
-        orderId,
+        orderId: actualOrderId,
+        orderNumber: order.orderNumber,
         status: 'OUT_FOR_DELIVERY',
         message: 'Order is out for delivery. OTP generated for customer tracking screen.',
         otpSentTo: maskedPhone,

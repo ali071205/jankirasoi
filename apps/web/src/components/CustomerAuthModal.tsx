@@ -180,6 +180,17 @@ export default function CustomerAuthModal({
         onClose();
       }, 500);
     } catch (err: any) {
+      if (
+        err.message?.toLowerCase().includes('restricted') ||
+        err.message?.toLowerCase().includes('blocked') ||
+        err.message?.toLowerCase().includes('ban')
+      ) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('jr_customer_phone', cleanPhone);
+          window.dispatchEvent(new CustomEvent('jr_customer_banned'));
+        }
+        onClose();
+      }
       setError(err.message || 'Failed to authenticate. Please check your details.');
     } finally {
       setLoading(false);

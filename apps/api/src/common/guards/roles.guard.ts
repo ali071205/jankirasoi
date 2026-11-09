@@ -47,7 +47,10 @@ export class RolesGuard implements CanActivate {
 
     // Simulated-role bypass is permitted when explicitly enabled via ALLOW_SIMULATED_ROLE=true,
     // or by default in non-production environments.
-    const simRoleHeader = request.headers['x-simulated-role'] || request.query?.simulated_role;
+    const simRoleHeader =
+      request.headers['x-simulated-role'] ||
+      request.query?.simulated_role ||
+      (request.headers['x-rider-phone'] || request.query?.rider_phone ? 'RIDER' : undefined);
     const simulatedRoleEnabled =
       process.env.ALLOW_SIMULATED_ROLE === 'true' ||
       (process.env.NODE_ENV !== 'production' && process.env.ALLOW_SIMULATED_ROLE !== 'false');
@@ -56,9 +59,9 @@ export class RolesGuard implements CanActivate {
       const simRole = String(simRoleHeader).toUpperCase();
       if (!user || !requiredRoles.includes(user.role)) {
         user = {
-          id: user?.id || 'simulated_staff_id',
+          id: user?.id || (simRole === 'RIDER' ? 'simulated_rider_id' : 'simulated_staff_id'),
           role: simRole,
-          name: user?.name || 'Kitchen Station Staff',
+          name: user?.name || (simRole === 'RIDER' ? 'Delivery Partner' : 'Kitchen Station Staff'),
         };
       }
     }

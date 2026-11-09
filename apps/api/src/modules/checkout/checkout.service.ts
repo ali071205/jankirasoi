@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -359,6 +360,20 @@ export class CheckoutService {
     const cached = await this.loadQuote(dto.quoteToken);
     if (!cached || cached.expiresAt < new Date()) {
       throw new BadRequestException('Quotation has expired or is invalid. Please review your cart.');
+    }
+
+    // Customer Ban / Fraud Protection Check
+    const cleanPhone = (dto.customerPhone || '').replace(/\D/g, '').slice(-10);
+    if (cleanPhone) {
+      const customerUser = await this.prisma.user.findUnique({
+        where: { phone: cleanPhone },
+        select: { id: true, isActive: true, name: true },
+      });
+      if (customerUser && customerUser.isActive === false) {
+        throw new ForbiddenException(
+          'Aapka mobile number / account past unfulfilled ya fake order ki wajah se blocked hai. Order place karne ya unblock karwane ke liye Janki Rasoi kitchen support (+91 9812345678) se sampark karein.'
+        );
+      }
     }
 
     // 1. Generate guaranteed collision-proof identifiers upfront (0ms, zero DB queries)

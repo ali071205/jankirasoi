@@ -2,10 +2,14 @@ import {
   Injectable,
   UnauthorizedException,
   BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+  Optional,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AdminLoginDto, RiderLoginDto, CustomerLoginDto, CreateRiderDto, ToggleRiderAvailabilityDto } from './dto/auth.dto';
+import { OrdersEventsService } from '../events/orders-events.service';
+import { AdminLoginDto, RiderLoginDto, CustomerLoginDto, CreateRiderDto, ToggleRiderAvailabilityDto, BanCustomerDto, PayUnbanPenaltyDto } from './dto/auth.dto';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 
@@ -13,7 +17,10 @@ import { randomBytes } from 'crypto';
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly eventsService?: OrdersEventsService,
+  ) {}
 
   async hashPassword(password: string): Promise<string> {
     const salt = await bcrypt.genSalt(10);
@@ -161,6 +168,12 @@ export class AuthService {
       });
       this.logger.log(`Created new customer account: ${user.name} (${user.phone})`);
     } else {
+      // Prevent banned customer accounts from logging in
+      if (!user.isActive) {
+        throw new ForbiddenException(
+          'Aapka account restricted/blocked hai. Unblock karwane ke liye Janki Rasoi kitchen support (+91 9812345678) par sampark karein.'
+        );
+      }
       // Prevent customer login from hijacking/overwriting Admin, Staff, or Rider accounts
       if (user.role !== 'CUSTOMER') {
         throw new BadRequestException('This phone number is registered for administrative or delivery fleet access. Please use your personal customer mobile number.');
@@ -217,8 +230,12 @@ export class AuthService {
     let savedAddress = null;
     let recentOrders: any[] = [];
     let riderInfo = null;
+    let banDetails: any = null;
 
     if (user.role === 'CUSTOMER') {
+      if (!user.isActive) {
+        banDetails = await this.getCustomerBanStatus(user.phone);
+      }
       recentOrders = await this.prisma.order.findMany({
         where: { customerPhone: user.phone },
         orderBy: { createdAt: 'desc' },
@@ -248,6 +265,11 @@ export class AuthService {
         phone: user.phone,
         email: user.email,
         role: user.role,
+        isActive: user.isActive,
+        isBanned: !user.isActive,
+        banReason: banDetails?.reason || null,
+        penaltyAmountPaise: banDetails?.penaltyAmountPaise || null,
+        penaltyAmountRupees: banDetails?.penaltyAmountRupees || null,
         savedAddress,
         orderCount: recentOrders.length,
         recentOrders,
@@ -257,21 +279,21 @@ export class AuthService {
   }
 
   async getAdminCustomers() {
+    // 1. Fetch registered customer users with active status
     const customerUsers = await this.prisma.user.findMany({
       where: { role: 'CUSTOMER' },
       select: {
         id: true,
         name: true,
         phone: true,
+        isActive: true,
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
-      take: 50,
+      take: 100,
     });
 
-    // FIX #10: Use Prisma groupBy aggregation instead of fetching all order rows and
-    // computing totals in JS. This replaces an unbounded full-table scan with a single
-    // indexed GROUP BY query.
+    // 2. Aggregate order metrics grouped by customer phone
     const orderStats = await this.prisma.order.groupBy({
       by: ['customerPhone'],
       _count: { id: true },
@@ -279,45 +301,372 @@ export class AuthService {
       _max: { createdAt: true },
     });
 
-    // Fetch one saved address per phone (most recent order's address)
-    const recentAddresses = await this.prisma.order.findMany({
+    const userByPhone = new Map(customerUsers.map((u) => [u.phone, u]));
+    const statsByPhone = new Map(orderStats.map((s) => [s.customerPhone, s]));
+
+    // Collect all unique phone numbers across registered users and past orders
+    const allPhones = new Set<string>();
+    for (const u of customerUsers) if (u.phone) allPhones.add(u.phone);
+    for (const s of orderStats) if (s.customerPhone) allPhones.add(s.customerPhone);
+
+    const phonesList = Array.from(allPhones);
+
+    // 3. Fetch latest order for each customer phone
+    const recentOrders = await this.prisma.order.findMany({
       where: {
-        customerPhone: { in: customerUsers.map((u) => u.phone) },
-        deliveryAddress: { not: undefined },
+        customerPhone: { in: phonesList },
       },
-      select: { customerPhone: true, deliveryAddress: true },
+      select: {
+        customerPhone: true,
+        customerName: true,
+        deliveryAddress: true,
+        status: true,
+        totalAmountPaise: true,
+        createdAt: true,
+        items: {
+          select: {
+            productName: true,
+            quantity: true,
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
       distinct: ['customerPhone'],
     });
-    const addressMap = new Map(recentAddresses.map((r) => [r.customerPhone, r.deliveryAddress]));
 
-    const statsMap = new Map(orderStats.map((s) => [s.customerPhone, s]));
+    const recentOrderMap = new Map(recentOrders.map((r) => [r.customerPhone, r]));
 
-    const phoneMap = new Map<string, {
-      id?: string;
-      name: string;
-      phone: string;
-      orderCount: number;
-      totalSpendPaise: number;
-      lastOrderDate: string;
-      savedAddress: any;
-    }>();
+    // 4. Fetch ban logs for any users with isActive === false
+    const bannedPhones = phonesList.filter((p) => {
+      const u = userByPhone.get(p);
+      return u && u.isActive === false;
+    });
 
-    for (const u of customerUsers) {
-      const stats = statsMap.get(u.phone);
-      phoneMap.set(u.phone, {
-        id: u.id,
-        name: u.name,
-        phone: u.phone,
-        orderCount: stats?._count.id ?? 0,
-        totalSpendPaise: stats?._sum.totalAmountPaise ?? 0,
-        lastOrderDate: stats?._max.createdAt?.toISOString() ?? u.createdAt.toISOString(),
-        savedAddress: addressMap.get(u.phone) ?? null,
+    const banLogs = bannedPhones.length > 0 ? await this.prisma.auditLog.findMany({
+      where: {
+        entity: 'CUSTOMER',
+        entityId: { in: bannedPhones },
+        action: 'BAN_CUSTOMER',
+      },
+      orderBy: { createdAt: 'desc' },
+      distinct: ['entityId'],
+    }) : [];
+
+    const banLogMap = new Map(banLogs.map((b) => [b.entityId, b]));
+
+    // 5. Construct rich customer records
+    const customers = phonesList.map((phone) => {
+      const u = userByPhone.get(phone);
+      const stats = statsByPhone.get(phone);
+      const recentOrder = recentOrderMap.get(phone);
+      const banLog = banLogMap.get(phone);
+
+      const isBanned = u ? !u.isActive : false;
+      const orderCount = stats?._count.id ?? 0;
+      const totalSpendPaise = stats?._sum.totalAmountPaise ?? 0;
+
+      // Customer name resolution: User profile name -> Recent order name -> Fallback
+      let name = u?.name;
+      if (!name || name.startsWith('Customer ')) {
+        name = recentOrder?.customerName || u?.name || `Customer ${phone.slice(-4)}`;
+      }
+
+      // Ban details
+      const banReason = isBanned ? (banLog?.reason || 'Account restricted by kitchen admin') : null;
+      const penaltyAmountPaise = isBanned
+        ? ((banLog?.newValue as any)?.penaltyAmountPaise || 0)
+        : 0;
+
+      // Customer Segmentation for Loyalty & Coupon targeting
+      let segment: 'VIP' | 'REGULAR' | 'NEW' | 'BANNED' = 'NEW';
+      if (isBanned) {
+        segment = 'BANNED';
+      } else if (orderCount >= 5 || totalSpendPaise >= 100000) {
+        segment = 'VIP';
+      } else if (orderCount >= 2) {
+        segment = 'REGULAR';
+      }
+
+      const recentItems = recentOrder?.items?.map((it) => `${it.quantity}x ${it.productName}`) || [];
+
+      return {
+        id: u?.id,
+        name,
+        phone,
+        isActive: !isBanned,
+        isBanned,
+        banReason,
+        penaltyAmountPaise,
+        orderCount,
+        totalSpendPaise,
+        lastOrderDate: stats?._max.createdAt?.toISOString() ?? u?.createdAt?.toISOString() ?? new Date().toISOString(),
+        lastOrderStatus: recentOrder?.status || 'NO_ORDERS',
+        recentItems,
+        savedAddress: recentOrder?.deliveryAddress || null,
+        segment,
+      };
+    });
+
+    // Sort by last active / order date descending
+    customers.sort((a, b) => new Date(b.lastOrderDate).getTime() - new Date(a.lastOrderDate).getTime());
+
+    return {
+      customers,
+      totalCount: customers.length,
+      bannedCount: customers.filter((c) => c.isBanned).length,
+      vipCount: customers.filter((c) => c.segment === 'VIP').length,
+    };
+  }
+
+  async banCustomer(phone: string, dto?: BanCustomerDto) {
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    if (!cleanPhone || cleanPhone.length < 10) {
+      throw new BadRequestException('Invalid 10-digit customer phone number');
+    }
+
+    let user = await this.prisma.user.findUnique({
+      where: { phone: cleanPhone },
+    });
+
+    if (!user) {
+      const latestOrder = await this.prisma.order.findFirst({
+        where: { customerPhone: cleanPhone },
+        orderBy: { createdAt: 'desc' },
+        select: { customerName: true },
+      });
+      const dummyHash = await this.hashPassword(randomBytes(16).toString('hex'));
+      user = await this.prisma.user.create({
+        data: {
+          phone: cleanPhone,
+          name: latestOrder?.customerName || `Customer ${cleanPhone.slice(-4)}`,
+          email: null,
+          passwordHash: dummyHash,
+          role: 'CUSTOMER',
+          isActive: false,
+        },
+      });
+    } else {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { isActive: false },
       });
     }
 
+    // Invalidate any active sessions for this user so they are immediately logged out
+    await this.prisma.session.deleteMany({
+      where: { userId: user.id },
+    }).catch(() => {});
+
+    // Log the ban event in AuditLog
+    await this.prisma.auditLog.create({
+      data: {
+        action: 'BAN_CUSTOMER',
+        actorRole: 'ADMIN',
+        entity: 'CUSTOMER',
+        entityId: cleanPhone,
+        reason: dto?.reason || 'Fake order / unreachable phone / refused COD',
+        newValue: {
+          bannedAt: new Date().toISOString(),
+          reason: dto?.reason || 'Fake order / unreachable phone / refused COD',
+          penaltyAmountPaise: dto?.penaltyAmountPaise || 0,
+        },
+      },
+    });
+
+    this.logger.warn(`Admin banned customer: ${user.name} (${cleanPhone}). Reason: ${dto?.reason || 'N/A'}`);
     return {
-      customers: Array.from(phoneMap.values()),
+      success: true,
+      message: `Customer +91 ${cleanPhone} has been blocked from placing orders.`,
+      phone: cleanPhone,
+      isBanned: true,
+    };
+  }
+
+  async unbanCustomer(phone: string) {
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    if (!cleanPhone || cleanPhone.length < 10) {
+      throw new BadRequestException('Invalid 10-digit customer phone number');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { phone: cleanPhone },
+    });
+
+    if (user) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { isActive: true },
+      });
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        action: 'UNBAN_CUSTOMER',
+        actorRole: 'ADMIN',
+        entity: 'CUSTOMER',
+        entityId: cleanPhone,
+        reason: 'Admin cleared penalty / unbanned customer',
+        newValue: {
+          unbannedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    this.logger.log(`Admin unbanned customer: ${cleanPhone}`);
+    return {
+      success: true,
+      message: `Customer +91 ${cleanPhone} has been unblocked.`,
+      phone: cleanPhone,
+      isBanned: false,
+    };
+  }
+
+  async getCustomerBanStatus(phone: string) {
+    const cleanPhone = phone ? phone.replace(/\D/g, '').slice(-10) : '';
+    if (!cleanPhone || cleanPhone.length < 10) {
+      return { isBanned: false, phone: cleanPhone };
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { phone: cleanPhone },
+    });
+
+    if (!user || user.isActive) {
+      return { isBanned: false, phone: cleanPhone };
+    }
+
+    const latestBanLog = await this.prisma.auditLog.findFirst({
+      where: {
+        entity: 'CUSTOMER',
+        entityId: cleanPhone,
+        action: 'BAN_CUSTOMER',
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const penaltyPaise = (latestBanLog?.newValue as any)?.penaltyAmountPaise ?? 25000;
+    const reason = latestBanLog?.reason || 'Customer phone unreachable / COD delivery unfulfilled';
+
+    return {
+      isBanned: true,
+      phone: cleanPhone,
+      name: user.name || 'Customer',
+      reason,
+      penaltyAmountPaise: penaltyPaise,
+      penaltyAmountRupees: Math.round(penaltyPaise / 100),
+      bannedAt: latestBanLog?.createdAt?.toISOString() || null,
+    };
+  }
+
+  async payUnbanPenalty(dto: PayUnbanPenaltyDto) {
+    const cleanPhone = dto.phone ? dto.phone.replace(/\D/g, '').slice(-10) : '';
+    if (!cleanPhone || cleanPhone.length < 10) {
+      throw new BadRequestException('Valid 10-digit customer mobile number is required.');
+    }
+
+    let user = await this.prisma.user.findUnique({
+      where: { phone: cleanPhone },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`Customer account with phone ${cleanPhone} not found.`);
+    }
+
+    // Set user to active
+    user = await this.prisma.user.update({
+      where: { id: user.id },
+      data: { isActive: true },
+    });
+
+    const txn = dto.transactionRef || `TXN_${Date.now().toString(36).toUpperCase()}`;
+    await this.prisma.auditLog.create({
+      data: {
+        action: 'UNBAN_CUSTOMER',
+        actorRole: 'CUSTOMER',
+        entity: 'CUSTOMER',
+        entityId: cleanPhone,
+        reason: `Customer cleared penalty via online payment (${dto.paymentMethod || 'UPI'}, Txn: ${txn})`,
+        newValue: {
+          unbannedAt: new Date().toISOString(),
+          paymentMethod: dto.paymentMethod || 'UPI',
+          transactionRef: txn,
+        },
+      },
+    });
+
+    // ponytail: notify admin real-time SSE stream about penalty payment & unban
+    if (this.eventsService) {
+      try {
+        const latestBanLog = await this.prisma.auditLog.findFirst({
+          where: { entity: 'CUSTOMER', entityId: cleanPhone, action: 'BAN_CUSTOMER' },
+          orderBy: { createdAt: 'desc' },
+        });
+        const penaltyPaise = (latestBanLog?.newValue as any)?.penaltyAmountPaise ?? 25000;
+        this.eventsService.emitOrderEvent('CUSTOMER_UNBANNED', {
+          phone: cleanPhone,
+          customerName: user.name,
+          penaltyAmount: Math.round(penaltyPaise / 100),
+        });
+      } catch (err) {
+        this.logger.warn(`Failed to emit CUSTOMER_UNBANNED event: ${err}`);
+      }
+    }
+
+    const session = await this.createSession(user.id);
+
+    return {
+      success: true,
+      message: `Account +91 ${cleanPhone} has been successfully unbanned! You can now place orders.`,
+      isBanned: false,
+      phone: cleanPhone,
+      sessionToken: session.token,
+      user: {
+        id: user.id,
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        isActive: true,
+        isBanned: false,
+      },
+    };
+  }
+
+  async getCustomerOrders(phone: string) {
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    const orders = await this.prisma.order.findMany({
+      where: { customerPhone: cleanPhone },
+      include: {
+        items: true,
+        deliverySlot: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 25,
+    });
+
+    return {
+      phone: cleanPhone,
+      orderCount: orders.length,
+      orders: orders.map((o) => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        status: o.status,
+        paymentMethod: o.paymentMethod,
+        paymentStatus: o.paymentStatus,
+        totalAmountPaise: o.totalAmountPaise,
+        subtotalPaise: o.subtotalPaise,
+        deliveryAddress: o.deliveryAddress,
+        deliveryNotes: o.deliveryNotes,
+        slotLabel: o.deliverySlot?.label || 'Standard',
+        createdAt: o.createdAt.toISOString(),
+        items: o.items.map((i) => ({
+          name: i.productName,
+          variant: i.variantName,
+          quantity: i.quantity,
+          totalPricePaise: i.totalPricePaise,
+          unitPricePaise: i.unitPricePaise,
+        })),
+      })),
     };
   }
 
