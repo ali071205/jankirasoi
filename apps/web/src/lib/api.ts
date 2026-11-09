@@ -78,6 +78,37 @@ export interface PincodeCheckResponse {
   message?: string;
 }
 
+export interface PlaceSearchResult {
+  placeId: string;
+  description: string;
+  mainText: string;
+  secondaryText: string;
+  lat: number | null;
+  lng: number | null;
+  pincode: string | null;
+  city: string | null;
+}
+
+export interface ReverseGeocodeResult {
+  formattedAddress: string;
+  name: string;
+  suburb: string;
+  city: string;
+  district: string;
+  state: string;
+  pincode: string;
+  lat: number;
+  lng: number;
+}
+
+export interface DirectionsResult {
+  distanceMeters: number;
+  durationSeconds: number;
+  distanceKm: number;
+  durationMinutes: number;
+  coordinates: [number, number][];
+}
+
 export interface QuoteRequestItem {
   productId: string;
   variantId?: string;
@@ -634,6 +665,112 @@ export const api = {
       message: 'Delivery not available beyond 15 km from Sagore Kitchen.',
     };
     return setCached(cacheKey, unserviceableData, 60000);
+  },
+
+  // 2b. Places Autocomplete via Ola Maps (Backend Proxy)
+  async searchPlaces(query: string, lat?: number, lng?: number): Promise<PlaceSearchResult[]> {
+    if (!query || query.trim().length < 2) return [];
+    const base = getApiBase();
+    let url = `${base}/delivery-zones/places-search?q=${encodeURIComponent(query.trim())}`;
+    if (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)) {
+      url += `&lat=${lat}&lng=${lng}`;
+    }
+    const cacheKey = `places_${query.trim().toLowerCase()}_${lat ?? ''}_${lng ?? ''}`;
+    const cached = getCached<PlaceSearchResult[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      const data: PlaceSearchResult[] = await res.json();
+      return setCached(cacheKey, data, 1800000); // 30 min cache
+    } catch {
+      return [];
+    }
+  },
+
+  // 2c. Reverse Geocode via Ola Maps (Backend Proxy)
+  async reverseGeocode(lat: number, lng: number): Promise<ReverseGeocodeResult | null> {
+    const base = getApiBase();
+    const cacheKey = `rev_${lat.toFixed(4)}_${lng.toFixed(4)}`;
+    const cached = getCached<ReverseGeocodeResult>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const res = await fetch(`${base}/delivery-zones/reverse-geocode?lat=${lat}&lng=${lng}`);
+      if (!res.ok) return null;
+      const data: ReverseGeocodeResult = await res.json();
+      return setCached(cacheKey, data, 86400000); // 24 hr cache
+    } catch {
+      return null;
+    }
+  },
+
+  // 2d. Delivery Route Directions via Ola Maps (Backend Proxy)
+  async getDirections(
+    originLat: number,
+    originLng: number,
+    destLat: number,
+    destLng: number,
+  ): Promise<DirectionsResult | null> {
+    const base = getApiBase();
+    const cacheKey = `dir_${originLat.toFixed(3)}_${originLng.toFixed(3)}_${destLat.toFixed(3)}_${destLng.toFixed(3)}`;
+    const cached = getCached<DirectionsResult>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const res = await fetch(
+        `${base}/delivery-zones/directions?originLat=${originLat}&originLng=${originLng}&destLat=${destLat}&destLng=${destLng}`,
+      );
+      if (!res.ok) return null;
+      const data: DirectionsResult = await res.json();
+      return setCached(cacheKey, data, 3600000); // 1 hr cache
+    } catch {
+      return null;
+    }
+  },
+
+  // 2e. Multi-Stop Route Optimization for Riders
+  async optimizeRoute(
+    origin: { lat: number; lng: number },
+    stops: { id: string; lat: number; lng: number; title?: string }[],
+  ): Promise<{
+    orderedStops: { id: string; lat: number; lng: number; title?: string }[];
+    totalDistanceKm: number;
+    estimatedDurationMinutes: number;
+  }> {
+    if (!stops || stops.length <= 1) {
+      return { orderedStops: stops || [], totalDistanceKm: 0, estimatedDurationMinutes: 0 };
+    }
+    const base = getApiBase();
+    try {
+      const res = await fetch(`${base}/delivery-zones/route-optimize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ origin, stops }),
+      });
+      if (!res.ok) throw new Error('Route optimization failed');
+      return await res.json();
+    } catch {
+      return { orderedStops: stops, totalDistanceKm: 0, estimatedDurationMinutes: 0 };
+    }
+  },
+
+  // 2f. Snap GPS Telemetry to Roads
+  async snapToRoad(points: [number, number][]): Promise<[number, number][]> {
+    if (!points || points.length <= 1) return points;
+    const base = getApiBase();
+    try {
+      const res = await fetch(`${base}/delivery-zones/snap-to-road`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ points }),
+      });
+      if (!res.ok) return points;
+      return await res.json();
+    } catch {
+      return points;
+    }
   },
 
   // 3. Delivery Slots with 1-minute Cache

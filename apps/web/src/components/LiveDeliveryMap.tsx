@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import 'leaflet/dist/leaflet.css';
+import { api } from '../lib/api';
 
 export interface LiveDeliveryMapProps {
   driverLocation?: { latitude: number; longitude: number; heading?: number } | null;
@@ -192,6 +193,25 @@ export default function LiveDeliveryMap({
         lineJoin: 'round',
       }).addTo(map);
 
+      // Asynchronously fetch accurate road directions from Ola Maps
+      const startLat = isRiderView && driverLocation?.latitude ? driverLocation.latitude : kitchenLocation.latitude;
+      const startLng = isRiderView && driverLocation?.longitude ? driverLocation.longitude : kitchenLocation.longitude;
+
+      api
+        .getDirections(
+          startLat,
+          startLng,
+          customerLocation.latitude,
+          customerLocation.longitude,
+        )
+        .then((directions) => {
+          if (!isMounted || !mapInstanceRef.current || !polylineRef.current) return;
+          if (directions && directions.coordinates && directions.coordinates.length > 1) {
+            polylineRef.current.setLatLngs(directions.coordinates);
+          }
+        })
+        .catch(() => {});
+
       // Fit bounds with comfortable padding
       const group = L.featureGroup([
         driverMarkerRef.current,
@@ -200,6 +220,7 @@ export default function LiveDeliveryMap({
       ]);
       map.fitBounds(group.getBounds().pad(0.2));
     });
+
 
     return () => {
       isMounted = false;
