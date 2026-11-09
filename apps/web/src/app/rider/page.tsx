@@ -540,10 +540,14 @@ export default function RiderPage() {
     }
   };
 
-  // Deduplicate deliveries by orderId to guarantee no duplicate cards
+  // Deduplicate deliveries by orderId to guarantee no duplicate cards and sort newest at the top
   const uniqueDeliveries = Array.from(
     new Map(deliveries.map((d) => [d.orderId, d])).values()
-  );
+  ).sort((a, b) => {
+    const timeA = new Date(a.assignedAt || a.createdAt || 0).getTime();
+    const timeB = new Date(b.assignedAt || b.createdAt || 0).getTime();
+    return timeB - timeA;
+  });
 
   const activeDeliveries = uniqueDeliveries.filter(
     (d) => d.status !== 'DELIVERED' && d.status !== 'CANCELLED'

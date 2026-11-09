@@ -598,7 +598,9 @@ export default function OperationsConsolePage() {
     if (!isSilent) setLoading(true);
     try {
       const data = await adminApi.getOrders();
-      const fetched = data.orders || [];
+      const fetched = (data.orders || []).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
 
       // Check if new orders arrived to trigger audio chime
       const newOrdersCount = fetched.filter((o) => o.status === 'PLACED').length;
@@ -709,7 +711,9 @@ export default function OperationsConsolePage() {
       const res = await adminApi.getCustomerOrders(c.phone);
       setViewingCustomerOrders({
         customer: c,
-        orders: res.orders || [],
+        orders: (res.orders || []).sort(
+          (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        ),
         loading: false,
       });
     } catch (err: any) {
@@ -1426,13 +1430,7 @@ export default function OperationsConsolePage() {
       return true;
     })
     .sort((a, b) => {
-      // Prioritize actionable orders needing rider assignment (READY_FOR_PICKUP, ACCEPTED, PREPARING, PLACED without assigned rider)
-      const aNeedsRider = !a.assignedRider && a.status !== 'DELIVERED' && a.status !== 'CANCELLED';
-      const bNeedsRider = !b.assignedRider && b.status !== 'DELIVERED' && b.status !== 'CANCELLED';
-      if (aNeedsRider && !bNeedsRider) return -1;
-      if (!aNeedsRider && bNeedsRider) return 1;
-
-      // Strict LIFO: Newest orders first (latest ordered at the top)
+      // Strict LIFO: Newest orders first (latest ordered always at the very top everywhere)
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 

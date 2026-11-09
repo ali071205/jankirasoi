@@ -446,6 +446,10 @@ function OrderTrackingContent() {
         }
       });
 
+      // Strict newest-first sorting for customer multi-order tracking
+      fetchedOrders.sort(
+        (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      );
       setOrders(fetchedOrders);
       setError(null);
     } catch (err: any) {
