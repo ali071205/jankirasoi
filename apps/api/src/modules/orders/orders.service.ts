@@ -15,11 +15,11 @@ import { RidersService } from '../riders/riders.service';
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   AWAITING_PAYMENT: ['PLACED', 'CANCELLED'],
   PLACED: ['ACCEPTED', 'PREPARING', 'CANCELLED'],
-  ACCEPTED: ['PREPARING', 'READY_FOR_PICKUP', 'CANCELLED'],
-  PREPARING: ['READY_FOR_PICKUP', 'CANCELLED'],
-  READY_FOR_PICKUP: ['OUT_FOR_DELIVERY', 'CANCELLED'],
-  OUT_FOR_DELIVERY: ['DELIVERED', 'DELIVERY_EXCEPTION'],
-  DELIVERY_EXCEPTION: ['OUT_FOR_DELIVERY', 'CANCELLED'],
+  ACCEPTED: ['PREPARING', 'READY_FOR_PICKUP', 'PLACED', 'CANCELLED'],
+  PREPARING: ['READY_FOR_PICKUP', 'ACCEPTED', 'PLACED', 'CANCELLED'],
+  READY_FOR_PICKUP: ['OUT_FOR_DELIVERY', 'PREPARING', 'ACCEPTED', 'CANCELLED'],
+  OUT_FOR_DELIVERY: ['DELIVERED', 'DELIVERY_EXCEPTION', 'READY_FOR_PICKUP', 'CANCELLED'],
+  DELIVERY_EXCEPTION: ['OUT_FOR_DELIVERY', 'READY_FOR_PICKUP', 'CANCELLED'],
   DELIVERED: [],
   CANCELLED: [],
 };
@@ -336,9 +336,17 @@ export class OrdersService {
     actorType = 'ADMIN',
   ) {
     const result = await this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({ where: { id: orderId } });
+      const order = await tx.order.findFirst({
+        where: {
+          OR: [{ id: orderId }, { orderNumber: orderId }],
+        },
+      });
       if (!order) {
         throw new NotFoundException(`Order not found: ${orderId}`);
+      }
+
+      if (order.status === toStatus) {
+        return order;
       }
 
       const allowed = VALID_TRANSITIONS[order.status];
@@ -349,14 +357,14 @@ export class OrdersService {
       }
 
       const updated = await tx.order.update({
-        where: { id: orderId },
+        where: { id: order.id },
         data: { status: toStatus },
       });
 
       // If dispatched out for delivery, ensure active 6-digit verbal handover PIN is generated
       if (toStatus === 'OUT_FOR_DELIVERY') {
         const existingOtp = await tx.deliveryOtp.findFirst({
-          where: { orderId, isUsed: false, expiresAt: { gt: new Date() } },
+          where: { orderId: order.id, isUsed: false, expiresAt: { gt: new Date() } },
         });
 
         if (!existingOtp) {
@@ -368,7 +376,7 @@ export class OrdersService {
 
           await tx.deliveryOtp.create({
             data: {
-              orderId,
+              orderId: order.id,
               phone: order.customerPhone,
               otpCode: null, // FIX #1: never persist plaintext OTP
               hashedVerifier,
@@ -380,7 +388,7 @@ export class OrdersService {
           await tx.outboxMessage.create({
             data: {
               eventType: 'DELIVERY_OTP_GENERATED',
-              payload: { orderId, phone: order.customerPhone, otp: plainOtp, channel: 'WEB_DISPLAY' },
+              payload: { orderId: order.id, phone: order.customerPhone, otp: plainOtp, channel: 'WEB_DISPLAY' },
               status: 'PENDING',
             },
           });
@@ -389,7 +397,7 @@ export class OrdersService {
 
       await tx.orderStatusEvent.create({
         data: {
-          orderId,
+          orderId: order.id,
           fromStatus: order.status,
           toStatus,
           actorId,
@@ -403,7 +411,7 @@ export class OrdersService {
         actorRole: actorType,
         action: 'UPDATE_ORDER_STATUS',
         entity: 'Order',
-        entityId: orderId,
+        entityId: order.id,
         oldValue: { status: order.status },
         newValue: { status: toStatus },
         reason,
@@ -413,7 +421,7 @@ export class OrdersService {
     });
 
     this.ordersEventsService.emitOrderEvent('ORDER_UPDATED', {
-      orderId,
+      orderId: result.id,
       status: toStatus,
       orderNumber: result.orderNumber,
     });
@@ -423,15 +431,26 @@ export class OrdersService {
 
   async assignRider(orderId: string, riderId: string, adminId?: string) {
     const result = await this.prisma.$transaction(async (tx) => {
+      // Resolve Order ID: Support both UUID id and human-readable orderNumber (e.g. JR-20261107-1061-F83F)
+      const order = await tx.order.findFirst({
+        where: {
+          OR: [{ id: orderId }, { orderNumber: orderId }],
+        },
+      });
+      if (!order) {
+        throw new NotFoundException(`Order with id or orderNumber '${orderId}' not found.`);
+      }
+      const actualOrderId = order.id;
+
       // 1. Invalidate any active OTPs on this order due to reassignment
       await tx.deliveryOtp.updateMany({
-        where: { orderId, isUsed: false },
+        where: { orderId: actualOrderId, isUsed: false },
         data: { isUsed: true, usedAt: new Date() },
       });
 
       // 2. Mark previous assignments cancelled
       await tx.riderAssignment.updateMany({
-        where: { orderId, status: { in: ['ASSIGNED', 'ACCEPTED'] } },
+        where: { orderId: actualOrderId, status: { in: ['ASSIGNED', 'ACCEPTED'] } },
         data: { status: 'CANCELLED' },
       });
 
@@ -470,27 +489,60 @@ export class OrdersService {
       // 4. Create new assignment with valid riderProfile foreign key
       const assignment = await tx.riderAssignment.create({
         data: {
-          orderId,
+          orderId: actualOrderId,
           riderId: resolvedProfileId,
           status: 'ASSIGNED',
         },
       });
+
+      // 5. If order was still PLACED, assigning a delivery partner automatically accepts it for kitchen cooking
+      let finalStatus = order.status;
+      if (order.status === 'PLACED') {
+        finalStatus = 'ACCEPTED';
+        await tx.order.update({
+          where: { id: actualOrderId },
+          data: { status: 'ACCEPTED', updatedAt: new Date() },
+        });
+        await tx.orderStatusEvent.create({
+          data: {
+            orderId: actualOrderId,
+            fromStatus: 'PLACED',
+            toStatus: 'ACCEPTED',
+            actorId: adminId,
+            actorType: 'ADMIN',
+            reason: 'Auto-accepted on rider dispatch assignment',
+          },
+        });
+      } else {
+        await tx.order.update({
+          where: { id: actualOrderId },
+          data: { updatedAt: new Date() },
+        });
+      }
 
       await this.auditService.log({
         actorId: adminId,
         actorRole: 'ADMIN',
         action: 'ASSIGN_RIDER',
         entity: 'Order',
-        entityId: orderId,
-        newValue: { riderId },
+        entityId: actualOrderId,
+        newValue: { riderId: resolvedProfileId, orderNumber: order.orderNumber, status: finalStatus },
       });
 
-      return assignment;
+      return { ...assignment, orderNumber: order.orderNumber, status: finalStatus };
     });
 
     this.ordersEventsService.emitOrderEvent('RIDER_ASSIGNED', {
-      orderId,
+      orderId: result.orderId,
       riderId,
+      orderNumber: result.orderNumber,
+      status: result.status,
+    });
+
+    this.ordersEventsService.emitOrderEvent('ORDER_UPDATED', {
+      orderId: result.orderId,
+      status: result.status,
+      orderNumber: result.orderNumber,
     });
 
     return result;

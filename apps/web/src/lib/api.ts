@@ -256,6 +256,7 @@ export interface RiderDelivery {
   customerPhone: string;
   deliveryAddress: string;
   landmark?: string;
+  deliveryNotes?: string;
   coordinates: {
     latitude: number;
     longitude: number;
@@ -265,6 +266,8 @@ export interface RiderDelivery {
   paymentMethod: string;
   cashDuePaise: number;
   itemsSummary: string;
+  createdAt?: string;
+  assignedAt?: string;
 }
 
 export const SUPABASE_STORAGE_DISHES_BASE = 'https://yxvwgcjavxeqsttzcbty.supabase.co/storage/v1/object/public/menu/dishes';
@@ -416,6 +419,30 @@ export function optimizeImageUrl(url?: string, width = 400): string {
 }
 
 // In api client:
+// Helper to build full headers for Rider Portal requests
+function getRiderHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Simulated-Role': 'RIDER',
+  };
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('jr_rider_token');
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const profileStr = localStorage.getItem('jr_rider_profile') || localStorage.getItem('jr_rider_user');
+    if (profileStr) {
+      try {
+        const parsed = JSON.parse(profileStr);
+        const phone = parsed.phone || parsed.user?.phone || '';
+        const id = parsed.riderProfile?.id || parsed.riderId || parsed.id || '';
+        if (phone) headers['X-Rider-Phone'] = phone;
+        if (id) headers['X-Rider-Id'] = id;
+      } catch {}
+    }
+  }
+  return headers;
+}
+
 export const api = {
   // Synchronous cache accessors for zero-flicker instant hydration
   getCachedCatalog(serviceDate?: string): CatalogResponse | null {
@@ -799,9 +826,18 @@ export const api = {
   // 10. Rider Deliveries Queue (Live database state only - zero mock data)
   async getRiderDeliveries(signal?: AbortSignal): Promise<{ deliveries: RiderDelivery[] }> {
     const base = getApiBase();
-    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
-    const res = await fetch(`${base}/rider/deliveries`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    const headers = getRiderHeaders();
+    const riderPhone = headers['X-Rider-Phone'] || '';
+    const riderId = headers['X-Rider-Id'] || '';
+
+    const queryParams = new URLSearchParams();
+    queryParams.set('_t', Date.now().toString());
+    queryParams.set('simulated_role', 'RIDER');
+    if (riderPhone) queryParams.set('rider_phone', riderPhone);
+    if (riderId) queryParams.set('rider_id', riderId);
+
+    const res = await fetch(`${base}/rider/deliveries?${queryParams.toString()}`, {
+      headers,
       credentials: 'include',
       cache: 'no-store',
       signal,
@@ -817,13 +853,9 @@ export const api = {
   // 10b. Rider Accept Delivery Assignment
   async acceptRiderDelivery(orderId: string) {
     const base = getApiBase();
-    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
     const res = await fetch(`${base}/rider/deliveries/${encodeURIComponent(orderId)}/accept`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: getRiderHeaders(),
       credentials: 'include',
     });
     if (!res.ok) {
@@ -836,13 +868,9 @@ export const api = {
   // 11. Rider Mark Out for Delivery (generates customer PIN)
   async markRiderOutForDelivery(orderId: string) {
     const base = getApiBase();
-    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
     const res = await fetch(`${base}/rider/deliveries/${encodeURIComponent(orderId)}/out-for-delivery`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: getRiderHeaders(),
       credentials: 'include',
     });
     if (!res.ok) {
@@ -855,13 +883,9 @@ export const api = {
   // 12. Rider Verify Delivery OTP PIN
   async verifyRiderDeliveryOtp(orderId: string, code: string) {
     const base = getApiBase();
-    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
     const res = await fetch(`${base}/rider/deliveries/${encodeURIComponent(orderId)}/verify-otp`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: getRiderHeaders(),
       credentials: 'include',
       body: JSON.stringify({ code }),
     });
@@ -875,13 +899,9 @@ export const api = {
   // 12b. Update Rider Duty Availability Status
   async updateRiderDutyStatus(isAvailable: boolean) {
     const base = getApiBase();
-    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
     const res = await fetch(`${base}/rider/deliveries/duty-status`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: getRiderHeaders(),
       credentials: 'include',
       body: JSON.stringify({ isAvailable }),
     });
@@ -895,13 +915,9 @@ export const api = {
   // 12c. Rider Update Real-time GPS Location Telemetry
   async updateRiderLocation(coords: { latitude: number; longitude: number; heading?: number; speed?: number }) {
     const base = getApiBase();
-    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_rider_token') : null;
     const res = await fetch(`${base}/rider/deliveries/location`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: getRiderHeaders(),
       credentials: 'include',
       body: JSON.stringify(coords),
     });
@@ -1065,6 +1081,58 @@ export const api = {
       }
     }
   },
+
+  // 17. Check Customer Ban / Restriction Status
+  async checkCustomerBanStatus(phone?: string): Promise<{
+    isBanned: boolean;
+    phone?: string;
+    name?: string;
+    reason?: string;
+    penaltyAmountPaise?: number;
+    penaltyAmountRupees?: number;
+    bannedAt?: string;
+  }> {
+    const base = getApiBase();
+    let queryPhone = phone;
+    if (!queryPhone && typeof window !== 'undefined') {
+      queryPhone = localStorage.getItem('jr_customer_phone') || undefined;
+    }
+    const token = typeof window !== 'undefined' ? localStorage.getItem('jr_session_token') : null;
+    const url = queryPhone
+      ? `${base}/auth/customer/status?phone=${encodeURIComponent(queryPhone)}`
+      : `${base}/auth/customer/status`;
+    try {
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        return res.json();
+      }
+    } catch {}
+    return { isBanned: false, phone: queryPhone };
+  },
+
+  // 18. Customer Pays Penalty to Unban Account
+  async payUnbanPenalty(phone: string, paymentMethod = 'UPI', transactionRef?: string) {
+    const base = getApiBase();
+    const res = await fetch(`${base}/auth/customer/pay-unban-penalty`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, paymentMethod, transactionRef }),
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Payment processing failed');
+    }
+    const data = await res.json();
+    if (typeof window !== 'undefined') {
+      if (data.sessionToken) localStorage.setItem('jr_session_token', data.sessionToken);
+      if (data.user) localStorage.setItem('jr_user_profile', JSON.stringify(data.user));
+    }
+    return data;
+  },
 };
 
 export interface UserProfile {
@@ -1073,6 +1141,11 @@ export interface UserProfile {
   phone: string;
   email?: string | null;
   role: 'CUSTOMER' | 'RIDER' | 'ADMIN' | 'STAFF';
+  isActive?: boolean;
+  isBanned?: boolean;
+  banReason?: string | null;
+  penaltyAmountPaise?: number | null;
+  penaltyAmountRupees?: number | null;
   savedAddress?: {
     flat?: string;
     street?: string;

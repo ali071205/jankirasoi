@@ -19,6 +19,14 @@ const nextConfig = {
       },
     ];
   },
+  webpack: (config, { dev }) => {
+    if (dev) {
+      // Use in-memory webpack cache during dev on Windows to prevent
+      // corrupt/missing chunk errors (e.g. "Cannot find module './9.js'")
+      config.cache = { type: 'memory' };
+    }
+    return config;
+  },
 };
 
 module.exports = nextConfig;

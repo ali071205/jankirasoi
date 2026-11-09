@@ -66,7 +66,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         const poolSize = configService.get<string>('DATABASE_POOL_SIZE') || '15';
         const poolTimeout = configService.get<string>('DATABASE_POOL_TIMEOUT') || '20';
         const host = parsed.hostname.includes('pooler.supabase.com') ? parsed.hostname : 'aws-0-ap-northeast-2.pooler.supabase.com';
-        const port = parsed.port || '6543';
+        const port = '6543'; // Supabase connection pooler (Transaction mode / PgBouncer) is always on port 6543
         databaseUrl = `postgresql://${poolerUser}${pass}@${host}:${port}/postgres?pgbouncer=true&sslmode=require&connection_limit=${poolSize}&pool_timeout=${poolTimeout}`;
       } catch {
         // keep databaseUrl as-is if parsing fails

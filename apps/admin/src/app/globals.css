@@ -69,3 +69,18 @@ html.icons-loading .material-symbols-outlined {
 .custom-pills-slider::-webkit-scrollbar-thumb:hover {
   background-color: #94a3b8;
 }
+
+/* Clockwise spin for refresh/sync icons */
+@keyframes spin-clockwise {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-clockwise,
+.animate-spin-reverse {
+  animation: spin-clockwise 1s linear infinite;
+}

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { adminApi, AdminOrder, AdminCustomer, AdminRider } from '../lib/api';
+import { adminApi, AdminOrder, AdminCustomer, AdminRider, CustomerOrderHistoryItem } from '../lib/api';
 
 // Synthesizer Web Audio API chime (zero external assets, 100% reliable)
 function playKitchenOrderChime() {
@@ -28,6 +28,19 @@ function playKitchenOrderChime() {
   } catch (e) {
     // Audio autoplay restrictions
   }
+}
+
+function ClockwiseRefreshIcon({ className = "w-4 h-4", spinning = false }: { className?: string; spinning?: boolean }) {
+  return (
+    <svg
+      className={`${className} transition-transform ${spinning ? 'animate-spin' : ''}`}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z" />
+    </svg>
+  );
 }
 
 function formatOrderDate(isoString?: string) {
@@ -66,6 +79,7 @@ function OrderDetailsPanel({
   handleTransition,
   handleManualOverride,
   setShowRiderModal,
+  setOrderForRiderModal,
   actionLoadingId,
   onClose,
   isDrawer = false,
@@ -76,6 +90,7 @@ function OrderDetailsPanel({
   handleTransition: (orderId: string, nextStatus: string) => Promise<void>;
   handleManualOverride: (orderId: string) => Promise<void>;
   setShowRiderModal: (show: boolean) => void;
+  setOrderForRiderModal?: (order: AdminOrder | null) => void;
   actionLoadingId: string | null;
   onClose?: () => void;
   isDrawer?: boolean;
@@ -304,14 +319,14 @@ function OrderDetailsPanel({
                     ? "bg-emerald-100 text-emerald-800"
                     : selectedOrder.assignedRider.assignmentStatus === "ACCEPTED"
                     ? "bg-emerald-100 text-emerald-800"
-                    : "bg-amber-100 text-amber-800 animate-pulse"
+                    : "bg-emerald-50 text-emerald-800 border border-emerald-200"
                 }`}
               >
                 {selectedOrder.status === "OUT_FOR_DELIVERY"
                   ? "En Route"
                   : selectedOrder.assignedRider.assignmentStatus === "ACCEPTED"
-                  ? "Accepted"
-                  : "Assigning..."}
+                  ? "Already Assigned (Accepted)"
+                  : "Already Assigned"}
               </span>
             </div>
 
@@ -327,30 +342,49 @@ function OrderDetailsPanel({
               </button>
             ) : selectedOrder.status === "READY_FOR_PICKUP" ? (
               <button
-                onClick={() => setShowRiderModal(true)}
+                onClick={() => {
+                  setOrderForRiderModal?.(selectedOrder);
+                  setShowRiderModal(true);
+                }}
                 disabled={actionLoadingId === selectedOrder.id}
-                className={`w-full py-2.5 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors ${
-                  selectedOrder.assignedRider.assignmentStatus === "ACCEPTED"
-                    ? "bg-emerald-600 hover:bg-emerald-700"
-                    : "bg-amber-500 hover:bg-amber-600"
-                }`}
+                className="w-full py-2.5 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors bg-emerald-600 hover:bg-emerald-700"
               >
                 <span className="material-symbols-outlined text-[16px]">two_wheeler</span>
                 <span>
-                  {selectedOrder.assignedRider.assignmentStatus === "ACCEPTED"
-                    ? "Assigned: Ready for Pickup"
-                    : "Assigning: Waiting for Acceptance"}
+                  {selectedOrder.assignedRider.name} (Change Rider)
                 </span>
+              </button>
+            ) : selectedOrder.status === "PLACED" ? (
+              <button
+                onClick={() => handleTransition(selectedOrder.id, "ACCEPTED")}
+                disabled={actionLoadingId === selectedOrder.id}
+                className="w-full py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+              >
+                <span className="material-symbols-outlined text-[16px]">skillet</span>
+                <span>Accept & Start Cooking</span>
+              </button>
+            ) : (selectedOrder.status === "ACCEPTED" || selectedOrder.status === "PREPARING") ? (
+              <button
+                onClick={() => handleTransition(selectedOrder.id, "READY_FOR_PICKUP")}
+                disabled={actionLoadingId === selectedOrder.id}
+                className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+              >
+                <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                <span>Mark Food Ready</span>
               </button>
             ) : null}
 
             {/* Subtle Secondary Links */}
             <div className="flex items-center justify-between pt-1 border-t border-gray-100 text-[11px]">
               <button
-                onClick={() => setShowRiderModal(true)}
-                className="font-medium text-gray-500 hover:text-gray-900 transition-colors"
+                onClick={() => {
+                  setOrderForRiderModal?.(selectedOrder);
+                  setShowRiderModal(true);
+                }}
+                className="font-medium text-emerald-700 hover:text-emerald-900 transition-colors flex items-center gap-0.5"
               >
-                Reassign
+                <span className="material-symbols-outlined text-[13px]">swap_horiz</span>
+                <span>Change Rider</span>
               </button>
               {selectedOrder.status !== "CANCELLED" && selectedOrder.status !== "DELIVERED" && (
                 <button
@@ -393,7 +427,10 @@ function OrderDetailsPanel({
 
             {selectedOrder.status === "READY_FOR_PICKUP" && (
               <button
-                onClick={() => setShowRiderModal(true)}
+                onClick={() => {
+                  setOrderForRiderModal?.(selectedOrder);
+                  setShowRiderModal(true);
+                }}
                 disabled={actionLoadingId === selectedOrder.id}
                 className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
               >
@@ -479,6 +516,8 @@ export default function OperationsConsolePage() {
 
   // Rider assignment modal state
   const [showRiderModal, setShowRiderModal] = useState(false);
+  const [orderForRiderModal, setOrderForRiderModal] = useState<AdminOrder | null>(null);
+  const [assigningRiderId, setAssigningRiderId] = useState<string | null>(null);
 
   // Add Rider Modal State
   const [showAddRiderModal, setShowAddRiderModal] = useState(false);
@@ -496,6 +535,18 @@ export default function OperationsConsolePage() {
   const [riders, setRiders] = useState<AdminRider[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [ridersLoading, setRidersLoading] = useState(false);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [customerFilterTab, setCustomerFilterTab] = useState<'ALL' | 'ACTIVE' | 'BANNED' | 'VIP'>('ALL');
+  const [selectedCustomerForBan, setSelectedCustomerForBan] = useState<AdminCustomer | null>(null);
+  const [banReason, setBanReason] = useState('Customer unreachable / phone not picked on COD delivery');
+  const [banPenaltyAmount, setBanPenaltyAmount] = useState('250');
+  const [isBanningCustomer, setIsBanningCustomer] = useState(false);
+  const [actioningCustomerPhone, setActioningCustomerPhone] = useState<string | null>(null);
+  const [viewingCustomerOrders, setViewingCustomerOrders] = useState<{
+    customer: AdminCustomer;
+    orders: CustomerOrderHistoryItem[];
+    loading: boolean;
+  } | null>(null);
 
   // Catalog & Inventory (86-ing) State
   const [catalogCategories, setCatalogCategories] = useState<any[]>([]);
@@ -579,6 +630,105 @@ export default function OperationsConsolePage() {
       setCustomersLoading(false);
     }
   }, []);
+
+  // Open Ban Customer Modal
+  const handleOpenBanModal = (c: AdminCustomer) => {
+    setSelectedCustomerForBan(c);
+    setBanReason('Customer phone unreachable / did not answer call on COD delivery');
+    setBanPenaltyAmount('250');
+  };
+
+  // Confirm Ban Customer
+  const handleConfirmBanCustomer = async () => {
+    if (!selectedCustomerForBan) return;
+    setIsBanningCustomer(true);
+    try {
+      const penalty = Math.round(parseFloat(banPenaltyAmount || '0') * 100);
+      await adminApi.banCustomer(selectedCustomerForBan.phone, banReason, penalty);
+      setCustomers((prev) =>
+        prev.map((c) =>
+          c.phone === selectedCustomerForBan.phone
+            ? {
+                ...c,
+                isBanned: true,
+                isActive: false,
+                banReason,
+                penaltyAmountPaise: penalty,
+                segment: 'BANNED' as const,
+              }
+            : c
+        )
+      );
+      showToast(`Customer +91 ${selectedCustomerForBan.phone} blocked from placing orders.`);
+      setSelectedCustomerForBan(null);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to ban customer');
+    } finally {
+      setIsBanningCustomer(false);
+    }
+  };
+
+  // Unban Customer
+  const handleUnbanCustomer = async (c: AdminCustomer) => {
+    if (!confirm(`Are you sure you want to unban ${c.name} (+91 ${c.phone})? They will be allowed to order again.`)) {
+      return;
+    }
+    setActioningCustomerPhone(c.phone);
+    try {
+      await adminApi.unbanCustomer(c.phone);
+      setCustomers((prev) =>
+        prev.map((item) =>
+          item.phone === c.phone
+            ? {
+                ...item,
+                isBanned: false,
+                isActive: true,
+                banReason: null,
+                penaltyAmountPaise: 0,
+                segment: item.orderCount >= 5 ? 'VIP' : item.orderCount >= 2 ? 'REGULAR' : 'NEW',
+              }
+            : item
+        )
+      );
+      showToast(`Customer +91 ${c.phone} has been unbanned.`);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to unban customer');
+    } finally {
+      setActioningCustomerPhone(null);
+    }
+  };
+
+  // View Customer Order History
+  const handleViewCustomerOrders = async (c: AdminCustomer) => {
+    setViewingCustomerOrders({
+      customer: c,
+      orders: [],
+      loading: true,
+    });
+    try {
+      const res = await adminApi.getCustomerOrders(c.phone);
+      setViewingCustomerOrders({
+        customer: c,
+        orders: res.orders || [],
+        loading: false,
+      });
+    } catch (err: any) {
+      showToast(err.message || 'Failed to load order history');
+      setViewingCustomerOrders(null);
+    }
+  };
+
+  // Copy Coupon Code & WhatsApp sharing
+  const handleShareCoupon = (customer: AdminCustomer, code = 'JANKI50') => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(code).catch(() => {});
+    }
+    showToast(`Coupon code ${code} (Flat ₹50 OFF) copied for ${customer.name}!`);
+    const text = encodeURIComponent(
+      `Namaste ${customer.name}! Janki Rasoi ki taraf se aapke liye vishesh discount coupon: Code ${code} lagayein aur paayein flat chhoot. Order karein: https://jankirasoi.in`
+    );
+    window.open(`https://wa.me/91${customer.phone}?text=${text}`, '_blank');
+  };
 
   // 3. Fetch Riders
   const loadRiders = useCallback(async () => {
@@ -682,6 +832,16 @@ export default function OperationsConsolePage() {
           showToast(`⚡ New order received: #${event.data.orderNumber || ''}`);
           loadOrders(true);
         }
+        if (event.data?.type === 'CUSTOMER_UNBANNED_PAYMENT') {
+          playKitchenOrderChime();
+          showToast(
+            `💰 Unban Penalty Paid: ₹${event.data.amount || 250} received from +91 ${event.data.phone}${
+              event.data.name ? ` (${event.data.name})` : ''
+            }. Account unbanned!`
+          );
+          loadCustomers();
+          loadOrders(true);
+        }
       };
     } catch {}
 
@@ -698,9 +858,18 @@ export default function OperationsConsolePage() {
             playKitchenOrderChime();
             showToast(`New order received: #${payload.orderNumber || ''}`);
           }
-          if (payload.type === 'ORDER_UPDATED' && payload.orderId && payload.status) {
+          if (payload.type === 'CUSTOMER_UNBANNED') {
+            playKitchenOrderChime();
+            showToast(
+              `💰 Unban Penalty Paid: ₹${payload.penaltyAmount || 250} received from +91 ${payload.phone}${
+                payload.customerName ? ` (${payload.customerName})` : ''
+              }. Account unbanned!`
+            );
+            loadCustomers();
+          }
+          if (payload.type === 'ORDER_UPDATED' && (payload.orderId || payload.orderNumber) && payload.status) {
             setOrders((prev) =>
-              prev.map((o) => (o.id === payload.orderId ? { ...o, status: payload.status } : o))
+              prev.map((o) => (o.id === payload.orderId || o.orderNumber === payload.orderNumber || o.orderNumber === payload.orderId ? { ...o, status: payload.status } : o))
             );
           }
           loadOrders(true);
@@ -727,7 +896,7 @@ export default function OperationsConsolePage() {
         ordersBroadcast.close();
       }
     };
-  }, [loadOrders, loadRiders, loadSlots, refreshIntervalSec]);
+  }, [loadOrders, loadRiders, loadSlots, loadCustomers, refreshIntervalSec]);
 
   useEffect(() => {
     if (mainView === 'CUSTOMERS') loadCustomers();
@@ -750,7 +919,7 @@ export default function OperationsConsolePage() {
     setActionLoadingId(orderId);
     // Instant optimistic update so the order card immediately moves to the new column / stage
     setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus as any } : o))
+      prev.map((o) => (o.id === orderId || o.orderNumber === orderId ? { ...o, status: nextStatus as any } : o))
     );
     try {
       await adminApi.updateOrderStatus(orderId, nextStatus);
@@ -766,15 +935,43 @@ export default function OperationsConsolePage() {
 
   // Handle Assigning Rider
   const handleAssignRider = async (orderId: string, riderId: string) => {
+    if (!orderId || !riderId) return;
+    setAssigningRiderId(riderId);
     setActionLoadingId(orderId);
+    const assignedRiderObj = riders.find((r) => r.id === riderId || r.userId === riderId);
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (o.id === orderId || o.orderNumber === orderId) {
+          const nextStatus = o.status === 'PLACED' ? 'ACCEPTED' : o.status;
+          return {
+            ...o,
+            status: nextStatus as any,
+            assignedRider: {
+              id: riderId,
+              name: assignedRiderObj?.name || 'Delivery Rider',
+              phone: assignedRiderObj?.phone || '',
+              assignmentStatus: 'ASSIGNED' as const,
+            },
+          };
+        }
+        return o;
+      })
+    );
     try {
       await adminApi.assignRider(orderId, riderId);
       showToast('Rider assigned successfully');
       setShowRiderModal(false);
+      // Broadcast instant cross-tab notification to Rider Portal
+      try {
+        const bc = new BroadcastChannel('jankirasoi_orders_channel');
+        bc.postMessage({ type: 'RIDER_ASSIGNED', orderId, riderId, timestamp: Date.now() });
+        bc.close();
+      } catch {}
       await loadOrders(true);
     } catch (err: any) {
       showToast(err.message || 'Failed to assign rider');
     } finally {
+      setAssigningRiderId(null);
       setActionLoadingId(null);
     }
   };
@@ -1229,11 +1426,17 @@ export default function OperationsConsolePage() {
       return true;
     })
     .sort((a, b) => {
-      // Newest orders first so newly placed orders appear instantly at the top of the queue
+      // Prioritize actionable orders needing rider assignment (READY_FOR_PICKUP, ACCEPTED, PREPARING, PLACED without assigned rider)
+      const aNeedsRider = !a.assignedRider && a.status !== 'DELIVERED' && a.status !== 'CANCELLED';
+      const bNeedsRider = !b.assignedRider && b.status !== 'DELIVERED' && b.status !== 'CANCELLED';
+      if (aNeedsRider && !bNeedsRider) return -1;
+      if (!aNeedsRider && bNeedsRider) return 1;
+
+      // Strict LIFO: Newest orders first (latest ordered at the top)
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
-  const selectedOrder = orders.find((o) => o.id === selectedOrderId) || filteredOrders[0] || null;
+  const selectedOrder = orders.find((o) => o.id === selectedOrderId || o.orderNumber === selectedOrderId) || filteredOrders[0] || null;
 
   // Reusable Kitchen Card Component with Urgency Timers and 1-Tap Actions (Minimalist & Squeeze-proof)
   const renderKitchenPipelineCard = (order: AdminOrder) => {
@@ -1419,22 +1622,51 @@ export default function OperationsConsolePage() {
           </a>
         </div>
 
-        {/* Assigned Rider Pill on Kanban Card */}
-        {order.assignedRider && (
-          <div className="flex items-center justify-between text-[11px] pt-1 text-gray-600 border-t border-gray-50">
+        {/* Assigned Rider Pill / Button on Kanban Card */}
+        {order.assignedRider ? (
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              setOrderForRiderModal(order);
+              setSelectedOrderId(order.id);
+              setShowRiderModal(true);
+            }}
+            className="flex items-center justify-between text-[11px] pt-1 text-gray-600 border-t border-gray-50 cursor-pointer hover:bg-emerald-50/70 rounded p-1 transition-colors group"
+            title="Click to change or reassign rider"
+          >
             <span className="flex items-center gap-1 truncate font-medium">
               <span className="material-symbols-outlined text-[13px] text-blue-600">two_wheeler</span>
               <span className="truncate">{order.assignedRider.name}</span>
             </span>
             <span
-              className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md uppercase tracking-wider shrink-0 ${
+              className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0 flex items-center gap-1 ${
                 order.assignedRider.assignmentStatus === 'ACCEPTED'
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-amber-100 text-amber-800'
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
               }`}
             >
-              {order.assignedRider.assignmentStatus === 'ACCEPTED' ? 'Accepted' : 'Assigning...'}
+              <span>{order.assignedRider.assignmentStatus === 'ACCEPTED' ? 'Assigned' : 'Assigned'}</span>
+              <span className="text-[9px] text-emerald-700 font-bold underline group-hover:text-emerald-950">Change</span>
             </span>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between text-[11px] pt-1 text-gray-400 border-t border-gray-50">
+            <span className="flex items-center gap-1 text-gray-400">
+              <span className="material-symbols-outlined text-[13px]">two_wheeler</span>
+              <span>No rider assigned</span>
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOrderForRiderModal(order);
+                setSelectedOrderId(order.id);
+                setShowRiderModal(true);
+              }}
+              className="text-[10px] text-blue-700 font-bold bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded transition-colors flex items-center gap-0.5"
+            >
+              <span>+ Assign</span>
+            </button>
           </div>
         )}
 
@@ -1481,6 +1713,7 @@ export default function OperationsConsolePage() {
               !order.assignedRider ? (
                 <button
                   onClick={() => {
+                    setOrderForRiderModal(order);
                     setSelectedOrderId(order.id);
                     setShowRiderModal(true);
                   }}
@@ -1490,49 +1723,29 @@ export default function OperationsConsolePage() {
                   <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
                   <span>Assign</span>
                 </button>
-              ) : order.assignedRider.assignmentStatus === 'ASSIGNED' ? (
-                <button
-                  onClick={() => {
-                    setSelectedOrderId(order.id);
-                    setShowRiderModal(true);
-                  }}
-                  disabled={actionLoadingId === order.id}
-                  className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors"
-                  title={`Assigned to ${order.assignedRider.name} (Waiting for acceptance). Click to re-assign.`}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-                  <span>Assigning</span>
-                </button>
               ) : (
                 <button
                   onClick={() => {
+                    setOrderForRiderModal(order);
                     setSelectedOrderId(order.id);
                     setShowRiderModal(true);
                   }}
                   disabled={actionLoadingId === order.id}
-                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
-                  title={`Accepted by ${order.assignedRider.name}. Click to view or change.`}
+                  className="px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-200 inline-flex items-center gap-1 transition-colors"
+                  title="Click to reassign or change rider"
                 >
-                  <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                  <span>Assigned</span>
+                  <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
+                  <span>Change Rider</span>
                 </button>
               )
             )}
 
             {isDispatch && (
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => {
-                    setSelectedOrderId(order.id);
-                    setShowRiderModal(true);
-                  }}
-                  disabled={actionLoadingId === order.id}
-                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
-                  title={order.assignedRider ? `Assigned to ${order.assignedRider.name}` : 'Rider assigned'}
-                >
-                  <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
-                  <span>Assigned</span>
-                </button>
+                <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-800 font-bold text-xs border border-emerald-200 inline-flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                  <span>Already Assigned</span>
+                </span>
                 <button
                   onClick={() => handleManualOverride(order.id)}
                   disabled={actionLoadingId === order.id}
@@ -1834,9 +2047,7 @@ export default function OperationsConsolePage() {
                     className="px-3 py-1.5 sm:py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-colors shrink-0"
                     title="Refresh orders from server"
                   >
-                    <span className={`material-symbols-outlined text-[16px] text-emerald-700 ${loading ? 'animate-spin' : ''}`}>
-                      sync
-                    </span>
+                    <ClockwiseRefreshIcon className="w-4 h-4 text-emerald-700" spinning={loading} />
                     <span className="hidden sm:inline">Refresh</span>
                   </button>
                 </div>
@@ -2191,9 +2402,10 @@ export default function OperationsConsolePage() {
                                         !order.assignedRider ? (
                                           <button
                                             onClick={() => {
-                                              setSelectedOrderId(order.id);
-                                              setShowRiderModal(true);
-                                            }}
+                    setOrderForRiderModal(order);
+                    setSelectedOrderId(order.id);
+                    setShowRiderModal(true);
+                  }}
                                             disabled={actionLoadingId === order.id}
                                             className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
                                             title="Assign Rider from Fleet"
@@ -2201,49 +2413,29 @@ export default function OperationsConsolePage() {
                                             <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
                                             <span>Assign</span>
                                           </button>
-                                        ) : order.assignedRider.assignmentStatus === "ASSIGNED" ? (
-                                          <button
-                                            onClick={() => {
-                                              setSelectedOrderId(order.id);
-                                              setShowRiderModal(true);
-                                            }}
-                                            disabled={actionLoadingId === order.id}
-                                            className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors"
-                                            title={"Assigned to " + order.assignedRider.name + " (Waiting for acceptance). Click to change."}
-                                          >
-                                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-                                            <span>Assigning</span>
-                                          </button>
                                         ) : (
                                           <button
                                             onClick={() => {
+                                              setOrderForRiderModal(order);
                                               setSelectedOrderId(order.id);
                                               setShowRiderModal(true);
                                             }}
                                             disabled={actionLoadingId === order.id}
-                                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
-                                            title={"Accepted by " + order.assignedRider.name + ". Click to view or change."}
+                                            className="px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-200 inline-flex items-center gap-1 transition-colors"
+                                            title="Click to reassign or change rider"
                                           >
-                                            <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                                            <span>Assigned</span>
+                                            <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
+                                            <span>Change</span>
                                           </button>
                                         )
                                       )}
 
                                       {isDispatch && (
                                         <div className="flex items-center gap-1">
-                                          <button
-                                            onClick={() => {
-                                              setSelectedOrderId(order.id);
-                                              setShowRiderModal(true);
-                                            }}
-                                            disabled={actionLoadingId === order.id}
-                                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
-                                            title={order.assignedRider ? "Assigned to " + order.assignedRider.name : "Rider assigned"}
-                                          >
-                                            <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
-                                            <span>Assigned</span>
-                                          </button>
+                                          <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-800 font-bold text-xs border border-emerald-200 inline-flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                                            <span>Already Assigned</span>
+                                          </span>
                                           <button
                                             onClick={() => handleManualOverride(order.id)}
                                             disabled={actionLoadingId === order.id}
@@ -2397,6 +2589,7 @@ export default function OperationsConsolePage() {
                       handleTransition={handleTransition}
                       handleManualOverride={handleManualOverride}
                       setShowRiderModal={setShowRiderModal}
+                      setOrderForRiderModal={setOrderForRiderModal}
                       actionLoadingId={actionLoadingId}
                       onClose={() => setDesktopPanelOpen(false)}
                     />
@@ -2406,54 +2599,365 @@ export default function OperationsConsolePage() {
             </main>
           )}
 
-          {/* VIEW: CUSTOMERS */}
+          {/* VIEW: CUSTOMERS (CRM, FRAUD & BAN MANAGEMENT) */}
           {mainView === 'CUSTOMERS' && (
             <main className="p-4 lg:p-6 flex flex-col gap-5 flex-1 max-w-[1600px] w-full mx-auto">
-              <div className="flex items-center justify-between">
+              {/* Header Title & Actions */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-2xl font-bold font-headline text-gray-900">Customers &amp; Addresses</h2>
-                  <p className="text-xs text-gray-500">View customer ordering history and contact info.</p>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-2xl font-bold font-headline text-gray-900">Customers CRM &amp; Fraud Control</h2>
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-800">
+                      {customers.length} Profiles
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Track customer ordering history, ban fake / unreachable callers, and issue loyalty coupons.
+                  </p>
                 </div>
-                <button
-                  onClick={loadCustomers}
-                  className="px-3.5 py-2 rounded-xl bg-white hover:bg-gray-50 text-xs font-semibold text-gray-700 border border-gray-200 flex items-center gap-1.5 shadow-2xs"
-                >
-                  <span className="material-symbols-outlined text-base text-emerald-800">sync</span>
-                  <span>Reload</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={loadCustomers}
+                    disabled={customersLoading}
+                    className="px-3.5 py-2 rounded-xl bg-white hover:bg-gray-50 text-xs font-semibold text-gray-700 border border-gray-200 flex items-center gap-1.5 shadow-2xs transition-colors shrink-0"
+                    title="Reload customers database"
+                  >
+                    <ClockwiseRefreshIcon className="w-4 h-4 text-emerald-800" spinning={customersLoading} />
+                    <span>Reload CRM</span>
+                  </button>
+                </div>
               </div>
 
+              {/* CRM Key Metrics Ribbon */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+                <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-2xs flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-xl">group</span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-gray-500 font-semibold block">Total Registered</span>
+                    <span className="text-xl font-extrabold text-gray-900 font-headline">{customers.length}</span>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-2xs flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-xl">verified_user</span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-gray-500 font-semibold block">Active &amp; Verified</span>
+                    <span className="text-xl font-extrabold text-emerald-800 font-headline">
+                      {customers.filter((c) => !c.isBanned).length}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-rose-200/80 rounded-2xl p-4 shadow-2xs flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-700 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-xl">block</span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-rose-600 font-semibold block">Blocked / Banned</span>
+                    <span className="text-xl font-extrabold text-rose-700 font-headline">
+                      {customers.filter((c) => c.isBanned).length}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-2xs flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-xl">payments</span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-gray-500 font-semibold block">Customer GMV</span>
+                    <span className="text-xl font-extrabold text-gray-900 font-headline">
+                      ₹{(customers.reduce((acc, c) => acc + (c.totalSpendPaise || 0), 0) / 100).toFixed(0)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filters & Search Control Bar */}
+              <div className="bg-white border border-gray-200/90 rounded-2xl p-3 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+                {/* Search Input */}
+                <div className="relative flex-1 max-w-md">
+                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">
+                    search
+                  </span>
+                  <input
+                    type="text"
+                    value={customerSearchQuery}
+                    onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                    placeholder="Search by customer name, phone (+91...) or address..."
+                    className="w-full pl-9 pr-8 py-2 rounded-xl border border-gray-200 text-xs font-medium text-gray-800 placeholder:text-gray-400 focus:outline-hidden focus:border-emerald-600"
+                  />
+                  {customerSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomerSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">close</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter Tabs */}
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setCustomerFilterTab('ALL')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                      customerFilterTab === 'ALL'
+                        ? 'bg-emerald-800 text-white shadow-2xs'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    All ({customers.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomerFilterTab('ACTIVE')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                      customerFilterTab === 'ACTIVE'
+                        ? 'bg-emerald-800 text-white shadow-2xs'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    Active ({customers.filter((c) => !c.isBanned).length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomerFilterTab('BANNED')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                      customerFilterTab === 'BANNED'
+                        ? 'bg-rose-600 text-white shadow-2xs'
+                        : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+                    }`}
+                  >
+                    Banned 🚫 ({customers.filter((c) => c.isBanned).length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomerFilterTab('VIP')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                      customerFilterTab === 'VIP'
+                        ? 'bg-amber-600 text-white shadow-2xs'
+                        : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
+                    }`}
+                  >
+                    VIP / Frequent 👑 ({customers.filter((c) => c.segment === 'VIP').length})
+                  </button>
+                </div>
+              </div>
+
+              {/* Customers Directory Table */}
               <div className="bg-white border border-gray-200/90 rounded-2xl overflow-hidden shadow-2xs">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs min-w-[640px]">
+                  <table className="w-full text-left text-xs min-w-[900px]">
                     <thead className="bg-[#f9faf8] text-gray-600 font-bold uppercase tracking-wider text-[10px] border-b border-gray-200">
                       <tr>
-                        <th className="py-3 px-4">Customer</th>
-                        <th className="py-3 px-4">Phone Number</th>
-                        <th className="py-3 px-4">Orders Placed</th>
-                        <th className="py-3 px-4">Total Spent</th>
-                        <th className="py-3 px-4">Last Order</th>
+                        <th className="py-3 px-4">Customer Profile</th>
+                        <th className="py-3 px-4">Contact &amp; Call</th>
+                        <th className="py-3 px-4">Account Status</th>
+                        <th className="py-3 px-4">Orders &amp; GMV</th>
+                        <th className="py-3 px-4">Last Activity &amp; Dishes</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {customers.map((c, idx) => (
-                        <tr key={idx} className="hover:bg-gray-50/80 transition-colors">
-                          <td className="py-3 px-4 font-bold text-gray-900 flex items-center gap-2">
-                            <span className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-xs">
-                              {getInitials(c.name)}
-                            </span>
-                            <span>{c.name}</span>
-                          </td>
-                          <td className="py-3 px-4 font-mono text-gray-700">+91 {c.phone}</td>
-                          <td className="py-3 px-4 font-bold text-emerald-900">{c.orderCount} meals</td>
-                          <td className="py-3 px-4 font-mono font-bold">₹{((c.totalSpendPaise || 0) / 100).toFixed(2)}</td>
-                          <td className="py-3 px-4 text-gray-500">{formatOrderDate(c.lastOrderDate)}</td>
-                        </tr>
-                      ))}
+                      {customers
+                        .filter((c) => {
+                          if (customerFilterTab === 'ACTIVE' && c.isBanned) return false;
+                          if (customerFilterTab === 'BANNED' && !c.isBanned) return false;
+                          if (customerFilterTab === 'VIP' && c.segment !== 'VIP') return false;
+                          if (customerSearchQuery.trim()) {
+                            const q = customerSearchQuery.toLowerCase();
+                            const matchName = c.name?.toLowerCase().includes(q);
+                            const matchPhone = c.phone?.toLowerCase().includes(q);
+                            const matchAddress = JSON.stringify(c.savedAddress || '').toLowerCase().includes(q);
+                            return matchName || matchPhone || matchAddress;
+                          }
+                          return true;
+                        })
+                        .map((c, idx) => {
+                          const isActioning = actioningCustomerPhone === c.phone;
+                          return (
+                            <tr key={idx} className={`hover:bg-gray-50/80 transition-colors ${c.isBanned ? 'bg-rose-50/20' : ''}`}>
+                              {/* Customer Profile */}
+                              <td className="py-3 px-4">
+                                <div className="flex items-center gap-2.5">
+                                  <span
+                                    className={`w-8 h-8 rounded-full font-bold flex items-center justify-center text-xs shrink-0 ${
+                                      c.isBanned
+                                        ? 'bg-rose-100 text-rose-800'
+                                        : c.segment === 'VIP'
+                                        ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                        : 'bg-emerald-100 text-emerald-800'
+                                    }`}
+                                  >
+                                    {getInitials(c.name)}
+                                  </span>
+                                  <div className="flex flex-col">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-bold text-gray-900 leading-tight">{c.name}</span>
+                                      {c.segment === 'VIP' && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">
+                                          👑 VIP
+                                        </span>
+                                      )}
+                                      {c.isBanned && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-rose-100 text-rose-700 border border-rose-200">
+                                          🚫 BLOCKED
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[11px] text-gray-500 truncate max-w-[220px]">
+                                      {typeof c.savedAddress === 'string'
+                                        ? c.savedAddress
+                                        : c.savedAddress?.flat
+                                        ? `${c.savedAddress.flat}, ${c.savedAddress.street || ''}`
+                                        : 'Address saved on checkout'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Contact & Call */}
+                              <td className="py-3 px-4">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-gray-800 font-semibold">+91 {c.phone}</span>
+                                  <a
+                                    href={`tel:+91${c.phone}`}
+                                    title="Call Customer"
+                                    className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-emerald-100 text-gray-600 hover:text-emerald-800 flex items-center justify-center transition-colors"
+                                  >
+                                    <span className="material-symbols-outlined text-[13px]">call</span>
+                                  </a>
+                                  <a
+                                    href={`https://wa.me/91${c.phone}?text=${encodeURIComponent(
+                                      `Namaste ${c.name}, Janki Rasoi kitchen support se message hai.`
+                                    )}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title="Message on WhatsApp"
+                                    className="w-6 h-6 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center justify-center transition-colors"
+                                  >
+                                    <span className="material-symbols-outlined text-[13px]">chat</span>
+                                  </a>
+                                </div>
+                              </td>
+
+                              {/* Account Status */}
+                              <td className="py-3 px-4">
+                                {c.isBanned ? (
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-rose-100 text-rose-700 border border-rose-200 w-fit">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse"></span>
+                                      <span>Banned / Blacklisted</span>
+                                    </span>
+                                    <span className="text-[10px] text-rose-700 font-medium leading-tight max-w-[180px] line-clamp-1" title={c.banReason || ''}>
+                                      {c.banReason || 'Fake order / unreachable'}
+                                    </span>
+                                    {c.penaltyAmountPaise ? c.penaltyAmountPaise > 0 && (
+                                      <span className="text-[10px] font-bold text-amber-800">
+                                        Settlement Penalty: ₹{(c.penaltyAmountPaise / 100).toFixed(0)}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                                    <span>Active • Verified</span>
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Orders & GMV */}
+                              <td className="py-3 px-4">
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-gray-900">{c.orderCount} meals ordered</span>
+                                  <span className="font-mono text-emerald-800 font-bold text-xs">
+                                    ₹{((c.totalSpendPaise || 0) / 100).toFixed(2)}
+                                  </span>
+                                </div>
+                              </td>
+
+                              {/* Last Activity & Dishes */}
+                              <td className="py-3 px-4">
+                                <div className="flex flex-col gap-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-gray-700 font-medium">{formatOrderDate(c.lastOrderDate)}</span>
+                                    <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-gray-100 text-gray-700">
+                                      {c.lastOrderStatus || 'DELIVERED'}
+                                    </span>
+                                  </div>
+                                  {c.recentItems && c.recentItems.length > 0 && (
+                                    <span className="text-[10px] text-gray-500 truncate max-w-[200px]" title={c.recentItems.join(', ')}>
+                                      {c.recentItems.slice(0, 2).join(', ')}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Actions */}
+                              <td className="py-3 px-4 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {/* View Customer Order History */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleViewCustomerOrders(c)}
+                                    className="px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 text-gray-700 font-bold text-[11px] flex items-center gap-1 transition-colors shadow-2xs"
+                                    title="View full past orders and dishes"
+                                  >
+                                    <span className="material-symbols-outlined text-[14px]">receipt_long</span>
+                                    <span className="hidden sm:inline">Orders</span>
+                                  </button>
+
+                                  {/* Send Discount Coupon via WhatsApp */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleShareCoupon(c, 'JANKI50')}
+                                    className="px-2.5 py-1.5 rounded-lg border border-amber-200 bg-amber-50/60 hover:bg-amber-100 text-amber-800 font-bold text-[11px] flex items-center gap-1 transition-colors shadow-2xs"
+                                    title="Send discount coupon offer to customer"
+                                  >
+                                    <span className="material-symbols-outlined text-[14px]">local_offer</span>
+                                    <span className="hidden sm:inline">Coupon</span>
+                                  </button>
+
+                                  {/* Ban / Unban Button */}
+                                  {c.isBanned ? (
+                                    <button
+                                      type="button"
+                                      disabled={isActioning}
+                                      onClick={() => handleUnbanCustomer(c)}
+                                      className="px-2.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] flex items-center gap-1 transition-colors shadow-2xs disabled:opacity-50"
+                                      title="Unban customer and clear penalty"
+                                    >
+                                      <span className="material-symbols-outlined text-[14px]">lock_open</span>
+                                      <span>Unban</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenBanModal(c)}
+                                      className="px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[11px] flex items-center gap-1 transition-colors shadow-2xs"
+                                      title="Ban customer from future orders"
+                                    >
+                                      <span className="material-symbols-outlined text-[14px]">block</span>
+                                      <span>Ban</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+
                       {customers.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="py-10 text-center text-gray-400">
-                            {customersLoading ? 'Loading customers directory...' : 'No customers registered yet.'}
+                          <td colSpan={6} className="py-12 text-center text-gray-400">
+                            {customersLoading ? 'Loading customers directory...' : 'No customers found in database.'}
                           </td>
                         </tr>
                       )}
@@ -2488,7 +2992,7 @@ export default function OperationsConsolePage() {
                     disabled={ridersLoading}
                     className="px-3.5 py-2 rounded-xl bg-white hover:bg-gray-50 text-xs font-semibold text-gray-700 border border-gray-200 flex items-center gap-1.5 shadow-2xs"
                   >
-                    <span className={`material-symbols-outlined text-base text-emerald-800 ${ridersLoading ? 'animate-spin' : ''}`}>sync</span>
+                    <ClockwiseRefreshIcon className="w-4 h-4 text-emerald-800" spinning={ridersLoading} />
                     <span>Reload</span>
                   </button>
                 </div>
@@ -2596,7 +3100,7 @@ export default function OperationsConsolePage() {
                     }}
                     className="px-3.5 py-2 rounded-xl bg-white hover:bg-gray-50 text-xs font-semibold text-gray-700 border border-gray-200 flex items-center gap-1.5 shadow-2xs"
                   >
-                    <span className="material-symbols-outlined text-base text-emerald-800">sync</span>
+                    <ClockwiseRefreshIcon className="w-4 h-4 text-emerald-800" spinning={catalogLoading} />
                     <span>Reload</span>
                   </button>
                   <button
@@ -2959,7 +3463,7 @@ export default function OperationsConsolePage() {
                       }}
                       className="px-3 py-1.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-bold flex items-center gap-1 shadow-2xs transition-colors"
                     >
-                      <span className="material-symbols-outlined text-sm">cached</span>
+                      <ClockwiseRefreshIcon className="w-3.5 h-3.5 text-gray-700" spinning={loading} />
                       <span>Resync</span>
                     </button>
                   </div>
@@ -3058,6 +3562,7 @@ export default function OperationsConsolePage() {
               handleTransition={handleTransition}
               handleManualOverride={handleManualOverride}
               setShowRiderModal={setShowRiderModal}
+              setOrderForRiderModal={setOrderForRiderModal}
               actionLoadingId={actionLoadingId}
               onClose={() => setDrawerOpen(false)}
               isDrawer={true}
@@ -3067,13 +3572,21 @@ export default function OperationsConsolePage() {
       )}
 
       {/* 4. ASSIGN RIDER MODAL */}
-      {showRiderModal && selectedOrder && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-2xl border border-gray-200 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150">
+      {showRiderModal && (orderForRiderModal || selectedOrder) && (() => {
+        const modalOrder = orderForRiderModal || selectedOrder!;
+        return (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowRiderModal(false);
+          }}
+        >
+          <div className="absolute inset-0 cursor-pointer" onClick={() => { setShowRiderModal(false); setOrderForRiderModal(null); }} />
+          <div className="relative z-10 bg-white w-full max-w-md rounded-2xl p-5 shadow-2xl border border-gray-200 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div>
                 <h3 className="font-bold text-base text-gray-900 font-headline">Assign Delivery Rider</h3>
-                <p className="text-xs text-gray-500">Select an available rider for order #{selectedOrder.orderNumber}</p>
+                <p className="text-xs text-gray-500">Select an available rider for order #{modalOrder.orderNumber}</p>
               </div>
               <div className="flex items-center gap-1.5">
                 <button
@@ -3083,7 +3596,7 @@ export default function OperationsConsolePage() {
                   title="Refresh riders from database"
                   className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition-colors"
                 >
-                  <span className={`material-symbols-outlined text-[16px] ${ridersLoading ? 'animate-spin' : ''}`}>sync</span>
+                  <ClockwiseRefreshIcon className="w-3.5 h-3.5 text-gray-700" spinning={ridersLoading} />
                 </button>
                 <button
                   type="button"
@@ -3103,35 +3616,73 @@ export default function OperationsConsolePage() {
                 </div>
               ) : (
                 <>
-                  {riders.map((r) => (
-                    <div
-                      key={r.id}
-                      onClick={() => handleAssignRider(selectedOrder.id, r.id)}
-                      className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                        r.isAvailable
-                          ? 'border-gray-200 hover:border-emerald-600 hover:bg-emerald-50/50'
-                          : 'border-gray-200/80 bg-gray-50/40 hover:bg-gray-100/60'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className={`w-8 h-8 rounded-full flex items-center justify-center ${r.isAvailable ? 'bg-amber-100 text-amber-900' : 'bg-gray-200 text-gray-600'}`}>
-                          <span className="material-symbols-outlined text-[18px]">two_wheeler</span>
-                        </span>
-                        <div>
-                          <div className="font-bold text-xs text-gray-900 flex items-center gap-1.5">
-                            <span>{r.name}</span>
-                            {!r.isAvailable && (
-                              <span className="text-[10px] text-gray-400 font-normal">(Currently Offline)</span>
-                            )}
+                  {riders.map((r) => {
+                    const isAssigningThis = assigningRiderId === r.id;
+                    const isAlreadyAssigned = modalOrder?.assignedRider?.id === r.id;
+                    return (
+                      <div
+                        key={r.id}
+                        className={`p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                          isAlreadyAssigned
+                            ? 'border-emerald-500 bg-emerald-50/60'
+                            : r.isAvailable
+                            ? 'border-gray-200 bg-white hover:border-emerald-600 hover:bg-emerald-50/30'
+                            : 'border-gray-200/80 bg-gray-50/40 hover:bg-gray-100/60'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${r.isAvailable ? 'bg-amber-100 text-amber-900' : 'bg-gray-200 text-gray-600'}`}>
+                            <span className="material-symbols-outlined text-[18px]">two_wheeler</span>
+                          </span>
+                          <div className="min-w-0">
+                            <div className="font-bold text-xs text-gray-900 flex items-center gap-1.5 truncate">
+                              <span>{r.name}</span>
+                              {!r.isAvailable && (
+                                <span className="text-[10px] text-gray-400 font-normal">(Offline)</span>
+                              )}
+                              {isAlreadyAssigned && (
+                                <span className="text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded font-semibold">Already Assigned</span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-gray-500 font-mono">+91 {r.phone} • {r.vehicleNumber}</div>
                           </div>
-                          <div className="text-[11px] text-gray-500 font-mono">+91 {r.phone} • {r.vehicleNumber}</div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.isAvailable ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-500'}`}>
+                            {r.isAvailable ? 'ON DUTY' : 'OFFLINE'}
+                          </span>
+
+                          <button
+                            type="button"
+                            disabled={isAssigningThis || actionLoadingId === (modalOrder.id || modalOrder.orderNumber)}
+                            onClick={() => handleAssignRider(modalOrder.id || modalOrder.orderNumber, r.id)}
+                            className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-2xs ${
+                              isAssigningThis
+                                ? 'bg-emerald-700 text-white cursor-wait opacity-80'
+                                : isAlreadyAssigned
+                                ? 'bg-emerald-700 text-white hover:bg-emerald-800'
+                                : r.isAvailable
+                                ? 'bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white'
+                                : 'bg-gray-700 hover:bg-gray-800 text-white'
+                            }`}
+                          >
+                            {isAssigningThis ? (
+                              <>
+                                <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                <span>Assigning...</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="material-symbols-outlined text-[14px]">two_wheeler</span>
+                                <span>{isAlreadyAssigned ? 'Already Assigned' : 'Assign'}</span>
+                              </>
+                            )}
+                          </button>
                         </div>
                       </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.isAvailable ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-500'}`}>
-                        {r.isAvailable ? 'ON DUTY' : 'OFFLINE'}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {riders.length === 0 && (
                     <div className="py-8 text-center flex flex-col items-center justify-center gap-2">
                       <span className="material-symbols-outlined text-3xl text-gray-300">no_accounts</span>
@@ -3175,12 +3726,14 @@ export default function OperationsConsolePage() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* 4b. REGISTER NEW RIDER MODAL */}
       {showAddRiderModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-2xl border border-gray-200 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150 my-auto">
+          <div className="absolute inset-0 cursor-pointer" onClick={() => setShowAddRiderModal(false)} />
+          <div className="relative z-10 bg-white w-full max-w-md rounded-2xl p-5 shadow-2xl border border-gray-200 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150 my-auto">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div>
                 <h3 className="font-bold text-base text-gray-900 font-headline">Register Delivery Rider</h3>
@@ -3291,7 +3844,8 @@ export default function OperationsConsolePage() {
       {/* 5. ADD NEW FOOD ITEM MODAL */}
       {showAddDishModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-lg rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-4 my-auto max-h-[92vh] overflow-y-auto">
+          <div className="absolute inset-0 cursor-pointer" onClick={() => setShowAddDishModal(false)} />
+          <div className="relative z-10 bg-white w-full max-w-lg rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl border border-stone-200 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-4 my-auto max-h-[92vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div>
@@ -3811,6 +4365,274 @@ export default function OperationsConsolePage() {
                     <span>Yes, Remove Food</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4c. BAN CUSTOMER MODAL */}
+      {selectedCustomerForBan && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="absolute inset-0 cursor-pointer" onClick={() => setSelectedCustomerForBan(null)} />
+          <div className="relative z-10 bg-white w-full max-w-md rounded-2xl p-5 shadow-2xl border border-gray-200 flex flex-col gap-4 animate-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="w-8 h-8 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
+                  <span className="material-symbols-outlined text-[18px]">block</span>
+                </span>
+                <div>
+                  <h3 className="font-bold text-base text-gray-900 font-headline">Ban Customer from Ordering</h3>
+                  <p className="text-xs text-gray-500">Prevent fake orders &amp; unreachable deliveries</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedCustomerForBan(null)}
+                className="w-7 h-7 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition-colors"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+
+            {/* Target Profile Highlight */}
+            <div className="bg-rose-50/70 border border-rose-200/80 rounded-xl p-3 flex items-center justify-between text-xs">
+              <div>
+                <span className="font-extrabold text-rose-950 block">{selectedCustomerForBan.name}</span>
+                <span className="font-mono text-rose-800 font-bold">+91 {selectedCustomerForBan.phone}</span>
+              </div>
+              <span className="px-2 py-1 rounded bg-rose-200/80 text-rose-900 font-extrabold text-[11px]">
+                {selectedCustomerForBan.orderCount} Past Orders
+              </span>
+            </div>
+
+            {/* Quick Reason Chips */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-gray-700">Select Ban Reason:</label>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  'Phone call nahi uthaya / Unreachable',
+                  'Galat address diya tha',
+                  'COD delivery par paise nahi diye',
+                  'Fake / Prank order tha',
+                ].map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    onClick={() => setBanReason(reason)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${
+                      banReason === reason
+                        ? 'bg-rose-700 text-white border-rose-700 shadow-2xs font-bold'
+                        : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'
+                    }`}
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Reason Input */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold text-gray-700 flex items-center justify-between">
+                <span>Ban Reason / Explanation (Shown on Customer Lock Window):</span>
+                <span className="text-[10px] text-gray-400">Editable / Custom</span>
+              </label>
+              <textarea
+                rows={2}
+                value={banReason}
+                onChange={(e) => setBanReason(e.target.value)}
+                placeholder="Enter specific ban reason (e.g. Rider called 5 times, customer switched off phone)..."
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs text-gray-800 focus:outline-hidden focus:border-rose-600 resize-none font-medium leading-relaxed"
+              />
+              <p className="text-[10px] text-gray-400">
+                Yeh reason customer ki storefront lock window par dikhai dega taaki unhe pata chale kyu restrict kiya gaya.
+              </p>
+            </div>
+
+            {/* Penalty Amount to Settle */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold text-gray-700 flex items-center justify-between">
+                <span>Loss / Settlement Penalty (₹):</span>
+                <span className="text-[11px] font-normal text-gray-500">Amount required to unban</span>
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-500 text-xs">₹</span>
+                <input
+                  type="number"
+                  value={banPenaltyAmount}
+                  onChange={(e) => setBanPenaltyAmount(e.target.value)}
+                  placeholder="250"
+                  className="w-full pl-7 pr-3 py-2 rounded-xl border border-gray-200 text-xs font-mono font-bold text-gray-800 focus:outline-hidden focus:border-rose-600"
+                />
+              </div>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                Jab yeh customer apna pending recovery bill (₹{banPenaltyAmount || '0'}) settle kar dega, account automatically unban ho jayega.
+              </p>
+            </div>
+
+            {/* Statutory Legal Protection Citation */}
+            <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 flex items-start gap-2 text-[11px] text-amber-950">
+              <span className="material-symbols-outlined text-base text-amber-800 shrink-0">gavel</span>
+              <div className="leading-tight">
+                <strong>Legal Protection:</strong> Indian Contract Act, 1872 (Section 73) &amp; Consumer Protection (E-Commerce) Rules, 2020 allow fresh perishable food preparation &amp; dispatch loss recovery for unfulfilled COD orders.
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setSelectedCustomerForBan(null)}
+                className="px-4 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isBanningCustomer}
+                onClick={handleConfirmBanCustomer}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs disabled:opacity-50 transition-colors"
+              >
+                {isBanningCustomer ? (
+                  <>
+                    <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                    <span>Blocking Customer...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-sm">lock</span>
+                    <span>Confirm &amp; Ban Customer</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4d. CUSTOMER ORDER HISTORY MODAL */}
+      {viewingCustomerOrders && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
+          <div className="absolute inset-0 cursor-pointer" onClick={() => setViewingCustomerOrders(null)} />
+          <div className="relative z-10 bg-white w-full max-w-2xl rounded-2xl sm:rounded-3xl p-5 shadow-2xl border border-gray-200 flex flex-col gap-4 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-hidden my-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <span className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-900 font-extrabold flex items-center justify-center text-sm shadow-2xs">
+                  {getInitials(viewingCustomerOrders.customer.name)}
+                </span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-base text-gray-900 font-headline">
+                      {viewingCustomerOrders.customer.name}
+                    </h3>
+                    {viewingCustomerOrders.customer.segment === 'VIP' && (
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
+                        👑 VIP CUSTOMER
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 font-mono">
+                    +91 {viewingCustomerOrders.customer.phone} • Lifetime GMV: ₹{((viewingCustomerOrders.customer.totalSpendPaise || 0) / 100).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingCustomerOrders(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition-colors shrink-0"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            {/* Orders List */}
+            <div className="flex flex-col gap-3 overflow-y-auto pr-1 flex-1">
+              {viewingCustomerOrders.loading ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-2 text-gray-500 text-xs">
+                  <span className="w-6 h-6 border-2 border-emerald-700 border-t-transparent rounded-full animate-spin"></span>
+                  <span>Fetching customer order timeline...</span>
+                </div>
+              ) : viewingCustomerOrders.orders.length === 0 ? (
+                <div className="py-12 text-center text-gray-400 text-xs">
+                  No orders recorded yet for this customer.
+                </div>
+              ) : (
+                viewingCustomerOrders.orders.map((ord) => (
+                  <div
+                    key={ord.id}
+                    className="p-3.5 rounded-2xl border border-gray-200/90 hover:border-gray-300 bg-[#FFFDF9] flex flex-col gap-2 transition-all shadow-2xs"
+                  >
+                    <div className="flex items-center justify-between text-xs pb-2 border-b border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-black text-gray-900">#{ord.orderNumber}</span>
+                        <span className="text-[11px] text-gray-500">{formatOrderDate(ord.createdAt)}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold ${
+                            ord.status === 'DELIVERED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : ord.status === 'CANCELLED'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-amber-100 text-amber-900'
+                          }`}
+                        >
+                          {ord.status}
+                        </span>
+                        <span className="font-mono font-bold text-gray-900">
+                          ₹{(ord.totalAmountPaise / 100).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Ordered Items List */}
+                    <div className="flex flex-col divide-y divide-gray-100/80 text-xs">
+                      {ord.items.map((it, iIdx) => (
+                        <div key={iIdx} className="py-1.5 flex items-center justify-between">
+                          <span className="font-semibold text-gray-800">
+                            {it.quantity}x {it.name}
+                            {it.variant && <span className="text-gray-500 text-[11px] ml-1">({it.variant})</span>}
+                          </span>
+                          {it.totalPricePaise ? (
+                            <span className="font-mono text-gray-700">₹{(it.totalPricePaise / 100).toFixed(0)}</span>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Delivery Address & Mode */}
+                    <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-500">
+                      <div className="truncate max-w-[320px]">
+                        📍{' '}
+                        {typeof ord.deliveryAddress === 'string'
+                          ? ord.deliveryAddress
+                          : ord.deliveryAddress?.flat
+                          ? `${ord.deliveryAddress.flat}, ${ord.deliveryAddress.street || ''}`
+                          : 'Customer Address'}
+                      </div>
+                      <span className="font-bold text-gray-700 shrink-0">
+                        {ord.paymentMethod === 'COD' ? '💵 Cash on Delivery' : '💳 Paid Online'}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="pt-3 border-t border-gray-100 flex items-center justify-between shrink-0">
+              <span className="text-xs text-gray-500 font-medium">
+                Total {viewingCustomerOrders.orders.length} order records found
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewingCustomerOrders(null)}
+                className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs transition-colors"
+              >
+                Close History
               </button>
             </div>
           </div>

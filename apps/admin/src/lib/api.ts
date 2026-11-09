@@ -180,13 +180,61 @@ export const adminApi = {
   },
 
   // 6. Manage & View Customers
-  async getCustomers(): Promise<{ customers: AdminCustomer[] }> {
+  async getCustomers(): Promise<{
+    customers: AdminCustomer[];
+    totalCount?: number;
+    bannedCount?: number;
+    vipCount?: number;
+  }> {
     const base = getApiBase();
     const res = await fetch(`${base}/admin/customers`, {
       headers: { 'X-Simulated-Role': 'STAFF' },
       cache: 'no-store',
     });
     if (!res.ok) throw new Error('Failed to fetch customers list');
+    return res.json();
+  },
+
+  async banCustomer(phone: string, reason?: string, penaltyAmountPaise?: number): Promise<{ success: boolean; message: string; isBanned: boolean }> {
+    const base = getApiBase();
+    const res = await fetch(`${base}/admin/customers/${encodeURIComponent(phone)}/ban`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Simulated-Role': 'STAFF',
+      },
+      body: JSON.stringify({ reason, penaltyAmountPaise }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to ban customer');
+    }
+    return res.json();
+  },
+
+  async unbanCustomer(phone: string): Promise<{ success: boolean; message: string; isBanned: boolean }> {
+    const base = getApiBase();
+    const res = await fetch(`${base}/admin/customers/${encodeURIComponent(phone)}/unban`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Simulated-Role': 'STAFF',
+      },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to unban customer');
+    }
+    return res.json();
+  },
+
+  async getCustomerOrders(phone: string): Promise<{ phone: string; orderCount: number; orders: CustomerOrderHistoryItem[] }> {
+    const base = getApiBase();
+    const res = await fetch(`${base}/admin/customers/${encodeURIComponent(phone)}/orders`, {
+      headers: { 'X-Simulated-Role': 'STAFF' },
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error('Failed to fetch customer order history');
     return res.json();
   },
 
@@ -435,14 +483,43 @@ export interface AdminCustomer {
   id?: string;
   name: string;
   phone: string;
+  isActive: boolean;
+  isBanned: boolean;
+  banReason?: string | null;
+  penaltyAmountPaise?: number;
   orderCount: number;
   totalSpendPaise: number;
   lastOrderDate: string;
+  lastOrderStatus?: string;
+  recentItems?: string[];
   savedAddress?: any;
+  segment?: 'VIP' | 'REGULAR' | 'NEW' | 'BANNED';
+}
+
+export interface CustomerOrderHistoryItem {
+  id: string;
+  orderNumber: string;
+  status: string;
+  paymentMethod: string;
+  paymentStatus: string;
+  totalAmountPaise: number;
+  subtotalPaise?: number;
+  deliveryAddress?: any;
+  deliveryNotes?: string | null;
+  slotLabel?: string;
+  createdAt: string;
+  items: Array<{
+    name: string;
+    variant?: string | null;
+    quantity: number;
+    totalPricePaise?: number;
+    unitPricePaise?: number;
+  }>;
 }
 
 export interface AdminRider {
   id: string;
+  userId?: string;
   name: string;
   phone: string;
   vehicleNumber: string;

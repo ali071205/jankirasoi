@@ -356,8 +356,22 @@ export default function LocationMapModal({
   const mapEmbedUrl = `https://maps.google.com/maps?q=${lat},${lng}&hl=en&z=16&output=embed`;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-      <div className="bg-[#FAF9F6] w-full max-w-md sm:max-w-lg rounded-t-[28px] sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] overflow-hidden border border-slate-200">
+    <div
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      {/* Backdrop overlay: clicking black area outside closes the modal */}
+      <div
+        className="absolute inset-0 cursor-pointer"
+        onClick={onClose}
+        aria-label="Close location selector"
+      />
+
+      <div className="relative z-10 bg-[#FAF9F6] w-full max-w-md sm:max-w-lg rounded-t-[28px] sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] overflow-hidden border border-slate-200">
 
         {/* ============================================================== */}
         {/* VIEW 1: SELECT YOUR LOCATION (Exact Match with Reference 1)     */}
@@ -858,7 +872,13 @@ export default function LocationMapModal({
       {/* ============================================================== */}
       {showPermissionDialog && (
         <div className="fixed inset-0 z-60 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-[#2B2D30] w-full max-w-[340px] sm:max-w-[360px] rounded-[32px] p-6 sm:p-7 shadow-2xl border border-white/10 flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
+          {/* Backdrop overlay */}
+          <div
+            className="absolute inset-0 cursor-pointer"
+            onClick={() => setShowPermissionDialog(false)}
+            aria-label="Close permission dialog"
+          />
+          <div className="relative z-10 bg-[#2B2D30] w-full max-w-[340px] sm:max-w-[360px] rounded-[32px] p-6 sm:p-7 shadow-2xl border border-white/10 flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
             
             {/* Top Location Icon */}
             <div className="w-10 h-10 rounded-full flex items-center justify-center text-[#9AA0A6] mb-3">

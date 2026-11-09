@@ -555,6 +555,15 @@ export default function CartPage() {
       if (isNetworkError) {
         showToast('Connection interrupted. Don\'t worry, your order was not duplicated. Please verify connection and retry.', true);
       } else {
+        if (
+          err.message?.toLowerCase().includes('restricted') ||
+          err.message?.toLowerCase().includes('blocked') ||
+          err.message?.toLowerCase().includes('ban')
+        ) {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('jr_customer_banned'));
+          }
+        }
         showToast(err.message || 'Failed to place order', true);
       }
     }

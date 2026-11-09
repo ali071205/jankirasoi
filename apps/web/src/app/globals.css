@@ -65,6 +65,21 @@ html.icons-loading .material-symbols-outlined {
   visibility: hidden !important;
 }
 
+/* Clockwise spin for refresh/sync icons */
+@keyframes spin-clockwise {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-clockwise,
+.animate-spin-reverse {
+  animation: spin-clockwise 1s linear infinite;
+}
+
 /* Hide scrollbar for horizontal categories */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
