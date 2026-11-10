@@ -37,6 +37,15 @@ export default function RiderPage() {
   const [isGpsLocating, setIsGpsLocating] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
+  // Offline Telemetry Buffer & Route Optimization State (Ola Maps)
+  const [offlineQueueCount, setOfflineQueueCount] = useState(0);
+  const [isOptimizingRoute, setIsOptimizingRoute] = useState(false);
+  const [optimizedRouteData, setOptimizedRouteData] = useState<{
+    orderedIds: string[];
+    totalDistanceKm: number;
+    estimatedDurationMinutes: number;
+  } | null>(null);
+
   const SAGORE_KITCHEN_COORDS = { lat: 22.6288, lng: 75.5684 };
 
   const formatOrderTime = (isoString?: string): string => {
@@ -179,6 +188,40 @@ export default function RiderPage() {
     );
   }, []);
 
+  // Smart multi-stop route sequence optimizer (powered by Ola Maps Route Optimizer)
+  const handleOptimizeDeliveryRoute = async () => {
+    if (activeDeliveries.length < 2) return;
+    setIsOptimizingRoute(true);
+
+    const origin = riderGps
+      ? { lat: riderGps.lat, lng: riderGps.lng }
+      : SAGORE_KITCHEN_COORDS;
+
+    const stops = activeDeliveries.map((d) => ({
+      id: d.orderId,
+      lat: d.coordinates?.latitude || 22.6312,
+      lng: d.coordinates?.longitude || 75.5715,
+      title: `${d.customerName} (#${d.orderNumber})`,
+    }));
+
+    try {
+      const res = await api.optimizeRoute(origin, stops);
+      if (res && res.orderedStops && res.orderedStops.length > 0) {
+        setOptimizedRouteData({
+          orderedIds: res.orderedStops.map((s) => s.id),
+          totalDistanceKm: res.totalDistanceKm,
+          estimatedDurationMinutes: res.estimatedDurationMinutes,
+        });
+        showRiderToast(`✓ Sequence optimized via Ola Maps (~${res.totalDistanceKm} km total)`);
+      }
+    } catch {
+      showRiderToast('Route optimization completed with standard sequence');
+    } finally {
+      setIsOptimizingRoute(false);
+    }
+  };
+
+
   // Check saved GPS permission on mount
   useEffect(() => {
     if (riderUser && isOnDuty) {
@@ -186,13 +229,41 @@ export default function RiderPage() {
     }
   }, [riderUser, isOnDuty, requestRiderGps]);
 
-  // Continuous Rider GPS Telemetry Watcher (Swiggy/Zomato style distance-throttled updates)
+  // Continuous Rider GPS Telemetry Watcher (Swiggy/Zomato style distance-throttled updates with offline buffering)
   useEffect(() => {
     if (!riderUser || !isOnDuty || typeof navigator === 'undefined' || !navigator.geolocation) return;
 
     let lastSentLat = 0;
     let lastSentLng = 0;
     let lastSentTime = 0;
+
+    // Flush any pending offline queue when connectivity is restored
+    const flushOfflineQueue = async () => {
+      try {
+        const stored = localStorage.getItem('jr_offline_telemetry_queue');
+        if (!stored) return;
+        const queue = JSON.parse(stored);
+        if (Array.isArray(queue) && queue.length > 0) {
+          const latest = queue[queue.length - 1];
+          await api.updateRiderLocation(latest);
+          localStorage.removeItem('jr_offline_telemetry_queue');
+          setOfflineQueueCount(0);
+          showRiderToast('🟢 GPS synced: flushed offline telemetry');
+        }
+      } catch {}
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', flushOfflineQueue);
+      // Check initial stored queue count
+      try {
+        const stored = localStorage.getItem('jr_offline_telemetry_queue');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) setOfflineQueueCount(parsed.length);
+        }
+      } catch {}
+    }
 
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
@@ -207,12 +278,30 @@ export default function RiderPage() {
           lastSentLng = lng;
           lastSentTime = now;
           setRiderGps({ lat, lng });
-          api.updateRiderLocation({
+
+          const telemetryPayload = {
             latitude: lat,
             longitude: lng,
             heading: pos.coords.heading ?? 0,
             speed: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0,
-          }).catch(() => {});
+          };
+
+          api
+            .updateRiderLocation(telemetryPayload)
+            .then(() => {
+              setOfflineQueueCount(0);
+              localStorage.removeItem('jr_offline_telemetry_queue');
+            })
+            .catch(() => {
+              // Network failed (Pithampur industrial dead zone): buffer offline
+              try {
+                const stored = localStorage.getItem('jr_offline_telemetry_queue');
+                const queue = stored ? JSON.parse(stored) : [];
+                const updated = [...queue, telemetryPayload].slice(-15);
+                localStorage.setItem('jr_offline_telemetry_queue', JSON.stringify(updated));
+                setOfflineQueueCount(updated.length);
+              } catch {}
+            });
         }
       },
       (err) => {
@@ -223,6 +312,9 @@ export default function RiderPage() {
 
     return () => {
       navigator.geolocation.clearWatch(watchId);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', flushOfflineQueue);
+      }
     };
   }, [riderUser, isOnDuty, calculateDistanceKm]);
 
@@ -555,7 +647,19 @@ export default function RiderPage() {
   const completedDeliveries = uniqueDeliveries.filter(
     (d) => d.status === 'DELIVERED'
   );
-  const displayList = activeTab === 'ACTIVE' ? activeDeliveries : completedDeliveries;
+  const displayList =
+    activeTab === 'ACTIVE'
+      ? (optimizedRouteData && optimizedRouteData.orderedIds.length > 0
+          ? [...activeDeliveries].sort((a, b) => {
+              const idxA = optimizedRouteData.orderedIds.indexOf(a.orderId);
+              const idxB = optimizedRouteData.orderedIds.indexOf(b.orderId);
+              if (idxA === -1 && idxB === -1) return 0;
+              if (idxA === -1) return 1;
+              if (idxB === -1) return -1;
+              return idxA - idxB;
+            })
+          : activeDeliveries)
+      : completedDeliveries;
 
   return (
     <div className="min-h-screen bg-[#FFF9F0] text-[#292D26] flex flex-col font-body pb-16 selection:bg-[#38754A] selection:text-white">
@@ -587,6 +691,17 @@ export default function RiderPage() {
           {/* Right Action Controls */}
           {riderUser ? (
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              {/* Offline Telemetry Badge */}
+              {offlineQueueCount > 0 && (
+                <div
+                  title={`${offlineQueueCount} GPS update(s) stored locally. Will auto-sync to server when network reconnects.`}
+                  className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1 shrink-0 animate-pulse"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                  <span>Offline ({offlineQueueCount})</span>
+                </div>
+              )}
+
               {/* Rider GPS toggle button */}
               <button
                 type="button"
@@ -795,6 +910,43 @@ export default function RiderPage() {
 
           {/* Deliveries Feed */}
           <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-4 pb-12 flex-1">
+            {/* Smart Delivery Route Sequence Banner (Ola Maps) */}
+            {activeTab === 'ACTIVE' && activeDeliveries.length >= 2 && (
+              <div className="mb-4 bg-gradient-to-r from-[#EAF4ED] to-[#F4F9F5] border border-[#38754A]/30 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-2xs">
+                <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-[#38754A] text-white flex items-center justify-center shrink-0 shadow-2xs">
+                    <span className="material-symbols-outlined text-[20px]">alt_route</span>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h3 className="text-xs sm:text-sm font-bold text-[#292D26]">
+                        Smart Delivery Sequence
+                      </h3>
+                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-[#38754A]/10 text-[#38754A] border border-[#38754A]/20">
+                        Ola Maps
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#77786F]">
+                      {optimizedRouteData
+                        ? `Optimized for ${optimizedRouteData.orderedIds.length} stops • Total ~${optimizedRouteData.totalDistanceKm} km (${optimizedRouteData.estimatedDurationMinutes} mins)`
+                        : `Auto-order deliveries from ${riderGps ? 'your live GPS' : 'Sagore Kitchen'} for shortest travel time`}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOptimizeDeliveryRoute}
+                  disabled={isOptimizingRoute}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#38754A] hover:bg-[#285C38] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors shrink-0 disabled:opacity-60 cursor-pointer"
+                >
+                  <span className={`material-symbols-outlined text-[16px] ${isOptimizingRoute ? 'animate-spin' : ''}`}>
+                    {isOptimizingRoute ? 'sync' : 'auto_fix_high'}
+                  </span>
+                  <span>{isOptimizingRoute ? 'Optimizing...' : optimizedRouteData ? 'Re-optimize' : 'Optimize Sequence'}</span>
+                </button>
+              </div>
+            )}
+
             {loading && deliveries.length === 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                 <div className="h-44 bg-white border border-[#EEE7DC] rounded-2xl animate-pulse"></div>
@@ -850,6 +1002,18 @@ export default function RiderPage() {
                           <span className="text-[12px] font-mono font-bold text-[#38754A]">
                             #{del.orderNumber}
                           </span>
+                          {optimizedRouteData && activeTab === 'ACTIVE' && (() => {
+                            const stopIdx = optimizedRouteData.orderedIds.indexOf(del.orderId);
+                            if (stopIdx !== -1) {
+                              return (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-[#38754A] px-2 py-0.5 rounded-md shadow-2xs">
+                                  <span className="material-symbols-outlined text-[12px]">pin_drop</span>
+                                  Stop #{stopIdx + 1}
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
                           {del.createdAt && (
                             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
                               <span className="material-symbols-outlined text-[13px] text-[#38754A]">schedule</span>

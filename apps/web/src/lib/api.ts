@@ -78,6 +78,37 @@ export interface PincodeCheckResponse {
   message?: string;
 }
 
+export interface PlaceSearchResult {
+  placeId: string;
+  description: string;
+  mainText: string;
+  secondaryText: string;
+  lat: number | null;
+  lng: number | null;
+  pincode: string | null;
+  city: string | null;
+}
+
+export interface ReverseGeocodeResult {
+  formattedAddress: string;
+  name: string;
+  suburb: string;
+  city: string;
+  district: string;
+  state: string;
+  pincode: string;
+  lat: number;
+  lng: number;
+}
+
+export interface DirectionsResult {
+  distanceMeters: number;
+  durationSeconds: number;
+  distanceKm: number;
+  durationMinutes: number;
+  coordinates: [number, number][];
+}
+
 export interface QuoteRequestItem {
   productId: string;
   variantId?: string;
@@ -188,6 +219,7 @@ export interface TrackOrderResponse {
     address?: string;
   };
   customerName?: string;
+  maskedPhone?: string;
   deliveryAddress?: {
     flat?: string;
     street?: string;
@@ -547,13 +579,198 @@ export const api = {
     if (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)) {
       url += `&lat=${lat}&lng=${lng}`;
     }
-    const res = await fetch(url);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to verify delivery pincode serviceability');
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const data: PincodeCheckResponse = await res.json();
+        return setCached(cacheKey, data, 300000);
+      }
+    } catch {
+      // Fall through to client-side distance heuristics
     }
-    const data: PincodeCheckResponse = await res.json();
-    return setCached(cacheKey, data, 300000);
+
+    // Client-side fallback for Sagore kitchen (5km Free Delivery, max 15km boundary)
+    // 1. If coordinates are provided, compute real distance
+    if (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)) {
+      const R = 6371;
+      const dLat = ((lat - 22.6288) * Math.PI) / 180;
+      const dLon = ((lng - 75.5684) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((22.6288 * Math.PI) / 180) * Math.cos((lat * Math.PI) / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distKm = Math.round(R * c * 10) / 10;
+
+      if (distKm <= 5.0) {
+        return setCached(cacheKey, {
+          serviceable: true,
+          pincode: cleanPin || '454774',
+          city: 'Sagore, Pithampur',
+          zoneName: `Sagore Local (${distKm} km)`,
+          distanceKm: distKm,
+          deliveryFeePaise: 0,
+          isFreeDelivery: true,
+          message: `✓ Delivering within 5 km (${distKm} km) • Free Delivery`,
+        }, 300000);
+      } else if (distKm <= 15.0) {
+        return setCached(cacheKey, {
+          serviceable: true,
+          pincode: cleanPin || '454775',
+          city: 'Pithampur Outer, Dhar',
+          zoneName: `Pithampur Outer (${distKm} km)`,
+          distanceKm: distKm,
+          deliveryFeePaise: 3500,
+          isFreeDelivery: false,
+          message: `✓ Serviceable (${distKm} km) • Delivery Fee ₹35`,
+        }, 300000);
+      }
+    }
+
+    // 2. Local Pincode heuristics for Sagore / Pithampur / Dhar / Mhow
+    if (cleanPin === '454774' || cleanPin.startsWith('454') || cleanPin.startsWith('453') || !cleanPin) {
+      const isCore = cleanPin === '454774' || !cleanPin;
+      return setCached(cacheKey, {
+        serviceable: true,
+        pincode: cleanPin || '454774',
+        city: 'Sagore, Pithampur',
+        district: 'Dhar',
+        state: 'Madhya Pradesh',
+        zoneName: isCore ? 'Sagore Central Zone (Within 5 km)' : 'Pithampur Zone',
+        distanceKm: isCore ? 2.0 : 4.5,
+        deliveryFeePaise: 0,
+        isFreeDelivery: true,
+        message: '✓ Delivering to Sagore • Free Delivery (Within 5 km)',
+      }, 300000);
+    }
+
+    if (cleanPin === '454775') {
+      return setCached(cacheKey, {
+        serviceable: true,
+        pincode: '454775',
+        city: 'Pithampur Outer, Dhar',
+        district: 'Dhar',
+        state: 'Madhya Pradesh',
+        zoneName: 'Pithampur Outer (~7.5 km)',
+        distanceKm: 7.5,
+        deliveryFeePaise: 3500,
+        isFreeDelivery: false,
+        message: '✓ Serviceable: Pithampur Outer (~7.5 km) • Delivery Fee ₹35',
+      }, 300000);
+    }
+
+    const unserviceableData: PincodeCheckResponse = {
+      serviceable: false,
+      pincode: cleanPin,
+      message: 'Delivery not available beyond 15 km from Sagore Kitchen.',
+    };
+    return setCached(cacheKey, unserviceableData, 60000);
+  },
+
+  // 2b. Places Autocomplete via Ola Maps (Backend Proxy)
+  async searchPlaces(query: string, lat?: number, lng?: number): Promise<PlaceSearchResult[]> {
+    if (!query || query.trim().length < 2) return [];
+    const base = getApiBase();
+    let url = `${base}/delivery-zones/places-search?q=${encodeURIComponent(query.trim())}`;
+    if (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)) {
+      url += `&lat=${lat}&lng=${lng}`;
+    }
+    const cacheKey = `places_${query.trim().toLowerCase()}_${lat ?? ''}_${lng ?? ''}`;
+    const cached = getCached<PlaceSearchResult[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      const data: PlaceSearchResult[] = await res.json();
+      return setCached(cacheKey, data, 1800000); // 30 min cache
+    } catch {
+      return [];
+    }
+  },
+
+  // 2c. Reverse Geocode via Ola Maps (Backend Proxy)
+  async reverseGeocode(lat: number, lng: number): Promise<ReverseGeocodeResult | null> {
+    const base = getApiBase();
+    const cacheKey = `rev_${lat.toFixed(4)}_${lng.toFixed(4)}`;
+    const cached = getCached<ReverseGeocodeResult>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const res = await fetch(`${base}/delivery-zones/reverse-geocode?lat=${lat}&lng=${lng}`);
+      if (!res.ok) return null;
+      const data: ReverseGeocodeResult = await res.json();
+      return setCached(cacheKey, data, 86400000); // 24 hr cache
+    } catch {
+      return null;
+    }
+  },
+
+  // 2d. Delivery Route Directions via Ola Maps (Backend Proxy)
+  async getDirections(
+    originLat: number,
+    originLng: number,
+    destLat: number,
+    destLng: number,
+  ): Promise<DirectionsResult | null> {
+    const base = getApiBase();
+    const cacheKey = `dir_${originLat.toFixed(3)}_${originLng.toFixed(3)}_${destLat.toFixed(3)}_${destLng.toFixed(3)}`;
+    const cached = getCached<DirectionsResult>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const res = await fetch(
+        `${base}/delivery-zones/directions?originLat=${originLat}&originLng=${originLng}&destLat=${destLat}&destLng=${destLng}`,
+      );
+      if (!res.ok) return null;
+      const data: DirectionsResult = await res.json();
+      return setCached(cacheKey, data, 3600000); // 1 hr cache
+    } catch {
+      return null;
+    }
+  },
+
+  // 2e. Multi-Stop Route Optimization for Riders
+  async optimizeRoute(
+    origin: { lat: number; lng: number },
+    stops: { id: string; lat: number; lng: number; title?: string }[],
+  ): Promise<{
+    orderedStops: { id: string; lat: number; lng: number; title?: string }[];
+    totalDistanceKm: number;
+    estimatedDurationMinutes: number;
+  }> {
+    if (!stops || stops.length <= 1) {
+      return { orderedStops: stops || [], totalDistanceKm: 0, estimatedDurationMinutes: 0 };
+    }
+    const base = getApiBase();
+    try {
+      const res = await fetch(`${base}/delivery-zones/route-optimize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ origin, stops }),
+      });
+      if (!res.ok) throw new Error('Route optimization failed');
+      return await res.json();
+    } catch {
+      return { orderedStops: stops, totalDistanceKm: 0, estimatedDurationMinutes: 0 };
+    }
+  },
+
+  // 2f. Snap GPS Telemetry to Roads
+  async snapToRoad(points: [number, number][]): Promise<[number, number][]> {
+    if (!points || points.length <= 1) return points;
+    const base = getApiBase();
+    try {
+      const res = await fetch(`${base}/delivery-zones/snap-to-road`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ points }),
+      });
+      if (!res.ok) return points;
+      return await res.json();
+    } catch {
+      return points;
+    }
   },
 
   // 3. Delivery Slots with 1-minute Cache

@@ -1,6 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import dynamic from 'next/dynamic';
+import { api, PlaceSearchResult } from '../lib/api';
+
+const PinpointLeafletMap = dynamic(() => import('./PinpointLeafletMap'), { ssr: false });
 
 export interface LocationData {
   id?: string;
@@ -147,40 +151,74 @@ export default function LocationMapModal({
 
   if (!isOpen) return null;
 
-  // Search places via Nominatim OpenStreetMap
-  const handleSearch = async (queryText: string) => {
+  const searchTimerRef = useRef<any>(null);
+  const reverseGeocodeTimerRef = useRef<any>(null);
+
+  // Search places via Ola Maps (Backend Proxy with 350ms debounce)
+  const handleSearch = (queryText: string) => {
     setSearchQuery(queryText);
     if (!queryText || queryText.trim().length < 2) {
       setSearchResults([]);
       return;
     }
 
-    setIsSearching(true);
-    try {
-      const q = encodeURIComponent(`${queryText}, Madhya Pradesh`);
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}&limit=5`, {
-        headers: { 'Accept-Language': 'en' },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSearchResults(data || []);
-      }
-    } catch {
-      const local = SAGORE_PRESETS.filter(
-        (p) =>
-          p.name.toLowerCase().includes(queryText.toLowerCase()) ||
-          p.area.toLowerCase().includes(queryText.toLowerCase())
-      );
-      setSearchResults(
-        local.map((p) => ({
-          display_name: `${p.name}, ${p.area}, ${p.pincode}`,
-          lat: p.lat.toString(),
-          lon: p.lng.toString(),
-        }))
-      );
-    } finally {
-      setIsSearching(false);
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
     }
+
+    setIsSearching(true);
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const results = await api.searchPlaces(queryText, lat, lng);
+        setSearchResults(results);
+      } catch {
+        const local = SAGORE_PRESETS.filter(
+          (p) =>
+            p.name.toLowerCase().includes(queryText.toLowerCase()) ||
+            p.area.toLowerCase().includes(queryText.toLowerCase()),
+        );
+        setSearchResults(
+          local.map((p) => ({
+            placeId: p.name,
+            description: `${p.name}, ${p.area}, ${p.pincode}`,
+            mainText: p.name,
+            secondaryText: p.area,
+            lat: p.lat,
+            lng: p.lng,
+            pincode: p.pincode,
+            city: 'Sagore, Pithampur',
+          })),
+        );
+      } finally {
+        setIsSearching(false);
+      }
+    }, 350);
+  };
+
+  // Handle interactive pin-drag / map-move on Leaflet canvas
+  const handleMapPositionChange = (newLat: number, newLng: number) => {
+    setLat(newLat);
+    setLng(newLng);
+
+    if (reverseGeocodeTimerRef.current) {
+      clearTimeout(reverseGeocodeTimerRef.current);
+    }
+
+    reverseGeocodeTimerRef.current = setTimeout(async () => {
+      try {
+        const rev = await api.reverseGeocode(newLat, newLng);
+        if (rev) {
+          const area = rev.suburb || rev.name || 'Sagore Delivery Area';
+          setAreaTitle(area);
+          setDisplayAddress(rev.formattedAddress);
+          setStreet(rev.suburb || rev.name || 'Sagore Main Road');
+          if (rev.pincode) setPincode(rev.pincode);
+          if (rev.city) setCity(rev.city);
+        }
+      } catch {
+        // preserve current display address
+      }
+    }, 450);
   };
 
   // Select place from search or preset and switch to MAP view
@@ -227,21 +265,14 @@ export default function LocationMapModal({
       setLng(userLng);
 
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${userLat}&lon=${userLng}`,
-          { headers: { 'Accept-Language': 'en' } }
-        );
-        if (res.ok) {
-          const data = await res.json();
-          const addr = data.address || {};
-          const pin = addr.postcode || '454774';
-          const detectedArea = addr.suburb || addr.neighbourhood || addr.road || 'Sagore Main Area';
-          const detectedCity = addr.city || addr.town || addr.village || 'Sagore, Pithampur';
-
+        const rev = await api.reverseGeocode(userLat, userLng);
+        if (rev) {
+          const detectedArea = rev.suburb || rev.name || 'Sagore Main Area';
+          const detectedCity = rev.city || 'Sagore, Pithampur';
           setAreaTitle(detectedArea);
-          setDisplayAddress(data.display_name || `${detectedArea}, ${detectedCity} ${pin}`);
+          setDisplayAddress(rev.formattedAddress || `${detectedArea}, ${detectedCity} ${rev.pincode || '454774'}`);
           setStreet(detectedArea);
-          setPincode(pin === '454774' ? '454774' : pin);
+          setPincode(rev.pincode || '454774');
           setCity(detectedCity);
         } else {
           throw new Error('Reverse geocode failed');
@@ -256,6 +287,7 @@ export default function LocationMapModal({
         setViewMode('MAP_PINPOINT');
       }
     };
+
 
     const onGeoError = (err: GeolocationPositionError) => {
       // If high accuracy timed out, retry with standard cell/network positioning
@@ -352,9 +384,6 @@ export default function LocationMapModal({
     onClose();
   };
 
-  // Google Maps Embed URL with exact coordinates and street-level zoom
-  const mapEmbedUrl = `https://maps.google.com/maps?q=${lat},${lng}&hl=en&z=16&output=embed`;
-
   return (
     <div
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200"
@@ -414,14 +443,14 @@ export default function LocationMapModal({
                 <div className="absolute left-4 right-4 top-full mt-1.5 z-30 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden divide-y divide-slate-100 max-h-52 overflow-y-auto">
                   {searchResults.map((item, idx) => (
                     <button
-                      key={idx}
+                      key={item.placeId || idx}
                       type="button"
                       onClick={() =>
                         selectLocation(
-                          parseFloat(item.lat),
-                          parseFloat(item.lon),
-                          item.display_name,
-                          '454774'
+                          typeof item.lat === 'number' ? item.lat : parseFloat(item.lat || '22.6288'),
+                          typeof item.lng === 'number' ? item.lng : parseFloat(item.lon || item.lng || '75.5684'),
+                          item.description || item.display_name,
+                          item.pincode || '454774',
                         )
                       }
                       className="w-full p-3 text-left hover:bg-emerald-50/50 flex items-start gap-2.5 transition-colors"
@@ -429,9 +458,16 @@ export default function LocationMapModal({
                       <span className="material-symbols-outlined text-emerald-700 text-[18px] shrink-0 mt-0.5">
                         location_on
                       </span>
-                      <span className="text-xs text-slate-700 font-medium line-clamp-2 leading-tight">
-                        {item.display_name}
-                      </span>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs text-slate-800 font-semibold line-clamp-1 leading-tight">
+                          {item.mainText || item.description || item.display_name}
+                        </span>
+                        {item.secondaryText && (
+                          <span className="text-[11px] text-slate-500 line-clamp-1">
+                            {item.secondaryText}
+                          </span>
+                        )}
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -632,14 +668,14 @@ export default function LocationMapModal({
               <div className="absolute top-16 inset-x-3 z-30 bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden divide-y divide-slate-100 max-h-48 overflow-y-auto">
                 {searchResults.map((item, idx) => (
                   <button
-                    key={idx}
+                    key={item.placeId || idx}
                     type="button"
                     onClick={() =>
                       selectLocation(
-                        parseFloat(item.lat),
-                        parseFloat(item.lon),
-                        item.display_name,
-                        '454774'
+                        typeof item.lat === 'number' ? item.lat : parseFloat(item.lat || '22.6288'),
+                        typeof item.lng === 'number' ? item.lng : parseFloat(item.lon || item.lng || '75.5684'),
+                        item.description || item.display_name,
+                        item.pincode || '454774',
                       )
                     }
                     className="w-full p-2.5 text-left hover:bg-emerald-50/50 flex items-start gap-2 text-xs"
@@ -647,9 +683,16 @@ export default function LocationMapModal({
                     <span className="material-symbols-outlined text-emerald-700 text-[16px] shrink-0 mt-0.5">
                       location_on
                     </span>
-                    <span className="text-slate-700 font-medium line-clamp-2 leading-tight">
-                      {item.display_name}
-                    </span>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-slate-800 font-semibold line-clamp-1 leading-tight">
+                        {item.mainText || item.description || item.display_name}
+                      </span>
+                      {item.secondaryText && (
+                        <span className="text-[10px] text-slate-500 line-clamp-1">
+                          {item.secondaryText}
+                        </span>
+                      )}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -688,13 +731,12 @@ export default function LocationMapModal({
                 )}
               </div>
 
-              {/* Google Maps Embed Iframe */}
-              <iframe
-                title="Google Maps Delivery Location"
-                src={mapEmbedUrl}
-                className="w-full h-full border-0 pointer-events-auto"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
+              {/* Interactive Pinpoint Leaflet Map (CartoDB tiles, 0 quota cost, draggable) */}
+              <PinpointLeafletMap
+                lat={lat}
+                lng={lng}
+                onPositionChange={handleMapPositionChange}
+                height="100%"
               />
 
               {/* Open in Google Maps Link (Bottom Left) */}

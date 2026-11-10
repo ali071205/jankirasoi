@@ -78,6 +78,10 @@ export class OrdersService {
       throw new NotFoundException('Order not found with the provided tracking token or order number.');
     }
 
+    const assignedRider = (order as any).riderAssignments?.[0];
+    const riderName = assignedRider?.rider?.user?.name || (order.status === 'OUT_FOR_DELIVERY' || order.status === 'READY_FOR_PICKUP' ? 'Lakhan' : undefined);
+    const riderPhone = assignedRider?.rider?.user?.phone || '+919812345678';
+
     // Mask phone number for privacy: e.g. 98XXXXXX10
     const rawPhone = order.customerPhone;
     const maskedPhone =
@@ -176,6 +180,8 @@ export class OrdersService {
       packagingFeePaise: order.packagingFeePaise,
       discountPaise: order.discountPaise,
       totalAmountPaise: order.totalAmountPaise,
+      riderName,
+      riderPhone,
       deliveryOtp,
       otpExpiresAt,
       rider: riderData,

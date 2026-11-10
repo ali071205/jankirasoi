@@ -1,0 +1,51 @@
+// Janki Rasoi — Shared Active Order Storage Helpers
+
+export function getActiveTrackingIdentifier(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  // 1. Direct tracking token
+  const directToken = window.localStorage.getItem('jr_last_tracking_token');
+  if (directToken && directToken.trim()) return directToken.trim();
+
+  // 2. Order number
+  const lastOrderNumber = window.localStorage.getItem('jr_last_order_number');
+  if (lastOrderNumber && lastOrderNumber.trim()) return lastOrderNumber.trim();
+
+  // 3. Most recent order in recent orders list
+  try {
+    const raw = window.localStorage.getItem('jr_recent_orders');
+    if (raw) {
+      const recents = JSON.parse(raw);
+      if (Array.isArray(recents) && recents.length > 0) {
+        const top = recents[0];
+        const tok = top.trackingToken || top.orderNumber;
+        if (tok && typeof tok === 'string' && tok.trim()) return tok.trim();
+      }
+    }
+  } catch {}
+
+  return null;
+}
+
+export function saveActiveOrder(trackingToken: string, orderNumber: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem('jr_last_tracking_token', trackingToken);
+    window.localStorage.setItem('jr_last_order_number', orderNumber);
+
+    const recents = JSON.parse(window.localStorage.getItem('jr_recent_orders') || '[]');
+    const nextRecents = [
+      { trackingToken, orderNumber, placedAt: new Date().toISOString() },
+      ...recents.filter((r: any) => r.orderNumber !== orderNumber && r.trackingToken !== trackingToken),
+    ].slice(0, 10);
+    window.localStorage.setItem('jr_recent_orders', JSON.stringify(nextRecents));
+
+    // Dispatch global event for instant UI update without waiting for poll
+    window.dispatchEvent(
+      new CustomEvent('jr_order_placed', {
+        detail: { trackingToken, orderNumber },
+      })
+    );
+  } catch {}
+}
+
