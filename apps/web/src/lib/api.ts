@@ -843,7 +843,8 @@ export const api = {
     try {
       const res = await fetch(base + '/orders/customer/' + encodeURIComponent(cleanPhone), { cache: 'no-store' });
       if (!res.ok) return [];
-      return res.json();
+      const data = await res.json();
+      return Array.isArray(data) ? data : (Array.isArray(data?.orders) ? data.orders : []);
     } catch {
       return [];
     }
