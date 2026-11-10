@@ -118,6 +118,9 @@ export default function LocationMapModal({
   const [accuracyMode, setAccuracyMode] = useState<'precise' | 'approximate'>('precise');
   const [savedAddresses, setSavedAddresses] = useState<LocationData[]>([]);
 
+  const searchTimerRef = useRef<any>(null);
+  const reverseGeocodeTimerRef = useRef<any>(null);
+
   // Load saved addresses from localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -148,11 +151,6 @@ export default function LocationMapModal({
       setSearchResults([]);
     }
   }, [isOpen, initialFlat, initialStreet, initialLandmark, initialPincode]);
-
-  if (!isOpen) return null;
-
-  const searchTimerRef = useRef<any>(null);
-  const reverseGeocodeTimerRef = useRef<any>(null);
 
   // Search places via Ola Maps (Backend Proxy with 350ms debounce)
   const handleSearch = (queryText: string) => {
@@ -383,6 +381,8 @@ export default function LocationMapModal({
     onConfirm(addr);
     onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <div
