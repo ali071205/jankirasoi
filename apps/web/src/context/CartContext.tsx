@@ -41,25 +41,25 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       if (stored) {
         const parsed: CartItem[] = JSON.parse(stored);
         const mapped = parsed.map((item) => {
-          if (item.productId === 'spec-full-thali') {
+          if (item.productId === 'spec-full-thali' || item.productId === '09f67dad-2306-49b7-88c7-cae050592f14') {
             return {
               ...item,
-              productId: '09f67dad-2306-49b7-88c7-cae050592f14',
-              variantId: item.variantId || 'd897e546-e669-4f5f-8f98-dd2db0308313',
+              productId: '5e27450e-59d4-40af-b42d-94fd2503b678',
+              variantId: '5fb90ecb-8273-43d8-bc30-2f2b23fc4fd0',
             };
           }
-          if (item.productId === 'spec-home-thali') {
+          if (item.productId === 'spec-home-thali' || item.productId === 'cd02708b-cf9d-460a-878d-3597115602b7') {
             return {
               ...item,
-              productId: 'cd02708b-cf9d-460a-878d-3597115602b7',
-              variantId: item.variantId || '7ee248f8-545a-46ba-b790-03a4e79cde96',
+              productId: '9526a501-703b-4ac6-aa81-0f8009d9e2c1',
+              variantId: '70fa6fe3-4c52-48a4-a660-493ea34c2b96',
             };
           }
-          if (item.productId === 'spec-roti-sabzi') {
+          if (item.productId === 'spec-roti-sabzi' || item.productId === 'a1c1e8ff-8f9e-4a82-98f3-876bd6f9e0f3') {
             return {
               ...item,
-              productId: 'a1c1e8ff-8f9e-4a82-98f3-876bd6f9e0f3',
-              variantId: item.variantId || '22e8ae01-205b-49d0-ac13-10354ea5155f',
+              productId: 'e8b30a5c-e92a-4b20-85f8-a9b3bc0f649a',
+              variantId: '52b837e4-ae11-4495-b4a4-267af46564c6',
             };
           }
           return item;

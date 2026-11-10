@@ -224,12 +224,20 @@ export default function CartPage() {
         pincode: pincode.trim() || '454774',
         items: items.map((i) => {
           let pid = i.productId;
-          if (pid === 'spec-full-thali') pid = '09f67dad-2306-49b7-88c7-cae050592f14';
-          if (pid === 'spec-home-thali') pid = 'cd02708b-cf9d-460a-878d-3597115602b7';
-          if (pid === 'spec-roti-sabzi') pid = 'a1c1e8ff-8f9e-4a82-98f3-876bd6f9e0f3';
+          let vid = i.variantId;
+          if (pid === 'spec-full-thali' || pid === '09f67dad-2306-49b7-88c7-cae050592f14') {
+            pid = '5e27450e-59d4-40af-b42d-94fd2503b678';
+            vid = '5fb90ecb-8273-43d8-bc30-2f2b23fc4fd0';
+          } else if (pid === 'spec-home-thali' || pid === 'cd02708b-cf9d-460a-878d-3597115602b7') {
+            pid = '9526a501-703b-4ac6-aa81-0f8009d9e2c1';
+            vid = '70fa6fe3-4c52-48a4-a660-493ea34c2b96';
+          } else if (pid === 'spec-roti-sabzi' || pid === 'a1c1e8ff-8f9e-4a82-98f3-876bd6f9e0f3') {
+            pid = 'e8b30a5c-e92a-4b20-85f8-a9b3bc0f649a';
+            vid = '52b837e4-ae11-4495-b4a4-267af46564c6';
+          }
           return {
             productId: pid,
-            variantId: i.variantId,
+            variantId: vid,
             quantity: i.quantity,
             selectedAddonOptionIds: i.selectedAddonOptionIds,
           };
@@ -381,12 +389,20 @@ export default function CartPage() {
           pincode: pincode.trim() || '454774',
           items: items.map((i) => {
             let pid = i.productId;
-            if (pid === 'spec-full-thali') pid = '09f67dad-2306-49b7-88c7-cae050592f14';
-            if (pid === 'spec-home-thali') pid = 'cd02708b-cf9d-460a-878d-3597115602b7';
-            if (pid === 'spec-roti-sabzi') pid = 'a1c1e8ff-8f9e-4a82-98f3-876bd6f9e0f3';
+            let vid = i.variantId;
+            if (pid === 'spec-full-thali' || pid === '09f67dad-2306-49b7-88c7-cae050592f14') {
+              pid = '5e27450e-59d4-40af-b42d-94fd2503b678';
+              vid = '5fb90ecb-8273-43d8-bc30-2f2b23fc4fd0';
+            } else if (pid === 'spec-home-thali' || pid === 'cd02708b-cf9d-460a-878d-3597115602b7') {
+              pid = '9526a501-703b-4ac6-aa81-0f8009d9e2c1';
+              vid = '70fa6fe3-4c52-48a4-a660-493ea34c2b96';
+            } else if (pid === 'spec-roti-sabzi' || pid === 'a1c1e8ff-8f9e-4a82-98f3-876bd6f9e0f3') {
+              pid = 'e8b30a5c-e92a-4b20-85f8-a9b3bc0f649a';
+              vid = '52b837e4-ae11-4495-b4a4-267af46564c6';
+            }
             return {
               productId: pid,
-              variantId: i.variantId,
+              variantId: vid,
               quantity: i.quantity,
               selectedAddonOptionIds: i.selectedAddonOptionIds,
             };
@@ -445,12 +461,20 @@ export default function CartPage() {
             pincode: pincode.trim() || '454774',
             items: items.map((i) => {
               let pid = i.productId;
-              if (pid === 'spec-full-thali') pid = '09f67dad-2306-49b7-88c7-cae050592f14';
-              if (pid === 'spec-home-thali') pid = 'cd02708b-cf9d-460a-878d-3597115602b7';
-              if (pid === 'spec-roti-sabzi') pid = 'a1c1e8ff-8f9e-4a82-98f3-876bd6f9e0f3';
+              let vid = i.variantId;
+              if (pid === 'spec-full-thali' || pid === '09f67dad-2306-49b7-88c7-cae050592f14') {
+                pid = '5e27450e-59d4-40af-b42d-94fd2503b678';
+                vid = '5fb90ecb-8273-43d8-bc30-2f2b23fc4fd0';
+              } else if (pid === 'spec-home-thali' || pid === 'cd02708b-cf9d-460a-878d-3597115602b7') {
+                pid = '9526a501-703b-4ac6-aa81-0f8009d9e2c1';
+                vid = '70fa6fe3-4c52-48a4-a660-493ea34c2b96';
+              } else if (pid === 'spec-roti-sabzi' || pid === 'a1c1e8ff-8f9e-4a82-98f3-876bd6f9e0f3') {
+                pid = 'e8b30a5c-e92a-4b20-85f8-a9b3bc0f649a';
+                vid = '52b837e4-ae11-4495-b4a4-267af46564c6';
+              }
               return {
                 productId: pid,
-                variantId: i.variantId,
+                variantId: vid,
                 quantity: i.quantity,
                 selectedAddonOptionIds: i.selectedAddonOptionIds,
               };
