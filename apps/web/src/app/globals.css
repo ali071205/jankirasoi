@@ -75,9 +75,21 @@ html.icons-loading .material-symbols-outlined {
   }
 }
 
-.animate-spin-clockwise,
-.animate-spin-reverse {
+@keyframes spin-reverse {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+.animate-spin-clockwise {
   animation: spin-clockwise 1s linear infinite;
+}
+
+.animate-spin-reverse {
+  animation: spin-reverse 1s linear infinite;
 }
 
 /* Hide scrollbar for horizontal categories */

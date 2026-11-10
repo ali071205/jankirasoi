@@ -545,7 +545,13 @@ export default function RiderPage() {
       );
       await loadDeliveries(true);
     } catch (err: any) {
-      alert(err.message || 'Failed to accept delivery assignment.');
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('session') || msg.toLowerCase().includes('unauthorized') || msg.toLowerCase().includes('credentials')) {
+        showRiderToast('Rider session expired. Please sign in again.');
+        setRiderUser(null);
+      } else {
+        alert(msg || 'Failed to accept delivery assignment.');
+      }
     } finally {
       setActionLoadingId(null);
     }
@@ -561,7 +567,13 @@ export default function RiderPage() {
       }
       await loadDeliveries(true);
     } catch (err: any) {
-      alert(err.message || 'Failed to start delivery trip.');
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('session') || msg.toLowerCase().includes('unauthorized') || msg.toLowerCase().includes('credentials')) {
+        showRiderToast('Rider session expired. Please sign in again.');
+        setRiderUser(null);
+      } else {
+        alert(msg || 'Failed to start delivery trip.');
+      }
     } finally {
       setActionLoadingId(null);
     }
@@ -743,7 +755,7 @@ export default function RiderPage() {
                 className="w-8 h-8 rounded-full bg-white border border-[#EEE7DC] flex items-center justify-center text-[#77786F] hover:text-[#292D26] shadow-2xs active:scale-95 transition-all shrink-0"
               >
                 <svg
-                  className={`w-[17px] h-[17px] text-[#77786F] transition-transform ${isRefreshing ? 'animate-spin' : ''}`}
+                  className={`w-[17px] h-[17px] text-[#77786F] transition-transform ${isRefreshing ? 'animate-spin-reverse' : ''}`}
                   viewBox="0 0 24 24"
                   fill="currentColor"
                   aria-hidden="true"
@@ -971,7 +983,7 @@ export default function RiderPage() {
                     className="mt-2 px-4 py-2 rounded-full bg-[#38754A] hover:bg-[#285C38] font-bold text-xs text-white flex items-center gap-1.5 shadow-xs transition-colors"
                   >
                     <svg
-                      className={`w-4 h-4 text-white transition-transform ${isRefreshing ? 'animate-spin' : ''}`}
+                      className={`w-4 h-4 text-white transition-transform ${isRefreshing ? 'animate-spin-reverse' : ''}`}
                       viewBox="0 0 24 24"
                       fill="currentColor"
                       aria-hidden="true"

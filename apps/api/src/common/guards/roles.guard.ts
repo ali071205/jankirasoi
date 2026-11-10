@@ -28,15 +28,15 @@ export class RolesGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
 
-    // 1. Extract session token from cookie or Authorization header
+    // 1. Extract session token: prioritize explicit Authorization header first, then session cookies
     let token: string | undefined = undefined;
-    if (request.cookies && request.cookies.session_token) {
+    if (request.headers.authorization) {
+      token = request.headers.authorization.replace(/^Bearer\s+/i, '');
+    } else if (request.cookies && request.cookies.session_token) {
       token = request.cookies.session_token;
     } else if (request.headers.cookie) {
       const match = request.headers.cookie.match(/session_token=([^;]+)/);
       if (match) token = match[1];
-    } else if (request.headers.authorization) {
-      token = request.headers.authorization.replace(/^Bearer\s+/i, '');
     }
 
     let user: any = null;
@@ -59,7 +59,7 @@ export class RolesGuard implements CanActivate {
       const simRole = String(simRoleHeader).toUpperCase();
       if (!user || !requiredRoles.includes(user.role)) {
         user = {
-          id: user?.id || (simRole === 'RIDER' ? 'simulated_rider_id' : 'simulated_staff_id'),
+          id: (request.headers['x-rider-id'] as string) || user?.id || (simRole === 'RIDER' ? 'simulated_rider_id' : 'simulated_staff_id'),
           role: simRole,
           name: user?.name || (simRole === 'RIDER' ? 'Delivery Partner' : 'Kitchen Station Staff'),
         };

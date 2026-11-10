@@ -33,7 +33,7 @@ function playKitchenOrderChime() {
 function ClockwiseRefreshIcon({ className = "w-4 h-4", spinning = false }: { className?: string; spinning?: boolean }) {
   return (
     <svg
-      className={`${className} transition-transform ${spinning ? 'animate-spin' : ''}`}
+      className={`${className} transition-transform ${spinning ? 'animate-spin-reverse' : ''}`}
       viewBox="0 0 24 24"
       fill="currentColor"
       aria-hidden="true"
